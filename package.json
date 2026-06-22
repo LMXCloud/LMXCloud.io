@@ -1,0 +1,21 @@
+{
+  "name": "lmxcloud",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api dev",
+    "dev:demo": "pnpm --filter @lmxcloud/demo dev",
+    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build",
+    "build:demo": "pnpm --filter @lmxcloud/demo build",
+    "typecheck": "pnpm --filter @lmxcloud/shared build && pnpm -r typecheck",
+    "start": "pnpm --filter @lmxcloud/api start"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

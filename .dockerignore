@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+.env
+.env.*
+data
+.git
+apps/demo
+*.log
+.DS_Store
+Thumbs.db
+README.md
+DEPLOY.md
