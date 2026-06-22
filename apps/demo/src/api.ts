@@ -3,6 +3,7 @@ import type {
   ChatCompletionResponse,
   LmxHeaders,
   StatusResponse,
+  UsageResponse,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
@@ -68,6 +69,14 @@ export async function sendChatCompletion(
       latencyMs: Number(res.headers.get("x-lmx-latency") ?? 0),
     },
   };
+}
+
+export async function fetchUsage(apiKey: string): Promise<UsageResponse> {
+  const res = await fetch(`${API_BASE}/v1/usage`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<UsageResponse>;
 }
 
 export { API_BASE };

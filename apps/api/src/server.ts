@@ -19,7 +19,9 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerChatRoutes } from "./routes/chat.js";
 
 import { registerStatusRoutes } from "./routes/status.js";
+import { registerUsageRoutes } from "./routes/usage.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { createUsageStore } from "./usage/index.js";
 
 
 
@@ -63,6 +65,8 @@ export async function buildServer() {
 
   const apiKeyStore = createApiKeyStore();
 
+  const usageStore = createUsageStore();
+
   const authenticate = createAuthHook(apiKeyStore);
 
 
@@ -99,7 +103,8 @@ export async function buildServer() {
 
   await registerStatusRoutes(app, { providers, healthStore });
 
-  await registerChatRoutes(app, { router, authenticate });
+  await registerChatRoutes(app, { router, authenticate, usageStore });
+  await registerUsageRoutes(app, { store: usageStore, authenticate });
 
 
 

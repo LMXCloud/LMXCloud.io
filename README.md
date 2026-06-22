@@ -2,7 +2,12 @@
 
 OpenAI-compatible inference API that routes requests through decentralized compute networks.
 
-## Phase 3 (current)
+## Phase 4 (current)
+
+- Usage tracking per API key — `GET /v1/usage`
+- Demo UI shows cumulative key usage after inference
+
+## Phase 3
 
 - Multi-provider routing: io.net, AkashML (optional), Together.ai (optional)
 - Health monitor — polls providers every 30s
@@ -78,6 +83,12 @@ Invoke-RestMethod -Uri "http://localhost:3000/v1/chat/completions" -Method POST 
 ```
 
 Response headers: `x-lmx-provider`, `x-lmx-fallback`, `x-lmx-latency`.
+
+Usage for your key:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/v1/usage" -Headers @{ Authorization = "Bearer $key" }
+```
 
 ## Fallback chain
 

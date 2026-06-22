@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchStatus, generateApiKey, sendChatCompletion } from "./api";
-import type { RequestLogEntry, RouteOption, StatusResponse } from "./types";
+import { fetchStatus, fetchUsage, generateApiKey, sendChatCompletion } from "./api";
+import type { RequestLogEntry, RouteOption, StatusResponse, UsageResponse } from "./types";
 
 const GITHUB_URL = import.meta.env.VITE_GITHUB_URL ?? "";
 const DOCS_URL = import.meta.env.VITE_DOCS_URL ?? "";
@@ -24,6 +24,45 @@ function maskKey(key: string): string {
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatIsoTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function UsagePanel({ usage, loading }: { usage: UsageResponse | null; loading?: boolean }) {
+  if (!usage && !loading) return null;
+
+  return (
+    <div className="mt-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+        Key Usage
+      </h3>
+      {loading ? (
+        <p className="font-mono text-xs text-[var(--color-muted)] animate-pulse">Loading…</p>
+      ) : usage ? (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-4">
+          <div>
+            <dt className="text-[var(--color-muted)]">Requests</dt>
+            <dd className="text-[#e6edf3]">{usage.requests}</dd>
+          </div>
+          <div>
+            <dt className="text-[var(--color-muted)]">Prompt tokens</dt>
+            <dd className="text-[#e6edf3]">{usage.prompt_tokens}</dd>
+          </div>
+          <div>
+            <dt className="text-[var(--color-muted)]">Completion tokens</dt>
+            <dd className="text-[#e6edf3]">{usage.completion_tokens}</dd>
+          </div>
+          <div>
+            <dt className="text-[var(--color-muted)]">Last request</dt>
+            <dd className="text-[#e6edf3]">{formatIsoTime(usage.last_request_at)}</dd>
+          </div>
+        </dl>
+      ) : null}
+    </div>
+  );
 }
 
 function HealthDot({ healthy, loading }: { healthy: boolean; loading?: boolean }) {
@@ -169,6 +208,19 @@ export default function App() {
   } | null>(null);
 
   const [requestLog, setRequestLog] = useState<RequestLogEntry[]>([]);
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  const refreshUsage = useCallback(async (key: string) => {
+    setUsageLoading(true);
+    try {
+      setUsage(await fetchUsage(key));
+    } catch {
+      setUsage(null);
+    } finally {
+      setUsageLoading(false);
+    }
+  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -195,6 +247,7 @@ export default function App() {
     try {
       const key = await generateApiKey(email || undefined);
       setApiKey(key);
+      void refreshUsage(key);
       try {
         await navigator.clipboard.writeText(key);
         setCopied(true);
@@ -252,6 +305,7 @@ export default function App() {
         latencyMs: headers.latencyMs,
         fallback: headers.fallback,
       });
+      void refreshUsage(apiKey);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Request failed";
       setSendError(msg);
@@ -332,6 +386,8 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {apiKey && <UsagePanel usage={usage} loading={usageLoading} />}
 
             <hr className="my-5 border-[var(--color-border)]" />
 

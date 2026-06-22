@@ -43,6 +43,16 @@ export interface RequestLogEntry {
   error?: string;
 }
 
+export interface UsageResponse {
+  object: string;
+  api_key_id: string;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  last_request_at: string | null;
+}
+
 export type RouteOption =
   | "default"
   | "cheapest"
