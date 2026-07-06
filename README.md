@@ -2,7 +2,13 @@
 
 OpenAI-compatible inference API that routes requests through decentralized compute networks.
 
-## Phase 6 (current)
+## Phase 7 (current)
+
+- Full dashboard at `apps/web` — overview, key management, usage charts, billing
+- `GET /v1/usage/history` for daily usage charts
+- Enriched `GET /v1/auth/keys` with balance and usage per key
+
+## Phase 6
 
 - Internal credit balance per API key (USD)
 - Cost deducted per inference from provider token rates
@@ -64,11 +70,25 @@ Single-page "try it now" experience at `apps/demo` — generate a key, send infe
 # Terminal 1 — API (port 3000)
 pnpm dev
 
-# Terminal 2 — Demo UI (port 5173)
+# Terminal 2 — Demo UI (port 5174)
 pnpm dev:demo
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Set `VITE_API_URL` in `apps/demo/.env` for production (e.g. `https://api.lmxcloud.io`).
+Open [http://localhost:5174](http://localhost:5174). Set `VITE_API_URL` in `apps/demo/.env` for production (e.g. `https://api.lmxcloud.io`).
+
+## Dashboard (`apps/web`)
+
+Account dashboard for managing multiple API keys, viewing usage charts, and topping up credits.
+
+```bash
+# Terminal 1 — API (port 3000)
+pnpm dev
+
+# Terminal 2 — Dashboard (port 5173)
+pnpm dev:web
+```
+
+Open [http://localhost:5173](http://localhost:5173) — redirects to sign in or sign up if you are not logged in.
 
 **Deploy to production:** see [DEPLOY.md](./DEPLOY.md) for Railway + Vercel step-by-step.
 
@@ -138,6 +158,7 @@ Providers without API keys are skipped. When Tier 4 serves a request, `x-lmx-fal
 ```
 apps/api/src/     API server
 apps/demo/        Demo UI (Vite + React)
+apps/web/         Dashboard (Vite + React)
 packages/shared/  OpenAI-compatible TypeScript types
 data/             Local API key store (gitignored)
 ```

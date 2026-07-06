@@ -21,9 +21,12 @@ export interface CreateApiKeyInput {
 export interface ApiKeyStore {
   create(input: CreateApiKeyInput): Promise<{ record: ApiKeyRecord; plainKey: string }>;
   findByPlainKey(plainKey: string): Promise<ApiKeyRecord | null>;
+  findById(id: string): Promise<ApiKeyRecord | null>;
+  findPrimaryKeyForEmail(email: string): Promise<ApiKeyRecord | null>;
   touchLastUsed(id: string): Promise<void>;
   listForRecord(record: ApiKeyRecord): Promise<ApiKeyRecord[]>;
   revoke(id: string, owner: ApiKeyRecord): Promise<boolean>;
+  emailHasAccount(email: string): Promise<boolean>;
 }
 
 export class FileApiKeyStore implements ApiKeyStore {
@@ -80,6 +83,30 @@ export class FileApiKeyStore implements ApiKeyStore {
     return record ?? null;
   }
 
+  async findById(id: string): Promise<ApiKeyRecord | null> {
+    await this.ensureLoaded();
+    const record = this.records.find((entry) => entry.id === id && !entry.revokedAt);
+    return record ?? null;
+  }
+
+  async findPrimaryKeyForEmail(email: string): Promise<ApiKeyRecord | null> {
+    await this.ensureLoaded();
+    const normalized = email.trim().toLowerCase();
+    const matches = this.records
+      .filter(
+        (entry) =>
+          !entry.revokedAt && entry.email?.trim().toLowerCase() === normalized,
+      )
+      .sort((a, b) => {
+        const aUsed = a.lastUsedAt ? Date.parse(a.lastUsedAt) : 0;
+        const bUsed = b.lastUsedAt ? Date.parse(b.lastUsedAt) : 0;
+        if (bUsed !== aUsed) return bUsed - aUsed;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+
+    return matches[0] ?? null;
+  }
+
   async touchLastUsed(id: string): Promise<void> {
     await this.ensureLoaded();
     const record = this.records.find((entry) => entry.id === id);
@@ -124,5 +151,15 @@ export class FileApiKeyStore implements ApiKeyStore {
     record.revokedAt = new Date().toISOString();
     await this.persist();
     return true;
+  }
+
+  async emailHasAccount(email: string): Promise<boolean> {
+    await this.ensureLoaded();
+    const normalized = email.trim().toLowerCase();
+    return this.records.some(
+      (entry) =>
+        !entry.revokedAt &&
+        entry.email?.trim().toLowerCase() === normalized,
+    );
   }
 }

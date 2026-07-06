@@ -35,8 +35,6 @@ export async function buildServer() {
 
   const config = loadConfig();
 
-
-
   const app = Fastify({
 
     trustProxy: true,
@@ -48,6 +46,10 @@ export async function buildServer() {
     },
 
   });
+
+  if (!config.clerkSecretKey) {
+    app.log.warn("CLERK_SECRET_KEY is not set — POST /v1/auth/clerk will return 503");
+  }
 
 
 
@@ -89,7 +91,9 @@ export async function buildServer() {
 
   const creditStore = createCreditStore();
 
-  const authenticate = createAuthHook(apiKeyStore);
+  const authenticate = createAuthHook(apiKeyStore, {
+    sessionSecret: config.sessionSecret,
+  });
 
 
 
@@ -127,7 +131,11 @@ export async function buildServer() {
       windowMs: config.keyGenRateLimitWindowMs,
     }),
     creditStore,
+    usageStore,
     initialCreditBalance: config.initialCreditBalance,
+    sessionSecret: config.sessionSecret,
+    sessionTtlMs: config.sessionTtlMs,
+    clerkSecretKey: config.clerkSecretKey,
   });
 
   await registerStatusRoutes(app, { providers, healthStore });
@@ -144,7 +152,7 @@ export async function buildServer() {
     }),
     minChatCost: config.minChatCost,
   });
-  await registerUsageRoutes(app, { store: usageStore, authenticate });
+  await registerUsageRoutes(app, { store: usageStore, apiKeyStore, authenticate });
   await registerBalanceRoutes(app, { creditStore, authenticate });
 
 

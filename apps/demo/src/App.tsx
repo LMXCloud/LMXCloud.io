@@ -1,10 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchBalance, fetchStatus, fetchUsage, generateApiKey, sendChatCompletion, topUpCredits } from "./api";
+import {
+  fetchBalance,
+  fetchModels,
+  fetchStatus,
+  fetchUsage,
+  generateApiKey,
+  revokeApiKey,
+  sendChatCompletion,
+  topUpCredits,
+} from "./api";
 import type { BalanceResponse, RequestLogEntry, RouteOption, StatusResponse, UsageResponse } from "./types";
 
 const GITHUB_URL = import.meta.env.VITE_GITHUB_URL ?? "";
 const DOCS_URL = import.meta.env.VITE_DOCS_URL ?? "";
 const POLL_INTERVAL_MS = 30_000;
+
+const STORAGE_KEYS = {
+  apiKey: "lmxcloud_api_key",
+  email: "lmxcloud_email",
+} as const;
+
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string | null): void {
+  try {
+    if (value) {
+      localStorage.setItem(key, value);
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    /* storage optional */
+  }
+}
 
 const ROUTE_OPTIONS: { value: RouteOption; label: string }[] = [
   { value: "default", label: "default" },
@@ -15,7 +49,7 @@ const ROUTE_OPTIONS: { value: RouteOption; label: string }[] = [
   { value: "provider:akash", label: "provider:akash" },
 ];
 
-const MODELS = ["llama-3-70b", "llama-3-8b", "mistral-7b"];
+const FALLBACK_MODELS = ["llama-3-70b"];
 
 function maskKey(key: string): string {
   if (key.length <= 12) return key;
@@ -237,13 +271,15 @@ export default function App() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
+  const [apiKey, setApiKey] = useState<string | null>(() => readStorage(STORAGE_KEYS.apiKey));
+  const [email, setEmail] = useState(() => readStorage(STORAGE_KEYS.email) ?? "");
   const [keyLoading, setKeyLoading] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const [model, setModel] = useState(MODELS[0]);
+  const [models, setModels] = useState<string[]>(FALLBACK_MODELS);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [model, setModel] = useState(FALLBACK_MODELS[0]);
   const [route, setRoute] = useState<RouteOption>("default");
   const [message, setMessage] = useState("Hello from LMX Cloud");
   const [sendLoading, setSendLoading] = useState(false);
@@ -308,6 +344,41 @@ export default function App() {
     return () => clearInterval(id);
   }, [refreshStatus]);
 
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.apiKey, apiKey);
+  }, [apiKey]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.email, email.trim() || null);
+  }, [email]);
+
+  useEffect(() => {
+    if (!apiKey) return;
+    void refreshUsage(apiKey);
+    void refreshBalance(apiKey);
+  }, [apiKey, refreshUsage, refreshBalance]);
+
+  useEffect(() => {
+    async function loadModels() {
+      setModelsLoading(true);
+      try {
+        const data = await fetchModels();
+        const ids = data.data.map((entry) => entry.id);
+        if (ids.length > 0) {
+          setModels(ids);
+          setModel((prev) => (ids.includes(prev) ? prev : ids[0]));
+        }
+      } catch {
+        setModels(FALLBACK_MODELS);
+        setModel((prev) => (FALLBACK_MODELS.includes(prev) ? prev : FALLBACK_MODELS[0]));
+      } finally {
+        setModelsLoading(false);
+      }
+    }
+
+    void loadModels();
+  }, []);
+
   async function handleGenerateKey() {
     setKeyLoading(true);
     setKeyError(null);
@@ -341,6 +412,29 @@ export default function App() {
     await navigator.clipboard.writeText(apiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleRevokeKey() {
+    if (!apiKey) return;
+    if (!window.confirm("Revoke this API key? It will stop working immediately.")) {
+      return;
+    }
+
+    setKeyLoading(true);
+    setKeyError(null);
+    try {
+      await revokeApiKey(apiKey);
+      setApiKey(null);
+      setBalance(null);
+      setUsage(null);
+      setResponseText(null);
+      setResponseMeta(null);
+      setCopied(false);
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : "Failed to revoke key");
+    } finally {
+      setKeyLoading(false);
+    }
   }
 
   async function handleTopUp() {
@@ -483,6 +577,14 @@ export default function App() {
                   >
                     {copied ? "Copied!" : "Copy"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRevokeKey()}
+                    disabled={keyLoading}
+                    className="shrink-0 rounded border border-[var(--color-danger)]/40 px-3 py-2 text-xs text-[var(--color-danger)] transition hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 disabled:opacity-50"
+                  >
+                    Revoke
+                  </button>
                 </div>
               </div>
             )}
@@ -510,13 +612,18 @@ export default function App() {
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-accent)]"
+                  disabled={modelsLoading || models.length === 0}
+                  className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                 >
-                  {MODELS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
+                  {modelsLoading ? (
+                    <option value={model}>Loading models…</option>
+                  ) : (
+                    models.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))
+                  )}
                 </select>
               </label>
               <label className="block">

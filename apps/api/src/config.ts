@@ -48,6 +48,12 @@ export interface Config {
 
   minChatCost: number;
 
+  sessionSecret: string;
+
+  sessionTtlMs: number;
+
+  clerkSecretKey?: string;
+
 }
 
 
@@ -133,6 +139,13 @@ export function loadConfig(): Config {
     initialCreditBalance: Number(process.env.INITIAL_CREDIT_BALANCE ?? 1),
 
     minChatCost: Number(process.env.MIN_CHAT_COST ?? 0.00001),
+
+    sessionSecret:
+      process.env.SESSION_SECRET ?? "lmxcloud-dev-session-secret-change-me",
+
+    sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
+
+    clerkSecretKey: process.env.CLERK_SECRET_KEY,
 
   };
 

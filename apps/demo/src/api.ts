@@ -3,6 +3,7 @@ import type {
   BalanceResponse,
   ChatCompletionResponse,
   LmxHeaders,
+  ModelsResponse,
   StatusResponse,
   UsageResponse,
 } from "./types";
@@ -22,6 +23,20 @@ export async function fetchStatus(): Promise<StatusResponse> {
   const res = await fetch(`${API_BASE}/v1/status`);
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<StatusResponse>;
+}
+
+export async function fetchModels(): Promise<ModelsResponse> {
+  const res = await fetch(`${API_BASE}/v1/models`);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ModelsResponse>;
+}
+
+export async function revokeApiKey(apiKey: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/auth/key`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(await parseError(res));
 }
 
 export async function generateApiKey(

@@ -62,6 +62,18 @@ export interface BalanceResponse {
   currency: string;
 }
 
+export interface ModelInfo {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
+
+export interface ModelsResponse {
+  object: string;
+  data: ModelInfo[];
+}
+
 export type RouteOption =
   | "default"
   | "cheapest"

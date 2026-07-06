@@ -14,7 +14,11 @@ export function createUsageStore(): UsageStore {
     process.env.USAGE_FILE ??
     path.resolve(__dirname, "../../../../data/usage.json");
 
-  return new FileUsageStore(dataPath);
+  const eventsPath =
+    process.env.USAGE_EVENTS_FILE ??
+    path.resolve(__dirname, "../../../../data/usage-events.json");
+
+  return new FileUsageStore(dataPath, eventsPath);
 }
 
-export type { KeyUsageStats, RecordUsageInput, UsageStore } from "./store.js";
+export type { KeyUsageStats, RecordUsageInput, UsageDayBucket, UsageStore } from "./store.js";

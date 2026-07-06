@@ -70,6 +70,32 @@ export class PostgresApiKeyStore implements ApiKeyStore {
     return row ? rowToRecord(row) : null;
   }
 
+  async findById(id: string): Promise<ApiKeyRecord | null> {
+    const result = await getPool().query<ApiKeyRow>(
+      `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
+       FROM api_keys
+       WHERE id = $1 AND revoked_at IS NULL`,
+      [id],
+    );
+
+    const row = result.rows[0];
+    return row ? rowToRecord(row) : null;
+  }
+
+  async findPrimaryKeyForEmail(email: string): Promise<ApiKeyRecord | null> {
+    const result = await getPool().query<ApiKeyRow>(
+      `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
+       FROM api_keys
+       WHERE LOWER(email) = LOWER($1) AND revoked_at IS NULL
+       ORDER BY last_used_at DESC NULLS LAST, created_at DESC
+       LIMIT 1`,
+      [email.trim()],
+    );
+
+    const row = result.rows[0];
+    return row ? rowToRecord(row) : null;
+  }
+
   async touchLastUsed(id: string): Promise<void> {
     await getPool().query(
       `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1 AND revoked_at IS NULL`,
@@ -120,5 +146,16 @@ export class PostgresApiKeyStore implements ApiKeyStore {
     );
 
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async emailHasAccount(email: string): Promise<boolean> {
+    const result = await getPool().query<{ exists: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM api_keys
+         WHERE LOWER(email) = LOWER($1) AND revoked_at IS NULL
+       ) AS exists`,
+      [email.trim()],
+    );
+    return result.rows[0]?.exists ?? false;
   }
 }

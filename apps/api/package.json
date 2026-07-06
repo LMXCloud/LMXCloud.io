@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/backend": "^3.10.0",
     "@fastify/cors": "^11.0.1",
     "@lmxcloud/shared": "workspace:*",
     "dotenv": "^16.5.0",

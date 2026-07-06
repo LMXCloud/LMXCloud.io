@@ -24,6 +24,21 @@ const MIGRATIONS = [
   )`,
   `ALTER TABLE api_keys
     ADD COLUMN IF NOT EXISTS credit_balance NUMERIC(18, 8) NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS usage_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    api_key_id UUID NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    cost NUMERIC(18, 8) NOT NULL DEFAULT 0,
+    latency_ms INTEGER,
+    fallback_used BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_usage_events_api_key_created
+    ON usage_events (api_key_id, created_at DESC)`,
 ];
 
 export async function runMigrations(): Promise<void> {

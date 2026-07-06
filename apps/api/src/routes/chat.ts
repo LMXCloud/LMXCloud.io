@@ -156,6 +156,7 @@ export async function registerChatRoutes(
           completionTokens: result.response.usage?.completion_tokens ?? 0,
           latencyMs: result.latencyMs,
           fallbackUsed: result.fallbackUsed,
+          cost: requestCost,
         });
 
         return reply.send(result.response);

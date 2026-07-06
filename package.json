@@ -4,8 +4,11 @@
   "scripts": {
     "dev": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api dev",
     "dev:demo": "pnpm --filter @lmxcloud/demo dev",
-    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build",
+    "dev:cli": "pnpm --filter @lmxcloud/cli dev",
+    "dev:web": "pnpm --filter @lmxcloud/web dev",
+    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build && pnpm --filter @lmxcloud/web build",
     "build:demo": "pnpm --filter @lmxcloud/demo build",
+    "build:web": "pnpm --filter @lmxcloud/web build",
     "typecheck": "pnpm --filter @lmxcloud/shared build && pnpm -r typecheck",
     "start": "pnpm --filter @lmxcloud/api start"
   },

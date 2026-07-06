@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { extractBearerToken, isValidApiKeyFormat } from "./keys.js";
+import { isSessionTokenFormat, verifySessionToken } from "./session.js";
 import type { ApiKeyRecord, ApiKeyStore } from "./store.js";
 
 declare module "fastify" {
@@ -8,7 +9,11 @@ declare module "fastify" {
   }
 }
 
-export function createAuthHook(store: ApiKeyStore) {
+interface AuthHookOptions {
+  sessionSecret: string;
+}
+
+export function createAuthHook(store: ApiKeyStore, options: AuthHookOptions) {
   return async function authenticate(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -18,10 +23,36 @@ export function createAuthHook(store: ApiKeyStore) {
     if (!token) {
       return reply.status(401).send({
         error: {
-          message: "Missing Authorization header. Use: Bearer lmx_your_api_key",
+          message: "Missing Authorization header. Use: Bearer <token>",
           type: "authentication_error",
         },
       });
+    }
+
+    if (isSessionTokenFormat(token)) {
+      const payload = verifySessionToken(token, options.sessionSecret);
+      if (!payload) {
+        return reply.status(401).send({
+          error: {
+            message: "Invalid or expired session",
+            type: "authentication_error",
+          },
+        });
+      }
+
+      const record = await store.findById(payload.id);
+      if (!record || record.email?.trim().toLowerCase() !== payload.email) {
+        return reply.status(401).send({
+          error: {
+            message: "Invalid or expired session",
+            type: "authentication_error",
+          },
+        });
+      }
+
+      request.apiKey = record;
+      void store.touchLastUsed(record.id);
+      return;
     }
 
     if (!isValidApiKeyFormat(token)) {
