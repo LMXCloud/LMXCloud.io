@@ -12,7 +12,8 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY packages/shared packages/shared
 COPY apps/api apps/api
-RUN pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api build
+# tsconfig.tsbuildinfo must not drive incremental skips when dist/ is absent (see .dockerignore)
+RUN pnpm --filter @lmxcloud/api exec tsc -b --force
 
 FROM base AS runner
 ENV NODE_ENV=production
