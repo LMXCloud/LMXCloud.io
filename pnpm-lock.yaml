@@ -149,9 +149,6 @@ importers:
       react-router-dom:
         specifier: ^7.6.2
         version: 7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      siwe:
-        specifier: ^3.0.0
-        version: 3.0.0(ethers@6.17.0)
       viem:
         specifier: ^2.54.6
         version: 2.54.6(typescript@6.0.3)(zod@4.4.3)
