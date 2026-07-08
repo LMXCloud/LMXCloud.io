@@ -36,6 +36,8 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   retrySession: () => Promise<void>;
   completeWalletSession: (sessionToken: string, walletAddress: string) => void;
+  /** Attach a verified funding wallet to the current email (Clerk) session. */
+  setLinkedWallet: (walletAddress: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -112,6 +114,11 @@ export function AuthProvider({
     setError(null);
   }, []);
 
+  const setLinkedWallet = useCallback((walletAddress: string) => {
+    setWallet(walletAddress);
+    writeWallet(walletAddress);
+  }, []);
+
   const exchangeClerk = useCallback(async (getToken: () => Promise<string | null>) => {
     if (exchangingRef.current) return;
     exchangingRef.current = true;
@@ -127,8 +134,9 @@ export function AuthProvider({
 
       setEmailState(session.email);
       writeEmail(session.email);
-      writeWallet(null);
-      setWallet(null);
+      const linkedWallet = session.wallet?.trim() ? session.wallet.trim() : null;
+      writeWallet(linkedWallet);
+      setWallet(linkedWallet);
       setAuthMode("clerk");
       writeAuthMode("clerk");
       setApiKey(session.session_token);
@@ -219,6 +227,7 @@ export function AuthProvider({
       logout,
       retrySession,
       completeWalletSession,
+      setLinkedWallet,
       exchangeClerk,
       clearWalletSession,
     }),
@@ -235,6 +244,7 @@ export function AuthProvider({
       logout,
       retrySession,
       completeWalletSession,
+      setLinkedWallet,
       exchangeClerk,
       clearWalletSession,
     ],

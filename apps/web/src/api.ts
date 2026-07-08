@@ -9,6 +9,7 @@ import type {
   UsageHistoryResponse,
   UsageLogsResponse,
   UsageResponse,
+  WalletLinkResponse,
   WalletNonceResponse,
 } from "./types";
 
@@ -102,6 +103,23 @@ export async function exchangeWalletSession(
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<LoginResponse>;
+}
+
+export async function linkWalletToSession(
+  token: string,
+  message: string,
+  signature: string,
+): Promise<WalletLinkResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/wallet/link`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message, signature }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<WalletLinkResponse>;
 }
 
 export async function fetchDepositInfo(token: string): Promise<DepositInfoResponse> {

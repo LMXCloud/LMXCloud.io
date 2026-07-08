@@ -302,8 +302,10 @@ console.log(response.choices[0].message.content);`}
               <h3 className="mt-8 text-title-md text-on-surface">Prerequisites</h3>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-body-sm text-on-surface-muted">
                 <li>
-                  Sign in with a wallet via SIWE so your account has a verified{" "}
-                  <code className="text-mono-sm">wallet</code> field.
+                  Have a verified <code className="text-mono-sm">wallet</code> on the account —
+                  either sign in with a wallet via SIWE, or sign in with email and link a funding
+                  wallet (
+                  <code className="text-mono-sm">POST /v1/auth/wallet/link</code>) from Billing.
                 </li>
                 <li>
                   The API operator must configure{" "}
@@ -313,11 +315,27 @@ console.log(response.choices[0].message.content);`}
                   unavailable without all three.
                 </li>
                 <li>
-                  Send USDC from the same address you verified at sign-in. Transfers from other
-                  wallets are recorded as <code className="text-mono-sm">unmatched</code> and are not
-                  credited automatically.
+                  Send USDC from the same address you verified. Transfers from other wallets are
+                  recorded as <code className="text-mono-sm">unmatched</code> and are not credited
+                  automatically.
                 </li>
               </ul>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Link a funding wallet (email sessions)</h3>
+              <p className="mt-2 text-body-sm text-on-surface-muted">
+                <code className="text-mono-sm">POST /v1/auth/wallet/link</code> — requires an email
+                (Clerk) session. Same SIWE message + signature as wallet sign-in. Attaches the
+                verified address to all API keys on the email account so USDC deposits credit that
+                balance. Rejects wallets already linked to a different account.
+              </p>
+              <div className="mt-4">
+                <CodeBlock title="Request body">
+                  {`{
+  "message": "<EIP-4361 SIWE message>",
+  "signature": "0x…"
+}`}
+                </CodeBlock>
+              </div>
 
               <h3 className="mt-8 text-title-md text-on-surface">Get deposit instructions</h3>
               <p className="mt-2 text-body-sm text-on-surface-muted">
@@ -882,6 +900,12 @@ data: {
                     <DataTableRow>
                       <DataTableCell mono>POST /v1/auth/wallet/verify</DataTableCell>
                       <DataTableCell>Verify a SIWE signature and return a session token</DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>POST /v1/auth/wallet/link</DataTableCell>
+                      <DataTableCell>
+                        Link a SIWE-verified wallet to an email session for USDC funding
+                      </DataTableCell>
                     </DataTableRow>
                     <DataTableRow>
                       <DataTableCell mono>GET /v1/auth/account</DataTableCell>

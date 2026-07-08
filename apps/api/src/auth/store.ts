@@ -19,12 +19,22 @@ export interface CreateApiKeyInput {
   wallet?: string;
 }
 
+export type LinkWalletResult =
+  | { ok: true; record: ApiKeyRecord }
+  | {
+      ok: false;
+      code: "email_required" | "wallet_taken" | "wallet_already_linked" | "not_found";
+      message: string;
+    };
+
 export interface ApiKeyStore {
   create(input: CreateApiKeyInput): Promise<{ record: ApiKeyRecord; plainKey: string }>;
   findByPlainKey(plainKey: string): Promise<ApiKeyRecord | null>;
   findById(id: string): Promise<ApiKeyRecord | null>;
   findPrimaryKeyForEmail(email: string): Promise<ApiKeyRecord | null>;
   findPrimaryKeyForWallet(wallet: string): Promise<ApiKeyRecord | null>;
+  /** Attach a verified wallet to an email account (all active keys). */
+  linkWallet(apiKeyId: string, wallet: string): Promise<LinkWalletResult>;
   touchLastUsed(id: string): Promise<void>;
   listForRecord(record: ApiKeyRecord): Promise<ApiKeyRecord[]>;
   revoke(id: string, owner: ApiKeyRecord): Promise<boolean>;
@@ -126,6 +136,62 @@ export class FileApiKeyStore implements ApiKeyStore {
       });
 
     return matches[0] ?? null;
+  }
+
+  async linkWallet(apiKeyId: string, wallet: string): Promise<LinkWalletResult> {
+    await this.ensureLoaded();
+    const owner = this.records.find((entry) => entry.id === apiKeyId && !entry.revokedAt);
+    if (!owner) {
+      return { ok: false, code: "not_found", message: "API key not found" };
+    }
+    if (!owner.email?.trim()) {
+      return {
+        ok: false,
+        code: "email_required",
+        message: "Only email accounts can link a funding wallet from this session",
+      };
+    }
+
+    const normalized = normalizeWalletAddress(wallet);
+    if (owner.wallet) {
+      if (owner.wallet === normalized) {
+        return { ok: true, record: owner };
+      }
+      return {
+        ok: false,
+        code: "wallet_already_linked",
+        message: "This account already has a different funding wallet linked",
+      };
+    }
+
+    const email = owner.email.trim().toLowerCase();
+    const conflict = this.records.find(
+      (entry) =>
+        !entry.revokedAt &&
+        entry.wallet === normalized &&
+        entry.email?.trim().toLowerCase() !== email,
+    );
+    if (conflict) {
+      return {
+        ok: false,
+        code: "wallet_taken",
+        message: "This wallet is already linked to another LMX account",
+      };
+    }
+
+    const now = new Date().toISOString();
+    for (const entry of this.records) {
+      if (entry.revokedAt) continue;
+      if (entry.email?.trim().toLowerCase() !== email) continue;
+      entry.wallet = normalized;
+      entry.lastUsedAt = now;
+    }
+    await this.persist();
+
+    const updated = this.records.find((entry) => entry.id === apiKeyId && !entry.revokedAt);
+    return updated
+      ? { ok: true, record: updated }
+      : { ok: false, code: "not_found", message: "API key not found" };
   }
 
   async touchLastUsed(id: string): Promise<void> {

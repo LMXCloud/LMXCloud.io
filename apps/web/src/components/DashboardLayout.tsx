@@ -116,6 +116,11 @@ export function DashboardLayout() {
             {authMode === "wallet" && (
               <p className="mt-0.5 text-body-sm text-on-surface-faint">Wallet account</p>
             )}
+            {authMode === "clerk" && wallet && (
+              <p className="mt-0.5 truncate text-body-sm text-on-surface-faint">
+                Funding · {formatWallet(wallet)}
+              </p>
+            )}
             {apiKey && (
               <p className="mt-1 truncate text-mono-sm text-on-surface-faint">
                 {maskKey(apiKey)}

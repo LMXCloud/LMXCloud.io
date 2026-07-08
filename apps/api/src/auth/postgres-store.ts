@@ -6,6 +6,7 @@ import type {
   ApiKeyRecord,
   ApiKeyStore,
   CreateApiKeyInput,
+  LinkWalletResult,
 } from "./store.js";
 
 interface ApiKeyRow {
@@ -109,6 +110,88 @@ export class PostgresApiKeyStore implements ApiKeyStore {
 
     const row = result.rows[0];
     return row ? rowToRecord(row) : null;
+  }
+
+  async linkWallet(apiKeyId: string, wallet: string): Promise<LinkWalletResult> {
+    const pool = getPool();
+    const ownerResult = await pool.query<ApiKeyRow>(
+      `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
+       FROM api_keys
+       WHERE id = $1 AND revoked_at IS NULL`,
+      [apiKeyId],
+    );
+    const owner = ownerResult.rows[0];
+    if (!owner) {
+      return { ok: false, code: "not_found", message: "API key not found" };
+    }
+    if (!owner.email?.trim()) {
+      return {
+        ok: false,
+        code: "email_required",
+        message: "Only email accounts can link a funding wallet from this session",
+      };
+    }
+
+    const normalized = normalizeWalletAddress(wallet);
+    if (owner.wallet) {
+      if (owner.wallet.toLowerCase() === normalized) {
+        return { ok: true, record: rowToRecord(owner) };
+      }
+      return {
+        ok: false,
+        code: "wallet_already_linked",
+        message: "This account already has a different funding wallet linked",
+      };
+    }
+
+    const email = owner.email.trim();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const conflict = await client.query<{ id: string }>(
+        `SELECT id FROM api_keys
+         WHERE LOWER(wallet) = LOWER($1)
+           AND revoked_at IS NULL
+           AND (email IS NULL OR LOWER(email) <> LOWER($2))
+         LIMIT 1
+         FOR UPDATE`,
+        [normalized, email],
+      );
+      if (conflict.rows[0]) {
+        await client.query("ROLLBACK");
+        return {
+          ok: false,
+          code: "wallet_taken",
+          message: "This wallet is already linked to another LMX account",
+        };
+      }
+
+      await client.query(
+        `UPDATE api_keys
+         SET wallet = $1, last_used_at = NOW()
+         WHERE LOWER(email) = LOWER($2) AND revoked_at IS NULL`,
+        [normalized, email],
+      );
+
+      const updated = await client.query<ApiKeyRow>(
+        `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
+         FROM api_keys
+         WHERE id = $1 AND revoked_at IS NULL`,
+        [apiKeyId],
+      );
+      await client.query("COMMIT");
+
+      const row = updated.rows[0];
+      return row
+        ? { ok: true, record: rowToRecord(row) }
+        : { ok: false, code: "not_found", message: "API key not found" };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async touchLastUsed(id: string): Promise<void> {

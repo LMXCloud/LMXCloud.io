@@ -210,6 +210,7 @@ export async function registerAuthRoutes(
       object: "session",
       session_token: sessionToken,
       email: clerkUser.email,
+      wallet: record.wallet ?? null,
       api_key_id: record.id,
       created_account: createdAccount,
     });
@@ -489,6 +490,83 @@ export async function registerAuthRoutes(
         object: "api_key.deleted",
         id: targetId,
         deleted: true,
+      });
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    "/v1/auth/wallet/link",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const owner = request.apiKey!;
+      if (!owner.email?.trim()) {
+        return reply.status(400).send({
+          error: {
+            message:
+              "Linking a funding wallet requires an email (Clerk) session. Sign in with email first, or use wallet sign-in directly.",
+            type: "invalid_request_error",
+            code: "email_required",
+          },
+        });
+      }
+
+      const validated = validateWalletVerifyBody(request.body);
+      if (typeof validated === "string") {
+        return reply.status(400).send({
+          error: { message: validated, type: "invalid_request_error" },
+        });
+      }
+
+      let address: string;
+      let nonce: string;
+      try {
+        const verified = await verifySiweMessage(
+          validated.message!,
+          validated.signature!,
+          deps.siwe,
+        );
+        address = verified.address;
+        nonce = verified.nonce;
+      } catch {
+        return reply.status(401).send({
+          error: {
+            message: "Invalid or expired wallet signature",
+            type: "authentication_error",
+          },
+        });
+      }
+
+      const nonceValid = await deps.walletNonceStore.consume(address, nonce);
+      if (!nonceValid) {
+        return reply.status(401).send({
+          error: {
+            message: "Invalid or expired wallet signature",
+            type: "authentication_error",
+          },
+        });
+      }
+
+      const linked = await deps.store.linkWallet(owner.id, address);
+      if (!linked.ok) {
+        const status =
+          linked.code === "wallet_taken" || linked.code === "wallet_already_linked"
+            ? 409
+            : 400;
+        return reply.status(status).send({
+          error: {
+            message: linked.message,
+            type: "invalid_request_error",
+            code: linked.code,
+          },
+        });
+      }
+
+      return reply.status(200).send({
+        object: "wallet_link",
+        wallet: linked.record.wallet!,
+        email: linked.record.email ?? null,
+        api_key_id: linked.record.id,
+        note: "Wallet linked for USDC funding. Send deposits from this address to credit your account.",
       });
     },
   );

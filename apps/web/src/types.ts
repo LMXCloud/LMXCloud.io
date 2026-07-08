@@ -100,9 +100,17 @@ export interface LoginResponse {
   object: string;
   session_token: string;
   email?: string;
-  wallet?: string;
+  wallet?: string | null;
   api_key_id: string;
   created_account?: boolean;
+}
+
+export interface WalletLinkResponse {
+  object: string;
+  wallet: string;
+  email: string | null;
+  api_key_id: string;
+  note: string;
 }
 
 export interface WalletNonceResponse {

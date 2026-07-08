@@ -5,7 +5,9 @@ import {
   fetchDepositInfo,
   fetchKeys,
   topUpCredits,
-} from "../api";import { AddCreditsCard } from "../components/AddCreditsCard";
+} from "../api";
+import { AddCreditsCard } from "../components/AddCreditsCard";
+import { ConnectFundingWalletCard } from "../components/ConnectFundingWalletCard";
 import { AlertBanner } from "../components/console/AlertBanner";
 import {
   DataTable,
@@ -32,6 +34,7 @@ const DEPOSIT_POLL_MAX_MS = 30_000;
 function hasPendingDeposits(history: DepositHistoryResponse | null): boolean {
   return history?.data.some((deposit) => deposit.status === "pending") ?? false;
 }
+
 function depositStatusLabel(
   deposit: DepositReceipt,
   confirmationsRequired: number,
@@ -49,11 +52,13 @@ function depositStatusTone(
   return "warning";
 }
 
-export function BillingPage() {  const { apiKey, authMode } = useAuth();
+export function BillingPage() {
+  const { apiKey, authMode, wallet, setLinkedWallet } = useAuth();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [sessionBalance, setSessionBalance] = useState<number | null>(null);
   const [depositInfo, setDepositInfo] = useState<DepositInfoResponse | null>(null);
-  const [depositHistory, setDepositHistory] = useState<DepositHistoryResponse | null>(null);  const [devTopUpAvailable, setDevTopUpAvailable] = useState(false);
+  const [depositHistory, setDepositHistory] = useState<DepositHistoryResponse | null>(null);
+  const [devTopUpAvailable, setDevTopUpAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [topUpLoading, setTopUpLoading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +66,13 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
   const [watchingDeposits, setWatchingDeposits] = useState(false);
   const [trackingTxHash, setTrackingTxHash] = useState<string | null>(null);
 
-  const load = useCallback(async () => {    if (!apiKey) return;
+  const linkedWallet =
+    wallet ?? keys.find((key) => key.wallet)?.wallet ?? null;
+  const canFundWithUsdc = Boolean(linkedWallet) || authMode === "wallet";
+  const needsFundingWallet = authMode === "clerk" && !linkedWallet;
+
+  const load = useCallback(async () => {
+    if (!apiKey) return;
     setLoading(true);
     try {
       const [keysRes, balanceRes] = await Promise.all([
@@ -72,7 +83,13 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
       setSessionBalance(balanceRes.balance);
       setError(null);
 
-      if (authMode === "wallet") {
+      const keyWallet = keysRes.data.find((key) => key.wallet)?.wallet ?? null;
+      if (authMode === "clerk" && keyWallet && !wallet) {
+        setLinkedWallet(keyWallet);
+      }
+
+      const fundingReady = Boolean(keyWallet || wallet) || authMode === "wallet";
+      if (fundingReady) {
         try {
           const [info, history] = await Promise.all([
             fetchDepositInfo(apiKey),
@@ -84,18 +101,22 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
           setDepositInfo(null);
           setDepositHistory(null);
         }
-      }    } catch (err) {
+      } else {
+        setDepositInfo(null);
+        setDepositHistory(null);
+      }
+    } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load billing");
     } finally {
       setLoading(false);
     }
-  }, [apiKey, authMode]);
+  }, [apiKey, authMode, wallet, setLinkedWallet]);
 
   const hasPending = hasPendingDeposits(depositHistory);
   const shouldPollDeposits = hasPending || trackingTxHash !== null;
 
   const refreshDeposits = useCallback(async () => {
-    if (!apiKey || authMode !== "wallet") return;
+    if (!apiKey || !canFundWithUsdc) return;
 
     try {
       const [balanceRes, history, keysRes] = await Promise.all([
@@ -109,7 +130,7 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
     } catch {
       // Keep showing the last known state while polling.
     }
-  }, [apiKey, authMode]);
+  }, [apiKey, canFundWithUsdc]);
 
   useEffect(() => {
     void load();
@@ -124,7 +145,7 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
   }, [trackingTxHash, depositHistory]);
 
   useEffect(() => {
-    if (!apiKey || authMode !== "wallet" || !shouldPollDeposits) {
+    if (!apiKey || !canFundWithUsdc || !shouldPollDeposits) {
       setWatchingDeposits(false);
       return;
     }
@@ -162,7 +183,7 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
       window.clearTimeout(intervalId);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [apiKey, authMode, shouldPollDeposits, refreshDeposits]);
+  }, [apiKey, canFundWithUsdc, shouldPollDeposits, refreshDeposits]);
 
   const handleDepositSubmitted = useCallback(
     (txHash: string) => {
@@ -171,6 +192,17 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
     },
     [refreshDeposits],
   );
+
+  const handleWalletLinked = useCallback(
+    (linkedWallet: string) => {
+      setSuccess(
+        `Wallet ${formatWallet(linkedWallet)} linked. You can now buy credits with USDC.`,
+      );
+      void load();
+    },
+    [load],
+  );
+
   useEffect(() => {
     if (!apiKey) return;
 
@@ -207,12 +239,13 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
   const currentKey = keys.find((key) => key.is_current);
   const hasUnmatchedDeposits =
     depositHistory?.data.some((deposit) => deposit.status === "unmatched") ?? false;
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Account"
         title="Billing"
-        description="Credit balances and funding for your API keys."
+        description="Credit balances and USDC funding for your API keys."
       />
 
       {error && <AlertBanner tone="error">{error}</AlertBanner>}
@@ -233,7 +266,11 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
         />
       </div>
 
-      {depositInfo && authMode === "wallet" && (
+      {needsFundingWallet && (
+        <ConnectFundingWalletCard onLinked={handleWalletLinked} />
+      )}
+
+      {depositInfo && canFundWithUsdc && (
         <>
           {watchingDeposits && (
             <AlertBanner tone="info">
@@ -254,74 +291,76 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
               <p className="font-medium">Unmatched deposit detected</p>
               <p className="mt-1 opacity-90">
                 Only USDC sent from your verified wallet ({formatWallet(depositInfo.wallet)})
-                is credited automatically. If you used a different address, sign out and sign in
-                with that wallet instead. If the transfer came from your linked wallet but still
-                shows as unmatched, contact support with the transaction hash — we can credit it
-                manually after verification.
+                is credited automatically. If you used a different address, link that wallet
+                instead (or sign in with it). If the transfer came from your linked wallet but
+                still shows as unmatched, contact support with the transaction hash.
               </p>
             </AlertBanner>
           )}
           <DataTable
             title="Deposit history"
             description="USDC transfers from your verified wallet to the treasury."
-          >          <DataTableHead>
-            <tr>
-              <DataTableTh>Date</DataTableTh>
-              <DataTableTh>Amount</DataTableTh>
-              <DataTableTh>Status</DataTableTh>
-              <DataTableTh>Transaction</DataTableTh>
-            </tr>
-          </DataTableHead>
-          <DataTableBody>
-            {loading ? (
-              <DataTableEmpty colSpan={4}>Loading deposits…</DataTableEmpty>
-            ) : depositHistory.data.length === 0 ? (
-              <DataTableEmpty colSpan={4}>
-                No deposits yet. Send USDC from your linked wallet to fund credits.
-              </DataTableEmpty>
-            ) : (
-              depositHistory.data.map((deposit) => (
-                <DataTableRow key={`${deposit.tx_hash}-${deposit.created_at}`}>
-                  <DataTableCell>
-                    {formatDateTime(deposit.credited_at ?? deposit.created_at)}
-                  </DataTableCell>
-                  <DataTableCell mono className="text-success">
-                    +{formatUsd(deposit.amount)}
-                  </DataTableCell>
-                  <DataTableCell>
-                    <div className="space-y-1">
-                      <Chip tone={depositStatusTone(deposit)}>
-                        {depositStatusLabel(
-                          deposit,
-                          depositHistory.confirmations_required,
+          >
+            <DataTableHead>
+              <tr>
+                <DataTableTh>Date</DataTableTh>
+                <DataTableTh>Amount</DataTableTh>
+                <DataTableTh>Status</DataTableTh>
+                <DataTableTh>Transaction</DataTableTh>
+              </tr>
+            </DataTableHead>
+            <DataTableBody>
+              {loading ? (
+                <DataTableEmpty colSpan={4}>Loading deposits…</DataTableEmpty>
+              ) : depositHistory.data.length === 0 ? (
+                <DataTableEmpty colSpan={4}>
+                  No deposits yet. Send USDC from your linked wallet to fund credits.
+                </DataTableEmpty>
+              ) : (
+                depositHistory.data.map((deposit) => (
+                  <DataTableRow key={`${deposit.tx_hash}-${deposit.created_at}`}>
+                    <DataTableCell>
+                      {formatDateTime(deposit.credited_at ?? deposit.created_at)}
+                    </DataTableCell>
+                    <DataTableCell mono className="text-success">
+                      +{formatUsd(deposit.amount)}
+                    </DataTableCell>
+                    <DataTableCell>
+                      <div className="space-y-1">
+                        <Chip tone={depositStatusTone(deposit)}>
+                          {depositStatusLabel(
+                            deposit,
+                            depositHistory.confirmations_required,
+                          )}
+                        </Chip>
+                        {deposit.status === "unmatched" && depositInfo && (
+                          <p className="max-w-xs text-body-sm text-on-surface-muted">
+                            Sent from an unverified address, or arrived before this wallet was
+                            linked. Link the sending wallet or email support with the tx hash.
+                          </p>
                         )}
-                      </Chip>
-                      {deposit.status === "unmatched" && depositInfo && (
-                        <p className="max-w-xs text-body-sm text-on-surface-muted">
-                          Sent from an unverified address, or arrived before this wallet was
-                          linked. Sign in with the sending wallet or email support with the tx
-                          hash.
-                        </p>
-                      )}
-                    </div>
-                  </DataTableCell>                  <DataTableCell>
-                    <a
-                      href={txExplorerUrl(depositHistory.chain, deposit.tx_hash)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono text-body-sm text-primary hover:underline"
-                    >
-                      {deposit.tx_hash.slice(0, 10)}…
-                    </a>
-                  </DataTableCell>
-                </DataTableRow>
-              ))
-            )}
-          </DataTableBody>
-        </DataTable>
+                      </div>
+                    </DataTableCell>
+                    <DataTableCell>
+                      <a
+                        href={txExplorerUrl(depositHistory.chain, deposit.tx_hash)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-body-sm text-primary hover:underline"
+                      >
+                        {deposit.tx_hash.slice(0, 10)}…
+                      </a>
+                    </DataTableCell>
+                  </DataTableRow>
+                ))
+              )}
+            </DataTableBody>
+          </DataTable>
         </>
       )}
-      {devTopUpAvailable && (        <Card accent="info">
+
+      {devTopUpAvailable && (
+        <Card accent="info">
           <p className="text-label-sm text-info">Dev top-up</p>
           <h3 className="mt-2 text-title-md text-on-surface">Add credits to session key</h3>
           <p className="mt-2 text-body-sm text-on-surface-muted">
@@ -329,7 +368,7 @@ export function BillingPage() {  const { apiKey, authMode } = useAuth();
             <code className="rounded border border-border bg-background px-1.5 py-0.5 text-mono-sm">
               CREDITS_ALLOW_SELF_TOPUP=true
             </code>{" "}
-            on the API.
+            on the API. Production funding is USDC only.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             {TOP_UP_AMOUNTS.map((amount) => (
