@@ -150,6 +150,24 @@ const STEPS = [
   },
 ];
 
+const MCP_ONBOARDING_STEPS = [
+  {
+    step: "01",
+    title: "Get an API key",
+    body: "Create a key from the console and keep it in your local MCP config as LMX_API_KEY.",
+  },
+  {
+    step: "02",
+    title: "Add MCP config",
+    body: "Set lmxcloud to https://mcp.lmxcloud.io/mcp and add Authorization: Bearer lmx_YOUR_KEY in .cursor/mcp.json headers.",
+  },
+  {
+    step: "03",
+    title: "Run chat_completion",
+    body: "Call list_models, then run chat_completion with model deepseek-v3.2 to confirm end-to-end routing.",
+  },
+];
+
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -259,6 +277,9 @@ export function LandingPage() {
                   </Button>
                   <Button to="/docs#pricing" variant="secondary" size="lg">
                     Agent payments (x402)
+                  </Button>
+                  <Button to="/docs#mcp" variant="secondary" size="lg">
+                    Use via MCP
                   </Button>
                 </div>
 
@@ -434,6 +455,35 @@ export function LandingPage() {
                   <code>{CODE_EXAMPLE}</code>
                 </pre>
               </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* MCP onboarding */}
+        <section className="border-y border-border bg-surface py-16 sm:py-20">
+          <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
+            <SectionHeader
+              eyebrow="MCP quickstart"
+              title="Connect agents in 3 steps"
+              description="Use the hosted MCP endpoint as the default integration path. Keep local --dir config for development only."
+              centered
+            />
+            <div className="mt-10 grid gap-4 md:grid-cols-3">
+              {MCP_ONBOARDING_STEPS.map((step) => (
+                <Card key={step.step} accent="info">
+                  <p className="text-metric text-info/30">{step.step}</p>
+                  <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
+                  <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
+                </Card>
+              ))}
+            </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button to="/docs#mcp" size="lg">
+                MCP quickstart
+              </Button>
+              <Button to="/console/keys" variant="secondary" size="lg">
+                Get API key
+              </Button>
             </div>
           </div>
         </section>

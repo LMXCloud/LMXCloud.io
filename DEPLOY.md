@@ -87,8 +87,8 @@ Deploy MCP as a separate service so agent traffic does not couple to API contain
    | `LMX_MCP_TRANSPORT` | Yes | `http` |
    | `LMX_MCP_HOST` | Yes | `0.0.0.0` |
    | `LMX_MCP_PORT` | Yes | `3334` |
-   | `LMX_API_BASE_URL` | Yes | Public API base URL (e.g. `https://api.lmxcloud.io`) |
-   | `LMX_API_KEY` | Yes | Service API key used for MCP tool calls |
+   | `LMX_API_BASE_URL` | Yes | Public API base URL (e.g. `https://lmxcloudapi-production.up.railway.app`) |
+   | `LMX_ADMIN_API_KEY` | No | Optional smoke-test fallback only — users should pass their own key |
    | `LMX_DEFAULT_MODEL` | No | `deepseek-v3.2` |
 
 4. Generate a Railway domain (example: `https://lmxcloud-mcp-production.up.railway.app`).

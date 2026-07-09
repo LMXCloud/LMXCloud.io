@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { listUniqueModelAliases } from "@lmxcloud/shared";
 import { API_BASE, fetchModels, type ModelsResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
@@ -38,12 +39,14 @@ const SECTIONS = [
 ] as const;
 
 const EXAMPLE_BASE = API_BASE;
+const MCP_HOSTED_BASE = "https://mcp.lmxcloud.io/mcp";
 
 const CATALOG_MODELS = listUniqueModelAliases();
 
 export function DocsPage() {
   const [models, setModels] = useState<ModelsResponse | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const location = useLocation();
 
   useEffect(() => {
     void fetchModels()
@@ -52,6 +55,20 @@ export function DocsPage() {
         setModelsError(err instanceof Error ? err.message : "Failed to load models"),
       );
   }, []);
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const targetId = location.hash.slice(1);
+    if (!targetId) return;
+
+    // React Router hash navigation can miss in-app transitions; scroll explicitly.
+    window.requestAnimationFrame(() => {
+      const element = document.getElementById(targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }, [location.hash]);
 
   return (
     <PublicLayout>
@@ -203,17 +220,44 @@ console.log(response.choices[0].message.content);`}
                 </li>
               </ul>
 
-              <h3 className="mt-8 text-title-md text-on-surface">Cursor config (outside repo demo)</h3>
+              <h3 className="mt-8 text-title-md text-on-surface">Hosted config (production)</h3>
               <p className="mt-2 text-body-sm text-on-surface-muted">
-                In any other repository, add a{" "}
-                <code className="text-mono-sm">.cursor/mcp.json</code> file that points back to your
-                LMX Cloud repo:
+                Add this to <code className="text-mono-sm">.cursor/mcp.json</code> in any repository.
+                Your API key is sent per user via the <code className="text-mono-sm">Authorization</code>{" "}
+                header — each caller pays from their own balance.
               </p>
               <div className="mt-4">
                 <CodeBlock title=".cursor/mcp.json">
                   {`{
   "mcpServers": {
-    "lmxcloud-local": {
+    "lmxcloud": {
+      "url": "${MCP_HOSTED_BASE}",
+      "headers": {
+        "Authorization": "Bearer lmx_YOUR_KEY"
+      }
+    }
+  }
+}`}
+                </CodeBlock>
+              </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Create a key in the{" "}
+                <Link to="/console/keys" className="text-primary hover:text-primary-hover">
+                  console
+                </Link>
+                , then run <code className="text-mono-sm">chat_completion</code>. Missing or invalid
+                keys return clear MCP errors before inference is attempted.
+              </p>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Local dev fallback</h3>
+              <p className="mt-2 text-body-sm text-on-surface-muted">
+                Use this only when developing the MCP server from source in this repository.
+              </p>
+              <div className="mt-4">
+                <CodeBlock title=".cursor/mcp.json (dev only)">
+                  {`{
+  "mcpServers": {
+    "lmxcloud-local-dev": {
       "command": "pnpm",
       "args": [
         "--dir",

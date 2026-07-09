@@ -1,6 +1,6 @@
 import { Check, Copy, KeyRound, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { API_BASE, createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
+import { createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
 import {
   DataTable,
@@ -29,23 +29,17 @@ export function KeysPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
 
+  const mcpHostedUrl =
+    import.meta.env.VITE_MCP_URL?.trim() || "https://mcp.lmxcloud.io/mcp";
+
   const mcpConfig = newKey
     ? JSON.stringify(
         {
           mcpServers: {
-            "lmxcloud-local": {
-              command: "pnpm",
-              args: [
-                "--dir",
-                "C:/Users/you/path/to/LMXCloud.io",
-                "--filter",
-                "@lmxcloud/mcp-server",
-                "dev",
-              ],
-              env: {
-                LMX_API_BASE_URL: API_BASE,
-                LMX_API_KEY: newKey,
-                LMX_DEFAULT_MODEL: "deepseek-v3.2",
+            lmxcloud: {
+              url: mcpHostedUrl,
+              headers: {
+                Authorization: `Bearer ${newKey}`,
               },
             },
           },
@@ -171,8 +165,8 @@ export function KeysPage() {
             <p className="text-label-sm text-on-surface">Use with MCP</p>
             <p className="mt-1 text-body-sm text-on-surface-muted">
               Generate a key, then copy this config into a different repository&apos;s{" "}
-              <code className="text-mono-sm">.cursor/mcp.json</code> to test LMX tools from outside
-              this workspace.
+              <code className="text-mono-sm">.cursor/mcp.json</code>. Your key is sent via{" "}
+              <code className="text-mono-sm">Authorization</code> so usage bills to your account.
             </p>
           </div>
           <Button

@@ -1,146 +1,87 @@
 import "dotenv/config";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import { logToolEvent } from "./log.js";
+import {
+  fetchJson,
+  getSupportedModels,
+  guardToolAccess,
+  normalizeMessageContent,
+  validateApiKey,
+  type LmxChatResponse,
+} from "./lmx-client.js";
+import { runWithRequestContext } from "./request-context.js";
 
-type LmxChatResponse = {
-  id?: string;
-  model?: string;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-  choices?: Array<{
-    message?: {
-      content?: string | Array<{ type?: string; text?: string }>;
-    };
-  }>;
-};
-
-type LmxModelsResponse = {
-  object: "list";
-  data: Array<{
-    id: string;
-    owned_by: string;
-  }>;
-};
-
-const API_BASE_URL =
-  process.env.LMX_API_BASE_URL?.replace(/\/+$/, "") ?? "http://127.0.0.1:3000";
-const API_KEY = process.env.LMX_API_KEY;
 const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "deepseek-v3.2";
-const MCP_TRANSPORT = process.env.LMX_MCP_TRANSPORT ?? "stdio";
+const MCP_TRANSPORT = (process.env.LMX_MCP_TRANSPORT ?? "stdio") as "stdio" | "http";
 const MCP_HOST = process.env.LMX_MCP_HOST ?? "0.0.0.0";
 const MCP_PORT = Number(process.env.PORT ?? process.env.LMX_MCP_PORT ?? 3334);
 
-function authHeaders(): Record<string, string> {
-  if (!API_KEY) {
-    return {};
-  }
+const optionalApiKeySchema = z
+  .string()
+  .regex(/^lmx_[0-9a-f]{32}$/i)
+  .optional()
+  .describe(
+    "Optional LMX API key (lmx_...). Prefer MCP client Authorization header or env; use this to override per call.",
+  );
 
+function requestContextFromHttp(req: IncomingMessage) {
+  const authorizationHeader = req.headers.authorization;
   return {
-    Authorization: `Bearer ${API_KEY}`,
+    authorizationHeader: Array.isArray(authorizationHeader)
+      ? authorizationHeader[0]
+      : authorizationHeader,
   };
 }
 
-function normalizeMessageContent(content: LmxChatResponse["choices"]): string {
-  const raw = content?.[0]?.message?.content;
-  if (!raw) {
-    return "";
-  }
-
-  if (typeof raw === "string") {
-    return raw;
-  }
-
-  return raw
-    .map((part) => (part?.type === "text" && part?.text ? part.text : ""))
-    .join("");
-}
-
-async function fetchJson<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
-  try {
-    const response = await fetch(`${API_BASE_URL}${path}`, init);
-    const text = await response.text();
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: `LMX API returned ${response.status}: ${text || response.statusText}`,
-      };
-    }
-
-    return { ok: true, data: JSON.parse(text) as T };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown fetch error",
-    };
-  }
-}
-
-async function getSupportedModels(): Promise<
-  { ok: true; models: LmxModelsResponse["data"]; ids: Set<string> } | { ok: false; error: string }
-> {
-  const response = await fetchJson<LmxModelsResponse>("/v1/models", {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...authHeaders(),
-    },
-  });
-
-  if (!response.ok) {
-    return { ok: false, error: response.error };
-  }
-
-  const models = response.data.data ?? [];
-  return {
-    ok: true,
-    models,
-    ids: new Set(models.map((item) => item.id)),
-  };
-}
-
-function createLmxMcpServer(): McpServer {
+function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
   const server = new McpServer({
     name: "lmxcloud-mcp",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
   server.tool(
     "get_pricing",
     "Fetch current LMX Cloud per-call pricing catalog.",
-    {},
-    async () => {
+    {
+      api_key: optionalApiKeySchema,
+    },
+    async ({ api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "get_pricing",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: false,
+      });
+      if (!access.ok) {
+        return { isError: true, content: [{ type: "text", text: access.message }] };
+      }
+
       const pricing = await fetchJson<unknown>("/v1/pricing", {
         method: "GET",
-        headers: {
-          Accept: "application/json",
-          ...authHeaders(),
-        },
+        headers: { Accept: "application/json" },
+      });
+
+      const ok = pricing.ok;
+      logToolEvent({
+        tool: "get_pricing",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok,
+        latencyMs: Date.now() - started,
+        detail: ok ? undefined : pricing.error,
       });
 
       if (!pricing.ok) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: pricing.error }],
-        };
+        return { isError: true, content: [{ type: "text", text: pricing.error }] };
       }
 
       return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(pricing.data, null, 2),
-          },
-        ],
+        content: [{ type: "text", text: JSON.stringify(pricing.data, null, 2) }],
       };
     },
   );
@@ -148,9 +89,34 @@ function createLmxMcpServer(): McpServer {
   server.tool(
     "list_models",
     "List currently supported LMX model aliases and providers.",
-    {},
-    async () => {
-      const models = await getSupportedModels();
+    {
+      api_key: optionalApiKeySchema,
+    },
+    async ({ api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "list_models",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: false,
+      });
+      if (!access.ok) {
+        return { isError: true, content: [{ type: "text", text: access.message }] };
+      }
+
+      const models = await getSupportedModels(
+        access.auth.apiKey || undefined,
+      );
+      const ok = models.ok;
+      logToolEvent({
+        tool: "list_models",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok,
+        latencyMs: Date.now() - started,
+        detail: ok ? undefined : models.error,
+      });
+
       if (!models.ok) {
         return {
           isError: true,
@@ -158,6 +124,7 @@ function createLmxMcpServer(): McpServer {
         };
       }
 
+      const data = models.data.data ?? [];
       return {
         content: [
           {
@@ -166,8 +133,8 @@ function createLmxMcpServer(): McpServer {
               {
                 object: "list",
                 default_model: DEFAULT_MODEL,
-                count: models.models.length,
-                data: models.models,
+                count: data.length,
+                data,
               },
               null,
               2,
@@ -180,12 +147,9 @@ function createLmxMcpServer(): McpServer {
 
   server.tool(
     "chat_completion",
-    "Call LMX Cloud OpenAI-compatible chat completions endpoint.",
+    "Call LMX Cloud OpenAI-compatible chat completions endpoint. Requires a user API key.",
     {
-      prompt: z
-        .string()
-        .min(1)
-        .describe("User prompt to send to the selected model."),
+      prompt: z.string().min(1).describe("User prompt to send to the selected model."),
       model: z
         .string()
         .optional()
@@ -203,11 +167,44 @@ function createLmxMcpServer(): McpServer {
         .max(2)
         .optional()
         .describe("Optional sampling temperature."),
+      api_key: optionalApiKeySchema,
     },
-    async ({ prompt, model, max_tokens, temperature }) => {
+    async ({ prompt, model, max_tokens, temperature, api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "chat_completion",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: true,
+      });
+      if (!access.ok) {
+        return { isError: true, content: [{ type: "text", text: access.message }] };
+      }
+
+      const authError = await validateApiKey(access.auth.apiKey);
+      if (authError) {
+        logToolEvent({
+          tool: "chat_completion",
+          callerId: access.auth.callerId,
+          source: access.auth.source,
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail: authError,
+        });
+        return { isError: true, content: [{ type: "text", text: authError }] };
+      }
+
       const selectedModel = model ?? DEFAULT_MODEL;
-      const models = await getSupportedModels();
+      const models = await getSupportedModels(access.auth.apiKey);
       if (!models.ok) {
+        logToolEvent({
+          tool: "chat_completion",
+          callerId: access.auth.callerId,
+          source: access.auth.source,
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail: models.error,
+        });
         return {
           isError: true,
           content: [
@@ -218,21 +215,24 @@ function createLmxMcpServer(): McpServer {
           ],
         };
       }
-      if (!models.ids.has(selectedModel)) {
-        const suggestions = models.models.slice(0, 12).map((entry) => entry.id);
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: [
-                `Model "${selectedModel}" is not currently supported.`,
-                "Use `list_models` to see the full live list.",
-                `Try one of: ${suggestions.join(", ")}`,
-              ].join("\n"),
-            },
-          ],
-        };
+
+      const ids = new Set((models.data.data ?? []).map((entry) => entry.id));
+      if (!ids.has(selectedModel)) {
+        const suggestions = (models.data.data ?? []).slice(0, 12).map((entry) => entry.id);
+        const message = [
+          `Model "${selectedModel}" is not currently supported.`,
+          "Use `list_models` to see the full live list.",
+          `Try one of: ${suggestions.join(", ")}`,
+        ].join("\n");
+        logToolEvent({
+          tool: "chat_completion",
+          callerId: access.auth.callerId,
+          source: access.auth.source,
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail: message,
+        });
+        return { isError: true, content: [{ type: "text", text: message }] };
       }
 
       const payload = {
@@ -248,16 +248,23 @@ function createLmxMcpServer(): McpServer {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          ...authHeaders(),
+          Authorization: `Bearer ${access.auth.apiKey}`,
         },
         body: JSON.stringify(payload),
       });
 
+      const ok = completion.ok;
+      logToolEvent({
+        tool: "chat_completion",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok,
+        latencyMs: Date.now() - started,
+        detail: ok ? undefined : completion.error,
+      });
+
       if (!completion.ok) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: completion.error }],
-        };
+        return { isError: true, content: [{ type: "text", text: completion.error }] };
       }
 
       const text = normalizeMessageContent(completion.data.choices);
@@ -265,9 +272,7 @@ function createLmxMcpServer(): McpServer {
         content: [
           {
             type: "text",
-            text:
-              text ||
-              "LMX API returned a completion response without text content.",
+            text: text || "LMX API returned a completion response without text content.",
           },
           {
             type: "text",
@@ -290,13 +295,13 @@ function createLmxMcpServer(): McpServer {
 }
 
 async function startStdioServer() {
-  const server = createLmxMcpServer();
+  const server = createLmxMcpServer("stdio");
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
 async function startHttpServer() {
-  const server = createLmxMcpServer();
+  const server = createLmxMcpServer("http");
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });
@@ -312,13 +317,16 @@ async function startHttpServer() {
           ok: true,
           transport: "http",
           endpoint: "/mcp",
+          auth: "Bearer lmx_... required for chat_completion",
         }),
       );
       return;
     }
 
     if (url.pathname === "/mcp") {
-      await transport.handleRequest(req, res);
+      await runWithRequestContext(requestContextFromHttp(req), async () => {
+        await transport.handleRequest(req, res);
+      });
       return;
     }
 
