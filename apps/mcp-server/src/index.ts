@@ -33,8 +33,8 @@ const API_BASE_URL =
 const API_KEY = process.env.LMX_API_KEY;
 const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "deepseek-v3.2";
 const MCP_TRANSPORT = process.env.LMX_MCP_TRANSPORT ?? "stdio";
-const MCP_HOST = process.env.LMX_MCP_HOST ?? "127.0.0.1";
-const MCP_PORT = Number(process.env.LMX_MCP_PORT ?? 3334);
+const MCP_HOST = process.env.LMX_MCP_HOST ?? "0.0.0.0";
+const MCP_PORT = Number(process.env.PORT ?? process.env.LMX_MCP_PORT ?? 3334);
 
 function authHeaders(): Record<string, string> {
   if (!API_KEY) {
