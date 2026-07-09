@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import * as Sentry from "@sentry/node";
-import { setSettlementOverrides } from "@x402/fastify";
 import { AllProvidersDownError, ModelNotSupportedError, ProviderError } from "../providers/types.js";
 import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
@@ -10,7 +9,7 @@ import type { InferenceRouter } from "../routing/router.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
 import type { PaymentStore } from "../payments/store.js";
-import { parseChatBody, formatUsdPrice } from "../payments/quote-context.js";
+import { parseChatBody } from "../payments/quote-context.js";
 import { hashPaymentPayload } from "../payments/idempotency.js";
 
 interface ChatRouteDeps {
@@ -71,6 +70,54 @@ function extractX402Payer(request: FastifyRequest): string | undefined {
   )?.toLowerCase();
 }
 
+function x402RateLimitKey(request: FastifyRequest): string {
+  const payer = extractX402Payer(request);
+  if (payer) return `x402:payer:${payer}`;
+  return `x402:ip:${request.ip}`;
+}
+
+async function rejectReplayedX402Payment(
+  paymentStore: PaymentStore | null,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<boolean> {
+  if (!paymentStore || !request.x402Context) return false;
+
+  const payloadHash = hashPaymentPayload(
+    JSON.stringify(request.x402Context.paymentPayload),
+  );
+  const payment = await paymentStore.findByPayloadHash(payloadHash);
+  if (!payment) return false;
+
+  const alreadyConsumed =
+    payment.status === "completed" ||
+    payment.status === "refunded" ||
+    payment.usageEventId !== null;
+  if (alreadyConsumed) {
+    await reply.status(409).send({
+      error: {
+        message: "Payment payload has already been consumed",
+        type: "invalid_request_error",
+        code: "x402_payment_replay",
+      },
+    });
+    return true;
+  }
+
+  if (payment.status === "settled") {
+    await reply.status(409).send({
+      error: {
+        message: "Payment payload is already settled and cannot be reused",
+        type: "invalid_request_error",
+        code: "x402_payment_replay",
+      },
+    });
+    return true;
+  }
+
+  return false;
+}
+
 async function linkX402Usage(
   paymentStore: PaymentStore | null,
   request: FastifyRequest,
@@ -85,15 +132,6 @@ async function linkX402Usage(
   if (!payment) return;
 
   await paymentStore.linkUsageEvent(payment.id, usageEventId);
-}
-
-function applyX402SettlementAmount(
-  reply: FastifyReply,
-  requestCost: number,
-  isX402: boolean,
-): void {
-  if (!isX402 || requestCost <= 0) return;
-  setSettlementOverrides(reply, { amount: formatUsdPrice(requestCost) });
 }
 
 async function handleProviderErrors(
@@ -180,7 +218,7 @@ export async function registerChatRoutes(
 
     const rateLimitKey = isBalance
       ? request.apiKey!.id
-      : `x402:${request.ip}`;
+      : x402RateLimitKey(request);
     const limiter = isBalance ? deps.chatRateLimit : deps.x402RateLimit;
     const limit = limiter ? limiter(rateLimitKey) : { allowed: true as const };
 
@@ -194,6 +232,10 @@ export async function registerChatRoutes(
             type: "rate_limit_error",
           },
         });
+    }
+
+    if (isX402 && await rejectReplayedX402Payment(deps.paymentStore, request, reply)) {
+      return;
     }
 
     const validated = parseChatBody(request.body);
@@ -339,8 +381,6 @@ export async function registerChatRoutes(
           });
         }
       }
-
-      applyX402SettlementAmount(reply, requestCost, isX402);
 
       let usageEventId: string | null = null;
       try {

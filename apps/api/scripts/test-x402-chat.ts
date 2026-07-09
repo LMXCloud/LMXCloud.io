@@ -29,7 +29,10 @@ import {
 } from "@x402/evm";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+const envFile = process.argv.includes("--mainnet")
+  ? ".env.mainnet"
+  : ".env";
+dotenv.config({ path: path.resolve(__dirname, "../../../", envFile) });
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 const MODEL = process.env.MODEL ?? "llama-3-70b";
@@ -39,6 +42,44 @@ const RPC_URL = process.env.BASE_RPC_URL;
 const USDC_ADDRESS = process.env.USDC_CONTRACT_ADDRESS as `0x${string}` | undefined;
 const PAY = process.argv.includes("--pay");
 const PAID_REQUEST_TIMEOUT_MS = Number(process.env.X402_TEST_TIMEOUT_MS ?? 600_000);
+const REPEAT = parsePositiveIntFlag("--repeat", Number(process.env.X402_TEST_REPEAT ?? 1));
+const DELAY_MS = parseNonNegativeIntFlag(
+  "--delay-ms",
+  Number(process.env.X402_TEST_DELAY_MS ?? 0),
+);
+
+function parsePositiveIntFlag(flag: string, fallback: number): number {
+  const index = process.argv.indexOf(flag);
+  if (index === -1) return fallback;
+  const raw = process.argv[index + 1];
+  if (!raw) {
+    throw new Error(`${flag} requires a value`);
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${flag} must be a positive integer`);
+  }
+  return value;
+}
+
+function parseNonNegativeIntFlag(flag: string, fallback: number): number {
+  const index = process.argv.indexOf(flag);
+  if (index === -1) return fallback;
+  const raw = process.argv[index + 1];
+  if (!raw) {
+    throw new Error(`${flag} requires a value`);
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${flag} must be a non-negative integer`);
+  }
+  return value;
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function configureLongFetchTimeout(): void {
   process.env.UNDICI_HEADERS_TIMEOUT = String(PAID_REQUEST_TIMEOUT_MS);
@@ -123,12 +164,12 @@ async function ensurePermit2Allowance(
 
   if (ethBalance === 0n) {
     throw new Error(
-      "Payer wallet has no ETH for gas on Base Sepolia. Get test ETH from a Base Sepolia faucet.",
+      `Payer wallet has no ETH for gas on ${chain.name}. Fund the payer wallet before running --pay.`,
     );
   }
   if ((usdcBalance as bigint) < requiredAmount) {
     throw new Error(
-      `Payer wallet needs at least ${formatUnits(requiredAmount, 6)} USDC on Base Sepolia (Circle faucet).`,
+      `Payer wallet needs at least ${formatUnits(requiredAmount, 6)} USDC on ${chain.name}.`,
     );
   }
 
@@ -267,25 +308,35 @@ async function paidRequest(): Promise<void> {
 async function main(): Promise<void> {
   if (PAY) {
     configureLongFetchTimeout();
-    await paidRequest();
-    console.log("x402 paid chat completion: OK");
+    for (let i = 1; i <= REPEAT; i += 1) {
+      console.log(`x402 paid run ${i}/${REPEAT}...`);
+      await paidRequest();
+      console.log(`x402 paid run ${i}/${REPEAT}: OK`);
+      await sleep(DELAY_MS);
+    }
+    console.log(`x402 paid chat completion soak: OK (${REPEAT} runs)`);
     return;
   }
 
-  const response = await unpaidRequest();
-  const body = await response.json().catch(() => ({}));
+  for (let i = 1; i <= REPEAT; i += 1) {
+    console.log(`x402 unpaid run ${i}/${REPEAT}...`);
+    const response = await unpaidRequest();
+    const body = await response.json().catch(() => ({}));
 
-  console.log(JSON.stringify({
-    status: response.status,
-    paymentRequiredHeader: response.headers.get("payment-required") ?? response.headers.get("x-payment-required"),
-    body,
-  }, null, 2));
+    console.log(JSON.stringify({
+      run: i,
+      status: response.status,
+      paymentRequiredHeader: response.headers.get("payment-required") ?? response.headers.get("x-payment-required"),
+      body,
+    }, null, 2));
 
-  if (response.status !== 402) {
-    throw new Error(`Expected 402 without payment, got ${response.status}`);
+    if (response.status !== 402) {
+      throw new Error(`Expected 402 without payment, got ${response.status}`);
+    }
+    await sleep(DELAY_MS);
   }
 
-  console.log("x402 unpaid probe: OK (402 returned)");
+  console.log(`x402 unpaid probe soak: OK (${REPEAT} runs)`);
 }
 
 main().catch((err) => {

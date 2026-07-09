@@ -2,7 +2,7 @@
 
 Original goal: go from working proof-of-concept (Phase 1-7) to something you can hand to strangers — developers trying it for free — without it breaking, leaking data, or embarrassing you. That base layer is done. The roadmap has since grown a second, bigger goal on top of it: reposition as Web3-native infrastructure and become "findable and payable" by autonomous agents (Phase 1 distribution, below). Both tracks are tracked in this one file — free-beta hardening didn't stop mattering, it's just no longer the only thing happening.
 
-## CURRENT STATE SNAPSHOT (2026-07-08, evening) — read this first
+## CURRENT STATE SNAPSHOT (2026-07-08, late evening) — read this first
 
 Everything below is verified directly against the code and local test runs, not assumed from memory or from what Cursor's own summaries claimed. This section supersedes the blow-by-blow notes further down for a quick read; the detailed sections below stay as the record of *why* each decision was made.
 
@@ -14,7 +14,8 @@ Everything below is verified directly against the code and local test runs, not 
 - **Web3-1: wallet identity + USDC funding on Base — shipped, hardened, verified end-to-end.** SIWE sign-in (browser or raw keypair script), Clerk as alternate auth, USDC deposits auto-crediting via confirmation-gated poller, in-console "Add Credits" flow, adaptive billing refresh, wrong-network detection, unmatched-deposit guidance. Railway confirmed on Base mainnet config (`SIWE_CHAIN_ID`, `BASE_RPC_URL`).
 - **Web3-2: verifiable on-chain logs — shipped, verified end-to-end on Base Sepolia (2026-07-07).** Per-request `lmx_receipt_v1` receipts, batched Merkle anchoring via `LmxLogAnchor` + background poller, `GET /v1/usage/logs/:id/proof`, anchoring on `GET /v1/status` and `StatusPage.tsx`, `pnpm verify:receipt` CLI, unit tests for receipt/Merkle/proof. Historical logs before enablement are not retroactively verifiable.
 - **x402 Sprint 1 — shipped (2026-07-07).** Per-call pricing catalog (`apps/api/src/pricing/`), `GET /v1/pricing`, `payment_events` migration + Postgres store, ADRs in `docs/x402-pricing.md` and `docs/x402-verification.md` (CDP Facilitator chosen).
-- **x402 Sprint 2 — implemented in code, E2E not verified (2026-07-08).** `@x402/fastify` middleware on `POST /v1/chat/completions`, dual path (Bearer → balance; no key → x402), CDP verify/settle hooks, `setSettlementOverrides` for actual cost, `pnpm test:x402` unpaid probe passes (~30ms → 402). **Paid Sepolia E2E (`pnpm test:x402 -- --pay`) still blocked — see flagged blockers below.**
+- **x402 Sprint 2 — verified end-to-end on Base Sepolia (2026-07-08).** `@x402/fastify` middleware on `POST /v1/chat/completions`, dual path (Bearer → balance; no key → x402), CDP verify/settle hooks, `setSettlementOverrides` for actual cost. Unpaid probe (`pnpm test:x402` → 402 in ~30ms) and paid E2E (`pnpm test:x402 -- --pay`) both green: verify → inference → settle with `payment_events` persistence. Paid soak (`--repeat 10`) also green on dedicated Sepolia RPC.
+- **x402 Sprint 3 — partially shipped (2026-07-08, in progress).** Sepolia RPC reliability close-out done (`DEPOSIT_MAX_LOG_BLOCK_RANGE` env + one-time smaller-chunk retry on provider range-limit errors). x402 abuse hardening (partial): replay rejection for consumed payment payloads (`x402_payment_replay`), wallet-aware anonymous rate-limit keys, `X402_ANON_RATE_LIMIT_*` env support. Reliability harness: `test:x402:soak` with `--repeat` / `--delay-ms`. Mainnet profile wired: `.env.mainnet`, `dev:mainnet`, `test:x402:mainnet-canary`, `check:mainnet-balance`; unpaid 402 on `eip155:8453` verified. **Paid mainnet canary not yet green** — see blockers below.
 - **Documentation refresh** — `README.md` and `DocsPage.tsx` describe Web3 direction, wallet auth, USDC funding, verifiable logs, x402 pricing endpoint, and public roadmap section.
 
 ### Known gaps / needs hardening (verified 2026-07-08)
@@ -22,19 +23,28 @@ Everything below is verified directly against the code and local test runs, not 
 **Security — fix before more money flows:**
 - ~~**Wallet squat on `POST /v1/auth/key` (HIGH).**~~ **Fixed 2026-07-07.** Unauthenticated key mint no longer accepts a `wallet` field; wallet-linked keys require SIWE (`/v1/auth/wallet/verify`) or authenticated `POST /v1/auth/keys`.
 
-**x402 Sprint 2 — flagged blockers (do not treat as production-ready until closed):**
+**x402 — resolved blockers (Sprint 2 close-out, verified 2026-07-08):**
+
+| Blocker | Status |
+|---------|--------|
+| Paid E2E hang on Sepolia | **Resolved.** Early body replay hook survives verify gap; `pnpm test:x402 -- --pay` returns 200 and settles. |
+| Neon DB unreachable locally | **Resolved in current dev env.** `payment_events` writes succeeding; fire-and-forget + 5s PG connect timeout in place. |
+| Flaky public Sepolia RPC | **Resolved.** Dedicated Base Sepolia Alchemy endpoint; paid soak 10/10 green. |
+| Deposit poller block-range errors | **Resolved.** `DEPOSIT_MAX_LOG_BLOCK_RANGE` configurable; one-time fallback retry on range-limit responses. |
+
+**x402 Sprint 3 — active blockers:**
 
 | Blocker | Symptom | Likely cause | Fix direction |
 |---------|---------|--------------|---------------|
-| **Paid E2E hang** | `pnpm test:x402 -- --pay` times out after CDP verify (~60–130s) | Fastify body-parser stall after long `onRequest` verify; early raw-body replay may not survive the async gap | Fix `registerEarlyJsonBodyParser` in `x402-server.ts` (cache + `preParsing` short-circuit) |
-| **Neon DB unreachable locally** | `payment_events` writes `ETIMEDOUT`; was blocking HTTP response before defer fix | Network/firewall to Neon from dev machine | Confirm `DATABASE_URL` reachable; use local Postgres for dev or fix VPN; payment recording is now fire-and-forget but still won't persist until DB works |
+| **Mainnet paid canary — RPC throughput** | `pnpm test:x402:mainnet-canary` fails with Alchemy `429` / "exceeded compute units per second" during Permit2 approval or balance reads | Free/low-tier Alchemy mainnet app rate-limited under burst RPC load | Upgrade Alchemy plan or swap `BASE_RPC_URL` in `.env.mainnet` to higher-throughput provider (paid Alchemy, Coinbase CDP node); rerun canary |
+| **Mainnet paid canary — not yet settled** | No `payment_events` row with `chain_id: 8453` yet | Blocked by RPC 429 before verify/settle completes | After RPC fix: `dev:mainnet` + `test:x402:mainnet-canary`; confirm `completed` row with mainnet tx hash |
 | **CDP verify latency** | Every paid call waits 1–2+ min at facilitator | External CDP `/verify` + on-chain simulation | Expected for beta; document in ops; consider async UX / status for agents later |
-| **Flaky Sepolia RPC** | Deposit/anchor pollers log `fetch failed` on `sepolia.base.org` | Public RPC rate limits / instability | Use Alchemy or Coinbase CDP Base Sepolia RPC in `BASE_RPC_URL` |
 | **Dev env hygiene** | `EADDRINUSE :3000`, tests hit stale servers | Multiple `pnpm dev` instances | One API process on 3000 when testing x402 |
 
 **Hard blockers for Phase 1:**
 - **Week 3 legal** — ToS, privacy policy, acceptable use, feedback channel. **Drafts in `legal/` and `/legal/*` (2026-07-08).** Attorney review still required before Bazaar listing.
-- **x402 paid path verified on testnet** — unpaid 402 works; paid verify → inference → settle E2E not yet green on Sepolia. Blocks Goal 1 confidence (not the same as "code doesn't exist").
+- ~~**x402 paid path verified on testnet**~~ — **Done 2026-07-08.** Sprint 2 closed on Base Sepolia.
+- **Mainnet x402 flip not yet verified** — Sprint 3 in progress: mainnet profile wired, payer wallet funded on Base (`~0.0009 ETH`, `~2.28 USDC` as of 2026-07-08), unpaid 402 on mainnet confirmed; paid canary blocked on RPC 429 only.
 - **Payment failure reconciliation** — partial: x402 middleware cancels verified payment on handler 4xx/5xx; no explicit refund tx or user-visible credit-back when provider fails after balance deduct.
 
 **Ops / scale (fine for single-instance beta, harden before scaling):**
@@ -56,11 +66,14 @@ Positioning: **"AWS for Web3"** — Web3-native infrastructure for autonomous AI
 ### What's left to build, roughly in order
 
 0. ~~**Wallet squat fix on `POST /v1/auth/key`**~~ — **done 2026-07-07.**
-1. **Week 3 legal** (Track B) — drafts published at `/legal/*`; **remaining:** attorney review, Clerk signup links if needed. Hard gate before public listing.
+1. **Week 3 legal** (Track B) — drafts published at `/legal/*`; **remaining:** attorney review. Hard gate before public listing. Can run in parallel with Sprint 3 — no engineering dependency.
 2. ~~**x402 Sprint 1**~~ — **done 2026-07-07** (`docs/x402-*.md`, `GET /v1/pricing`, `payment_events` store).
-3. **x402 Sprint 2 close-out** — code landed; **remaining:** fix paid E2E blockers above, green `pnpm test:x402 -- --pay` on Sepolia, then mark done.
-4. **x402 Sprint 3** — mainnet config, abuse/replay hardening, anonymous rate limits, billing UI for per-call payments.
-5. **Phase 1 Goal 1** — Bazaar + Agentic.Market listing (after legal + Sprint 2 E2E + Sprint 3).
+3. ~~**x402 Sprint 2 close-out**~~ — **done 2026-07-08.** Paid Sepolia E2E + 10-run soak green; `payment_events` persistence confirmed.
+4. **x402 Sprint 3 (current focus)** — **partially done.** Remaining:
+   - **Mainnet paid canary** — swap to higher-throughput Base mainnet RPC, rerun `test:x402:mainnet-canary`, confirm `payment_events` row with `chain_id: 8453`.
+   - **Abuse/load hardening** — replay protection landed; still need burst/load validation on anonymous x402 path.
+   - **Payer visibility decision** — internal-only vs wallet-queryable per-call payment history; extend billing/usage UI if needed.
+5. **Phase 1 Goal 1** — Bazaar + Agentic.Market listing (after legal + Sprint 3 mainnet canary green).
 6. **Phase 1 Goal 2** — MCP server.
 7. **Phase 1 Goal 3** — ElizaOS plugin.
 8. **Week 4 outreach prep** — depends on Web2-vs-Web3 sequencing decision.
@@ -68,11 +81,12 @@ Positioning: **"AWS for Web3"** — Web3-native infrastructure for autonomous AI
 
 ### How to make the system better (engineering priorities)
 
-1. **Reliability first** — stable RPC (`BASE_RPC_URL`), reachable Postgres, single-instance discipline, uptime monitor confirmed.
-2. **Close x402 paid loop** — body-parser fix → green Sepolia E2E → then mainnet flip in Sprint 3.
-3. **Legal before listing** — Week 3 content unblocks Bazaar/MCP without taking on unmanaged liability.
-4. **Scale when needed** — Redis-backed rate limits + nonce store before second Railway instance.
-5. **Trust signals** — mainnet anchor deploy, LogsPage proof links, public status page already strong from Web3-2.
+1. **Green mainnet canary** — upgrade mainnet RPC, rerun `test:x402:mainnet-canary`, confirm `payment_events` on chain 8453. This is the immediate gate.
+2. **Finish Sprint 3 hardening** — load-test anonymous x402 path; decide payer visibility model.
+3. **Legal before listing** — attorney review of Week 3 drafts unblocks Bazaar/MCP without unmanaged liability.
+4. **Reliability ops** — uptime monitor confirmed; keep dedicated RPC on both Sepolia (dev) and mainnet (prod).
+5. **Scale when needed** — Redis-backed rate limits + nonce store before second Railway instance.
+6. **Trust signals** — mainnet anchor deploy, LogsPage proof links, public status page already strong from Web3-2.
 
 ### Explicitly not being built right now
 
@@ -96,11 +110,13 @@ Native token (legal counsel first), Virtuals/ACP + Autonolas + Fetch.ai + Bitten
 - ~~Public status page~~ — `StatusPage.tsx` exists.
 - ~~Per-request logs~~ — `LogsPage.tsx` exists.
 
-## Next sprint (decided 2026-07-08): Week 3 legal + x402 Sprint 2 close-out when ready
+## Next sprint (updated 2026-07-08): x402 Sprint 3 close-out + attorney review in parallel
 
-**Immediate next task:** **Week 3 legal** (ToS, privacy, acceptable use, feedback channel) — hard gate for public listing, no engineering dependency. x402 Sprint 2 code is in place; **paid Sepolia E2E is flagged, not done** — revisit when fixing body-parser + DB/RPC env (see blockers table in snapshot).
+**Immediate next tasks, both parallel:** (1) **Mainnet paid canary** — upgrade Base mainnet RPC in `.env.mainnet` (current Alchemy free tier hits 429 under burst load), rerun `pnpm --filter @lmxcloud/api dev:mainnet` + `test:x402:mainnet-canary`, confirm `payment_events` row with `chain_id: 8453`. Payer wallet is funded; RPC throughput is the only remaining blocker. (2) **Attorney review** of Week 3 legal drafts at `/legal/*` — hard gate before Sprint 4 listing, zero engineering dependency.
 
-Web3-2 is done. **Track B (legal)** is the recommended parallel focus. **Track A (x402)** unpaid path works; paid path needs close-out before Sprint 3 / Bazaar. Remaining Web3-2 ops (mainnet anchor deploy, optional LogsPage proof UI) are non-blocking polish.
+**Sprint 3 progress so far (2026-07-08):** Sepolia RPC reliability done (dedicated endpoint, soak 10/10, configurable deposit log chunking). Partial abuse hardening (replay rejection, wallet-aware anon rate limits). Mainnet profile wired (`.env.mainnet`, `dev:mainnet`, `test:x402:mainnet-canary`, `check:mainnet-balance`); unpaid 402 on `eip155:8453` verified. Paid mainnet canary not yet green.
+
+Web3-2 is done. **x402 Sprint 2 is done.** **Track A (x402)** is in Sprint 3 close-out. **Track B (legal)** is attorney review — last non-engineering gate before Sprint 4 (Bazaar/Agentic.Market listing). Remaining Web3-2 ops (mainnet anchor deploy, optional LogsPage proof UI) are non-blocking polish.
 
 **Sequencing (2026-07-06): close the two small loose ends first, ToS/Privacy content after.**
 
@@ -131,7 +147,7 @@ Direction: reposition LMX Cloud as Web3-native infrastructure, not a DePIN-backe
 - ~~`wallet` is never verified~~ — **fixed 2026-07-07:** unauthenticated `POST /v1/auth/key` no longer accepts `wallet`; SIWE and authenticated `POST /v1/auth/keys` are the only wallet-linking paths.
 - `CreditStore.credit(apiKeyId, amount)` in `apps/api/src/credits/postgres-store.ts` is already the exact function a stablecoin deposit listener would call — no schema change needed, just a new caller instead of the manual `CREDITS_ALLOW_SELF_TOPUP` dev route in `routes/balance.ts`.
 - An API key can already be minted with just a `wallet` string and no email (`POST /v1/auth/key`) — meaning agent self-sovereign key minting is nearly free once wallet claims are actually verified.
-- ~~Nothing on-chain exists anywhere in the codebase~~ — **updated 2026-07-08:** Web3-1 added SIWE + USDC deposit polling; Web3-2 added `LmxLogAnchor` contract, Merkle batch anchoring, and proof API. x402 per-call payments are **implemented but paid E2E not verified** (unpaid 402 works; see Sprint 2 blockers in snapshot).
+- ~~Nothing on-chain exists anywhere in the codebase~~ — **updated 2026-07-08:** Web3-1 added SIWE + USDC deposit polling; Web3-2 added `LmxLogAnchor` contract, Merkle batch anchoring, and proof API. x402 per-call payments are **verified end-to-end on Base Sepolia** (paid flow settles on-chain, `payment_events` persists as `completed`) — Sprint 2 done, Sprint 3 (mainnet + hardening) is next.
 
 ### Sprint Web3-1 — Wallet identity + stablecoin rails (foundational, do together)
 
@@ -239,14 +255,17 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 
 - [x] Implement 402 Payment Required response + payment verification on the paid inference routes (`chat.ts` first), per Sprint 1's decision. `@x402/fastify` middleware + `upto` scheme; dual path with Bearer auth for balance users.
 - [x] Reconciliation logic: auto-refund or credit-back when payment succeeds but the downstream io.net/Akash call fails — payment cancellation on handler 4xx/5xx via x402 middleware; partial settlement via `setSettlementOverrides` for actual token cost.
-- [ ] **End-to-end test on Base Sepolia — FLAGGED (2026-07-08).** Unpaid probe green (`pnpm test:x402` → 402 in ~30ms). Paid path (`pnpm test:x402 -- --pay`) not verified: hangs after CDP verify. Blockers: body-parser after long verify, Neon DB timeout from dev network, flaky `sepolia.base.org` RPC. Partial mitigations landed: non-blocking `payment_events` writes, 5s PG connection timeout.
+- [x] **End-to-end test on Base Sepolia (2026-07-08).** Unpaid probe green (`pnpm test:x402` → 402 in ~30ms) and paid path (`pnpm test:x402 -- --pay`) verified end-to-end: verify → inference → settle with a `payment_events` row written.
 - [x] (Track B) Legal draft ready for review — published at `/legal/*`; counsel review pending.
 - [x] ~~(Track C) Web3-2: batched Merkle anchoring live on testnet~~ — done (Sepolia verified 2026-07-07).
 
 ### Distribution Sprint 3 — Production hardening
 
-- [ ] Flip x402 config to Base mainnet values; verify in production the same way Web3-1's mainnet config was checked (not just assumed).
-- [ ] Abuse/load-test the now-fully-public payment endpoint: replay/double-spend handling on payment proofs, rate limits appropriate for anonymous callers.
+- [x] **RPC reliability close-out on Sepolia (2026-07-08).** Dedicated Base Sepolia RPC configured; paid soak (`pnpm test:x402 -- --pay --repeat 10 --delay-ms 1000`) green; deposit poller no longer throws provider block-range errors after `DEPOSIT_MAX_LOG_BLOCK_RANGE` env + one-time fallback retry.
+- [x] **x402 abuse hardening (partial, 2026-07-08).** Replay rejection for consumed payment payloads (`409` / `x402_payment_replay`); wallet-aware anonymous rate-limit keys; `X402_ANON_RATE_LIMIT_*` env support. Soak test harness (`test:x402:soak`, `--repeat`, `--delay-ms`).
+- [x] **Mainnet profile wired (2026-07-08).** `.env.mainnet` + `LMX_ENV=mainnet` loading; `dev:mainnet`, `test:x402:mainnet-canary`, `check:mainnet-balance` scripts; unpaid 402 on `eip155:8453` with mainnet USDC asset verified; payer wallet funded on Base mainnet.
+- [ ] **Mainnet paid canary green.** Blocked on Alchemy RPC 429 (compute-units/sec limit) during Permit2 approval / balance reads — not wallet funding. Upgrade RPC or swap provider in `.env.mainnet`, rerun canary, confirm `payment_events` row with `chain_id: 8453` and mainnet tx hash.
+- [ ] Abuse/load-test the now-fully-public payment endpoint under burst traffic (replay protection landed; formal load validation still needed).
 - [ ] Portal: extend billing/usage views to show per-call payment records, not just balance draws — decide explicitly whether anonymous (no-session) x402 payments get any payer-visible record at all, or are purely internal-ops visibility.
 - [x] (Track B) Legal published and linked from signup + docs — **counsel review still required before Sprint 4 listing gate.**
 - [x] ~~(Track C) Web3-2: `GET /v1/usage/logs/:id/proof` endpoint live, contract address + recent roots surfaced on `StatusPage.tsx`~~ — done.
@@ -271,6 +290,38 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 - [ ] Build the model-provider plugin (wraps the existing OpenAI-compatible endpoint, wires in wallet-based key minting from Web3-1).
 - [ ] PR submitted to `elizaos-plugins/registry`.
 - [ ] Tested end-to-end with a real ElizaOS agent instance.
+
+## Phase 2 — AWS-for-Web3 expansion (decided 2026-07-08)
+
+**Framing (plain version — this is the one that stuck):** Phase 2 is the same three pieces Phase 1 builds — routing, payment, proof — pointed at things other than LLM prompts. Nothing architecturally new, just wider use of what Phase 1 proves out. Phase 1 proves the pipes work at all: one resource type (compute), one provider type (io.net/Akash), one payment rail (x402). Phase 2 runs more things through those same pipes once they're proven, in the order that follows most naturally from what already exists:
+
+1. **Storage.** Agents don't just need to run prompts, they need somewhere to keep data — memory, logs, files. Same idea as routing to io.net/Akash for compute, but routing to a storage network (Filecoin/Arweave) instead, paid and verified the same way.
+2. **Other sellers renting the rails.** Right now LMX is the thing an agent pays. Later, a smaller compute or storage provider who wants to accept agent payments but doesn't want to build wallet auth and payment verification themselves plugs into LMX's version instead of building their own. LMX becomes the plumbing underneath other people's businesses too, not just its own.
+3. **More job types.** Right now the only thing an agent can pay LMX for is "run this chat completion." Later that widens to embeddings, image generation, fine-tuning jobs — same pipes, more things flowing through them.
+
+*(AWS analogy, for reference: this maps onto AWS's own build order — compute, then storage, then higher-level compute, then letting others sell on top of your infra. LMX already has 3 of the 4 foundational pieces AWS needed before it became a platform: compute (io.net/Akash routing), identity (SIWE wallet auth), and audit/logging (Merkle-anchored receipts) — the missing piece was billing, which is Phase 1's x402 work above.)*
+
+**Sequencing note:** Phase 2 doesn't start until Phase 1's payment flow is actually live (Sprint 2 close-out + Sprint 3 mainnet flip). Building storage routing on top of a payment system that doesn't fully work yet just means debugging the same problem twice.
+
+### Phase 2 Goal 1 — Storage routing (the "S3" of LMX)
+
+Route agent requests for storage/memory (files, logs, embeddings) to decentralized storage networks (e.g. Filecoin, Arweave) the same way inference requests already route to io.net/Akash — same `ProviderAdapter` pattern (`apps/api/src/providers/`), same per-call x402 pricing/verification, same receipt/Merkle anchoring for proof of delivery.
+
+**Definition of done:** an agent can pay per-call (or per-byte/per-period) to store and retrieve data through LMX Cloud, routed to at least one decentralized storage network, with a verifiable receipt the same way inference calls get one today.
+
+### Phase 2 Goal 2 — Open the rails to other sellers (the "Marketplace" of LMX)
+
+Package LMX's payment + verification stack (x402 middleware, pricing catalog, receipt/Merkle anchoring) as something a smaller compute or storage provider — not Akash/io.net scale — can plug into instead of building their own agent-payment stack from scratch. Turns LMX from "a router agents shop through" into infrastructure other sellers rent, the same relationship AWS has to companies selling on AWS Marketplace.
+
+**Definition of done:** at least one external, non-LMX-operated provider is reachable through LMX's payment and verification rails, earning LMX a cut of that provider's agent-originated revenue.
+
+### Phase 2 Goal 3 — Widen job types routed (the "Lambda" of LMX)
+
+Extend routing beyond chat completions to other paid job types (embeddings, fine-tuning, image generation) through the same provider-adapter/pricing/verification pipeline, once Goal 1 proves the pattern generalizes past one resource type.
+
+**Definition of done:** at least one non-chat-completion job type is routable, priced, and payable per-call through the existing x402 flow.
+
+**Explicitly not Phase 2:** reputation/trust-scoring products (e.g. feeding receipts into ERC-8004 or similar emerging standards) — revisit once Phase 2 has real multi-resource transaction volume to make that data meaningful. Treasury/spend-policy management for agents — adjacent territory already being built by others (PolicyLayer, Eco, AWS Bedrock AgentCore); not a near-term fit unless narrowly scoped to cross-provider compute/storage spend specifically.
 
 ## Deliberately deferred (not blocking beta)
 

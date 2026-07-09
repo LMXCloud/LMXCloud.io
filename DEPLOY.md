@@ -5,6 +5,7 @@ Ship the **API on Railway** and the **dashboard + demo on Vercel**.
 | App | Host | Root directory |
 |-----|------|----------------|
 | API | Railway | repo root (`Dockerfile`) |
+| MCP Server | Railway | repo root + `apps/mcp-server/railway.toml` |
 | Dashboard | Vercel | `apps/web` |
 | Demo (optional) | Vercel | `apps/demo` |
 
@@ -69,6 +70,40 @@ If your current Railway account has no credits left, use a **fresh account** —
 ```powershell
 Invoke-RestMethod -Uri "https://YOUR-RAILWAY-URL/health"
 Invoke-RestMethod -Uri "https://YOUR-RAILWAY-URL/v1/status"
+```
+
+---
+
+## Railway: MCP server (`apps/mcp-server`)
+
+Deploy MCP as a separate service so agent traffic does not couple to API container restarts.
+
+1. In Railway, create **New Service** from the same GitHub repo.
+2. Configure service to use `apps/mcp-server/railway.toml`.
+3. Add variables:
+
+   | Variable | Required | Notes |
+   |----------|----------|-------|
+   | `LMX_MCP_TRANSPORT` | Yes | `http` |
+   | `LMX_MCP_HOST` | Yes | `0.0.0.0` |
+   | `LMX_MCP_PORT` | Yes | `3334` |
+   | `LMX_API_BASE_URL` | Yes | Public API base URL (e.g. `https://api.lmxcloud.io`) |
+   | `LMX_API_KEY` | Yes | Service API key used for MCP tool calls |
+   | `LMX_DEFAULT_MODEL` | No | `deepseek-v3.2` |
+
+4. Generate a Railway domain (example: `https://lmxcloud-mcp-production.up.railway.app`).
+5. Optional custom domain: `mcp.lmxcloud.io`.
+
+### Verify MCP service
+
+```powershell
+Invoke-RestMethod -Uri "https://YOUR-MCP-URL/healthz"
+```
+
+Expected response:
+
+```json
+{"ok":true,"transport":"http","endpoint":"/mcp"}
 ```
 
 ---

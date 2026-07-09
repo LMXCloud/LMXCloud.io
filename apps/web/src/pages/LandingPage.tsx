@@ -8,14 +8,14 @@ import {
 } from "@lmxcloud/shared";
 import {
   ArrowRight,
-  BarChart3,
+  Bot,
   Code2,
-  Globe2,
+  FileCheck,
   Layers,
   Plug,
   Route,
   Shield,
-  Zap,
+  Wallet,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LandingChat } from "../components/LandingChat";
@@ -36,7 +36,6 @@ const MODELS_BY_CATEGORY = SUPPORTED_MODEL_LIST.reduce<
   return groups;
 }, {});
 
-const PROVIDERS = ["io.net", "AkashML", "Auto-fallback"];
 
 const CATEGORY_ORDER: ModelCategory[] = [
   "meta",
@@ -58,10 +57,10 @@ const HERO_STATS = [
     tone: "success" as const,
   },
   {
-    label: "Zero lock-in",
-    value: "3",
+    label: "DePIN routing",
+    value: "2",
     unit: "networks",
-    hint: "DePIN routing · auto-failover",
+    hint: "io.net + Akash · auto-failover",
     tone: "info" as const,
   },
   {
@@ -77,56 +76,77 @@ const FEATURES = [
   {
     icon: Plug,
     title: "Drop-in compatible",
-    description: "Same endpoints and request format as OpenAI. Swap the base URL — keep your SDK.",
+    description:
+      "Same endpoints and request format as OpenAI. Swap the base URL — keep your SDK, agents, and tooling.",
     accent: "primary" as const,
   },
   {
     icon: Route,
-    title: "Smart routing",
-    description: "Route by cost, latency, or DePIN-only. Automatic failover when a node goes dark.",
+    title: "DePIN routing",
+    description:
+      "Route by cost, latency, or DePIN-only across io.net and Akash. Automatic failover when a provider goes dark.",
     accent: "info" as const,
+  },
+  {
+    icon: Bot,
+    title: "x402 pay-per-call",
+    description:
+      "Agents pay per request in USDC on Base — no signup, no API key, no pre-funded balance. HTTP 402 with a price, pay, get inference.",
+    accent: "warning" as const,
+  },
+  {
+    icon: Wallet,
+    title: "Wallet identity",
+    description:
+      "Sign in with Ethereum (SIWE) from a browser wallet or a raw keypair script. Fund with USDC on Base — no corporate card required.",
+    accent: "success" as const,
+  },
+  {
+    icon: FileCheck,
+    title: "Verifiable logs",
+    description:
+      "Every request gets a cryptographic receipt, batched into Merkle roots anchored on Base. Independently verify routing claims — not just dashboard numbers.",
+    accent: "primary" as const,
   },
   {
     icon: Shield,
     title: "Resilient by design",
-    description: "No single vendor lock-in. Requests fan across decentralized compute networks.",
-    accent: "success" as const,
-  },
-  {
-    icon: Zap,
-    title: "Low-latency paths",
-    description: "Provider selection weighs real-time latency so responses stay snappy under load.",
-    accent: "warning" as const,
-  },
-  {
-    icon: BarChart3,
-    title: "Usage dashboard",
-    description: "Track tokens, spend, and API keys from a unified console with per-key breakdowns.",
-    accent: "primary" as const,
-  },
-  {
-    icon: Globe2,
-    title: "OpenAI benchmarks",
-    description: "Every response shows cost and savings vs equivalent OpenAI models — live in the demo.",
+    description:
+      "No single-vendor lock-in. Transparent headers show which provider served each call and whether fallback kicked in.",
     accent: "info" as const,
+  },
+];
+
+const AUDIENCES = [
+  {
+    icon: Code2,
+    title: "Developers",
+    body: "Sign in with email or wallet, fund with USDC on Base, and manage keys, usage, and billing from the console. $1.00 in credits to start.",
+    cta: { label: "Open console", to: "/sign-up" as const },
+  },
+  {
+    icon: Bot,
+    title: "Autonomous agents",
+    body: "Call the API with no prior relationship. Receive HTTP 402 with per-model pricing, pay in USDC via x402, and get routed DePIN inference back — no account setup.",
+    cta: { label: "View x402 docs", to: "/docs#pricing" as const },
   },
 ];
 
 const STEPS = [
   {
     step: "01",
-    title: "Create account",
-    body: "Sign up with email via Clerk. No password vault to manage — $1.00 credits included.",
+    title: "Choose how you connect",
+    body: "Developers: sign in with email or wallet and mint an API key. Agents: skip signup — call /v1/chat/completions directly and follow the x402 payment flow.",
   },
   {
     step: "02",
-    title: "Generate API key",
-    body: "Open the console, create a key, and copy it once. Session keys link to your account.",
+    title: "Pay in stablecoin",
+    body: "Fund a balance with USDC on Base, or pay per call via x402. No Stripe, no corporate billing entity — stablecoin rails built for humans and headless agents alike.",
   },
   {
     step: "03",
-    title: "Send requests",
-    body: "Point your OpenAI client at LMX Cloud and call /v1/chat/completions.",
+    title: "Get routed inference",
+    body: "OpenAI-compatible chat completions across io.net and Akash, with streaming, transparent fallback, and verifiable receipts on every call.",
   },
 ];
 
@@ -141,7 +161,7 @@ export function LandingPage() {
             </span>
             <div>
               <p className="text-title-md text-on-surface leading-tight">LMX Cloud</p>
-              <p className="text-body-sm text-on-surface-faint leading-tight">Inference router</p>
+              <p className="text-body-sm text-on-surface-faint leading-tight">Web3-native inference</p>
             </div>
           </Link>
 
@@ -149,6 +169,7 @@ export function LandingPage() {
             {(
               [
                 { href: "#features", label: "Features" },
+                { href: "#for-agents", label: "For agents" },
                 { href: "#models", label: "Models" },
                 { href: "#how-it-works", label: "How it works" },
                 { href: "#try-chat", label: "Live demo" },
@@ -215,26 +236,29 @@ export function LandingPage() {
               <div className="max-w-xl">
                 <div className="mb-5 flex flex-wrap gap-2">
                   <Chip tone="primary">OpenAI-compatible</Chip>
-                  <Chip tone="info">DePIN-powered</Chip>
+                  <Chip tone="info">DePIN routing</Chip>
+                  <Chip tone="success">x402 · USDC on Base</Chip>
                 </div>
                 <h1 className="text-display font-semibold text-on-surface">
-                  Cheaper, resilient LLM inference
+                  Inference infrastructure
                 </h1>
                 <p className="mt-2 text-headline-md font-semibold text-on-surface-muted">
-                  through <span className="text-primary">decentralized</span> compute
+                  for <span className="text-primary">developers</span> and{" "}
+                  <span className="text-primary">autonomous agents</span>
                 </p>
                 <p className="mt-6 max-w-lg text-body-md text-on-surface-muted">
-                  LMX Cloud routes your requests across io.net, AkashML, and other providers with
-                  automatic fallback. Drop in your existing OpenAI SDK — or try the live chat demo
-                  with a free throwaway key.
+                  LMX Cloud routes chat completions across io.net and Akash with automatic fallback.
+                  Human developers get a dashboard, wallet auth, and USDC funding. Agents pay per
+                  call via x402 — no signup, no API key. Drop in your OpenAI SDK or try the live
+                  demo below.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-3">
                   <Button to="/sign-up" size="lg">
-                    Create free account
+                    Get started free
                     <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
                   </Button>
-                  <Button href="#try-chat" variant="secondary" size="lg">
-                    Try the chat
+                  <Button to="/docs#pricing" variant="secondary" size="lg">
+                    Agent payments (x402)
                   </Button>
                 </div>
 
@@ -244,13 +268,17 @@ export function LandingPage() {
                   ))}
                 </div>
 
-                <div className="mt-8 flex flex-wrap items-center gap-2">
-                  <span className="text-label-sm text-on-surface-faint">Routed via</span>
-                  {PROVIDERS.map((name) => (
-                    <Chip key={name} tone="default">
-                      {name}
-                    </Chip>
-                  ))}
+                <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-label-sm text-on-surface-faint">Routed via</span>
+                    <Chip tone="default">io.net</Chip>
+                    <Chip tone="default">AkashML</Chip>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-label-sm text-on-surface-faint">Payments</span>
+                    <Chip tone="success">x402</Chip>
+                    <Chip tone="success">USDC on Base</Chip>
+                  </div>
                 </div>
               </div>
 
@@ -273,14 +301,37 @@ export function LandingPage() {
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <SectionHeader
               eyebrow="Platform"
-              title="Built for production inference"
-              description="Everything you need to ship LLM features without rebuilding your stack or betting on one provider."
+              title="Web3-native inference, DePIN-backed"
+              description="OpenAI-compatible routing across decentralized compute — with stablecoin payments, wallet identity, and independently verifiable usage receipts."
             />
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((feature) => (
                 <FeatureCard key={feature.title} {...feature} />
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* For agents / developers */}
+        <section id="for-agents" className="border-b border-border py-16 sm:py-20">
+          <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
+            <SectionHeader
+              eyebrow="Two ways in"
+              title="Built for humans and headless agents"
+              description="The same routed inference endpoint — whether you manage keys in a dashboard or pay per call with zero prior relationship."
+            />
+            <div className="mt-12 grid gap-4 md:grid-cols-2">
+              {AUDIENCES.map((audience) => (
+                <AudienceCard key={audience.title} {...audience} />
+              ))}
+            </div>
+            <p className="mt-8 max-w-3xl text-body-sm text-on-surface-muted">
+              <span className="text-label-sm text-on-surface-faint">Coming soon — Phase 1 distribution</span>
+              <span className="mt-2 block">
+                Listings on x402 Bazaar, Agentic.Market, an MCP server, and an ElizaOS plugin — so
+                agents can discover and pay for inference without a manual integration.
+              </span>
+            </p>
           </div>
         </section>
 
@@ -351,19 +402,22 @@ export function LandingPage() {
                 <SectionHeader
                   eyebrow="Integration"
                   title="Three lines to switch"
-                  description="Keep your OpenAI SDK. Change the base URL and API key — routing, metering, and fallback happen automatically."
+                  description="Keep your OpenAI SDK. Change the base URL and API key — routing, metering, fallback, and receipts happen automatically."
                 />
                 <ul className="mt-8 space-y-3">
-                  {["Same /v1/chat/completions endpoint", "Streaming supported", "Usage headers on every response"].map(
-                    (item) => (
-                      <li key={item} className="flex items-center gap-3 text-body-sm text-on-surface-muted">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-success/30 bg-success/10">
-                          <Code2 className="h-3 w-3 text-success" strokeWidth={1.75} />
-                        </span>
-                        {item}
-                      </li>
-                    ),
-                  )}
+                  {[
+                    "Same /v1/chat/completions endpoint",
+                    "Streaming supported (Bearer auth path)",
+                    "x402 per-call payments for agent workflows",
+                    "Verifiable receipts anchored on Base",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-3 text-body-sm text-on-surface-muted">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-success/30 bg-success/10">
+                        <Code2 className="h-3 w-3 text-success" strokeWidth={1.75} />
+                      </span>
+                      {item}
+                    </li>
+                  ))}
                 </ul>
                 <Button to="/docs" variant="secondary" className="mt-8">
                   Read the docs
@@ -389,8 +443,8 @@ export function LandingPage() {
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <SectionHeader
               eyebrow="Workflow"
-              title="Get started in three steps"
-              description="From signup to first request in under five minutes."
+              title="From wallet to first request"
+              description="Developers and agents share the same inference layer — only the payment and identity path differs."
               centered
             />
             <div className="mt-12 grid gap-4 md:grid-cols-3">
@@ -418,18 +472,19 @@ export function LandingPage() {
               <div>
                 <p className="text-label-sm text-success">Ready to route</p>
                 <h2 className="mt-2 text-headline-md text-on-surface">
-                  Start with $1.00 in free credits
+                  Start building on Web3-native inference
                 </h2>
                 <p className="mt-2 max-w-md text-body-sm text-on-surface-muted">
-                  Create an account, open the console, and send your first chat completion in minutes.
+                  Developers: create an account with $1.00 in credits, or connect a wallet and fund
+                  with USDC. Agents: read the x402 docs and pay per call — no signup required.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-3">
                 <Button to="/sign-up" size="lg">
-                  Create free account
+                  Get started free
                 </Button>
-                <Button to="/sign-in" variant="secondary" size="lg">
-                  Sign in
+                <Button to="/docs#pricing" variant="secondary" size="lg">
+                  x402 for agents
                 </Button>
               </div>
             </Card>
@@ -445,12 +500,15 @@ export function LandingPage() {
             </span>
             <div>
               <p className="text-body-sm font-medium text-on-surface">LMX Cloud</p>
-              <p className="text-body-sm text-on-surface-faint">Decentralized inference infrastructure</p>
+              <p className="text-body-sm text-on-surface-faint">Web3-native inference infrastructure</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-4 text-body-sm text-on-surface-muted">
             <a href="#features" className="hover:text-on-surface">
               Features
+            </a>
+            <a href="#for-agents" className="hover:text-on-surface">
+              For agents
             </a>
             <a href="#models" className="hover:text-on-surface">
               Models
@@ -546,6 +604,32 @@ function HeroStat({
       </div>
       <p className="mt-auto pt-2.5 text-body-sm leading-snug text-on-surface-faint">{hint}</p>
     </div>
+  );
+}
+
+function AudienceCard({
+  icon: Icon,
+  title,
+  body,
+  cta,
+}: {
+  icon: typeof Code2;
+  title: string;
+  body: string;
+  cta: { label: string; to: string };
+}) {
+  return (
+    <Card accent="primary" className="flex h-full flex-col">
+      <span className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-md border border-primary/30 bg-primary/10">
+        <Icon className="h-5 w-5 text-primary" strokeWidth={1.75} />
+      </span>
+      <h3 className="text-title-md text-on-surface">{title}</h3>
+      <p className="mt-2 flex-1 text-body-sm text-on-surface-muted">{body}</p>
+      <Button to={cta.to} variant="secondary" size="sm" className="mt-6 w-fit">
+        {cta.label}
+        <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+      </Button>
+    </Card>
   );
 }
 

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
+import { Readable } from "node:stream";
 import { createFacilitatorConfig } from "@coinbase/x402";
 import { HTTPFacilitatorClient, x402HTTPResourceServer, x402ResourceServer } from "@x402/core/server";
 import type {
@@ -108,6 +109,7 @@ async function recordVerifiedPayment(
 }
 
 const earlyParsedBodyKey = Symbol("x402EarlyParsedBody");
+const earlyRawBodyKey = Symbol("x402EarlyRawBody");
 
 /**
  * x402 middleware runs on Fastify's onRequest hook, before the JSON body parser.
@@ -139,9 +141,22 @@ function registerEarlyJsonBodyParser(app: FastifyInstance): void {
       }
     }
 
-    (request as { [earlyParsedBodyKey]?: unknown })[earlyParsedBodyKey] = parsed;
+    (
+      request as {
+        [earlyParsedBodyKey]?: unknown;
+        [earlyRawBodyKey]?: Buffer;
+      }
+    )[earlyParsedBodyKey] = parsed;
+    (request as { [earlyRawBodyKey]?: Buffer })[earlyRawBodyKey] = rawBody;
     request.body = parsed;
-    incoming.unshift(rawBody);
+  });
+
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    const earlyRaw = (request as { [earlyRawBodyKey]?: Buffer })[earlyRawBodyKey];
+    if (earlyRaw === undefined) {
+      return payload;
+    }
+    return Readable.from([earlyRaw]);
   });
 
   app.addHook("preValidation", async (request) => {

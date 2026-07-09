@@ -23,6 +23,7 @@ import { cn } from "../lib/cn";
 const SECTIONS = [
   { id: "overview", label: "Overview" },
   { id: "quickstart", label: "Quickstart" },
+  { id: "mcp", label: "MCP" },
   { id: "authentication", label: "Authentication" },
   { id: "wallet-auth", label: "Wallet authentication" },
   { id: "usdc-funding", label: "Funding with USDC" },
@@ -173,6 +174,74 @@ const response = await client.chat.completions.create({
 });
 
 console.log(response.choices[0].message.content);`}
+                </CodeBlock>
+              </div>
+            </DocSection>
+
+            <DocSection id="mcp" title="MCP (Model Context Protocol)">
+              <p className="text-body-md text-on-surface-muted">
+                LMX Cloud ships an MCP server package (
+                <code className="text-mono-sm">@lmxcloud/mcp-server</code>) so agents can call
+                inference as tools instead of hand-writing REST calls.
+              </p>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Current MCP tools:
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-body-sm text-on-surface-muted">
+                <li>
+                  <code className="text-mono-sm">get_pricing</code> — fetches{" "}
+                  <code className="text-mono-sm">GET /v1/pricing</code>
+                </li>
+                <li>
+                  <code className="text-mono-sm">list_models</code> — fetches{" "}
+                  <code className="text-mono-sm">GET /v1/models</code>
+                </li>
+                <li>
+                  <code className="text-mono-sm">chat_completion</code> — calls{" "}
+                  <code className="text-mono-sm">POST /v1/chat/completions</code> with model
+                  pre-validation against live supported models
+                </li>
+              </ul>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Cursor config (outside repo demo)</h3>
+              <p className="mt-2 text-body-sm text-on-surface-muted">
+                In any other repository, add a{" "}
+                <code className="text-mono-sm">.cursor/mcp.json</code> file that points back to your
+                LMX Cloud repo:
+              </p>
+              <div className="mt-4">
+                <CodeBlock title=".cursor/mcp.json">
+                  {`{
+  "mcpServers": {
+    "lmxcloud-local": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "C:/Users/you/path/to/LMXCloud.io",
+        "--filter",
+        "@lmxcloud/mcp-server",
+        "dev"
+      ],
+      "env": {
+        "LMX_API_BASE_URL": "${EXAMPLE_BASE}",
+        "LMX_API_KEY": "lmx_YOUR_KEY",
+        "LMX_DEFAULT_MODEL": "deepseek-v3.2"
+      }
+    }
+  }
+}`}
+                </CodeBlock>
+              </div>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Smoke test</h3>
+              <p className="mt-2 text-body-sm text-on-surface-muted">
+                After reloading MCP servers in your agent client, call tools in this order:
+              </p>
+              <div className="mt-4">
+                <CodeBlock title="Suggested test flow">
+                  {`1) list_models
+2) get_pricing
+3) chat_completion(prompt="Reply with exactly: MCP test passed.", model="deepseek-v3.2")`}
                 </CodeBlock>
               </div>
             </DocSection>

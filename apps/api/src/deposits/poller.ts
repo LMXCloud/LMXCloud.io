@@ -42,6 +42,8 @@ export interface DepositPollerConfig {
 
   lookbackBlocks: number;
 
+  maxLogBlockRange: number;
+
   maxDepositUsdc: number;
 
 }
@@ -56,7 +58,17 @@ const TRANSFER_EVENT = parseAbiItem(
 
 
 
-const MAX_LOG_BLOCK_RANGE = 2000n;
+function isRangeLimitError(err: unknown): boolean {
+
+  const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+
+  return (
+    message.includes("block range") ||
+    (message.includes("max") && message.includes("block")) ||
+    message.includes("eth_getlogs")
+  );
+
+}
 
 
 
@@ -232,19 +244,41 @@ export class DepositPoller {
 
   ): Promise<Log[]> {
 
+    const maxRange = BigInt(this.config.maxLogBlockRange);
+    try {
+      return await this.fetchTransferLogsChunked(fromBlock, toBlock, maxRange);
+    } catch (err) {
+      if (!isRangeLimitError(err) || maxRange <= 1n) {
+        throw err;
+      }
+      const retryRange = maxRange > 10n ? 10n : maxRange / 2n;
+      const safeRetryRange = retryRange >= 1n ? retryRange : 1n;
+      this.log(
+        `Deposit poller range-limit hit; retrying once with ${safeRetryRange.toString()}-block chunks`,
+      );
+      return this.fetchTransferLogsChunked(fromBlock, toBlock, safeRetryRange);
+    }
+  }
+
+  private async fetchTransferLogsChunked(
+    fromBlock: bigint,
+    toBlock: bigint,
+    chunkSize: bigint,
+  ): Promise<Log[]> {
+
     const logs: Log[] = [];
 
 
 
-    for (let start = fromBlock; start <= toBlock; start += MAX_LOG_BLOCK_RANGE) {
+    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
 
       const end =
 
-        start + MAX_LOG_BLOCK_RANGE - 1n > toBlock
+        start + chunkSize - 1n > toBlock
 
           ? toBlock
 
-          : start + MAX_LOG_BLOCK_RANGE - 1n;
+          : start + chunkSize - 1n;
 
 
 

@@ -148,6 +148,25 @@ Open [http://localhost:5173](http://localhost:5173) — redirects to sign in or 
 
 **Deploy to production:** see [DEPLOY.md](./DEPLOY.md) for Railway + Vercel step-by-step.
 
+## MCP server (`apps/mcp-server`)
+
+LMX ships an MCP server with tools for pricing, model discovery, and chat completions.
+
+```bash
+# stdio (local Cursor / process-spawned)
+pnpm dev:mcp
+
+# hosted streamable HTTP (distribution)
+pnpm dev:mcp:http
+```
+
+HTTP mode endpoints:
+
+- `http://127.0.0.1:3334/mcp`
+- `http://127.0.0.1:3334/healthz`
+
+Production deploy instructions are in [DEPLOY.md](./DEPLOY.md) under the Railway MCP section.
+
 ## Test
 
 **API docs:** [http://localhost:5173/docs](http://localhost:5173/docs) — overview, quickstart, wallet auth, USDC funding, routing, streaming, and roadmap.

@@ -3,6 +3,7 @@ dist/
 **/*.tsbuildinfo
 .env
 .env.local
+.env.mainnet
 data/
 contracts/out/
 *.log

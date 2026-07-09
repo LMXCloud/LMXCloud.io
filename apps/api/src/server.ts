@@ -175,6 +175,7 @@ export async function buildServer() {
         confirmations: config.deposits.confirmations,
         pollIntervalMs: config.deposits.pollIntervalMs,
         lookbackBlocks: config.deposits.lookbackBlocks,
+        maxLogBlockRange: config.deposits.maxLogBlockRange,
         maxDepositUsdc: config.deposits.maxDepositUsdc,
       },
       depositStore,
@@ -294,8 +295,12 @@ export async function buildServer() {
       windowMs: config.chatRateLimitWindowMs,
     }),
     x402RateLimit: createRateLimiter({
-      max: Number(process.env.X402_RATE_LIMIT_MAX ?? 10),
-      windowMs: Number(process.env.X402_RATE_LIMIT_WINDOW_MS ?? 60_000),
+      max: Number(process.env.X402_ANON_RATE_LIMIT_MAX ?? process.env.X402_RATE_LIMIT_MAX ?? 10),
+      windowMs: Number(
+        process.env.X402_ANON_RATE_LIMIT_WINDOW_MS ??
+          process.env.X402_RATE_LIMIT_WINDOW_MS ??
+          60_000,
+      ),
     }),
     minChatCost: config.minChatCost,
     x402Enabled: config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),

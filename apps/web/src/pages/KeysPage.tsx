@@ -1,6 +1,6 @@
-import { KeyRound, Plus } from "lucide-react";
+import { Check, Copy, KeyRound, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
+import { API_BASE, createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
 import {
   DataTable,
@@ -27,6 +27,33 @@ export function KeysPage() {
   const [error, setError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+
+  const mcpConfig = newKey
+    ? JSON.stringify(
+        {
+          mcpServers: {
+            "lmxcloud-local": {
+              command: "pnpm",
+              args: [
+                "--dir",
+                "C:/Users/you/path/to/LMXCloud.io",
+                "--filter",
+                "@lmxcloud/mcp-server",
+                "dev",
+              ],
+              env: {
+                LMX_API_BASE_URL: API_BASE,
+                LMX_API_KEY: newKey,
+                LMX_DEFAULT_MODEL: "deepseek-v3.2",
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )
+    : null;
 
   const load = useCallback(async () => {
     if (!apiKey) return;
@@ -51,6 +78,7 @@ export function KeysPage() {
     setCreating(true);
     setError(null);
     setNewKey(null);
+    setCopyState("idle");
     try {
       const result = await createAccountApiKey(apiKey);
       setNewKey(result.api_key);
@@ -59,6 +87,17 @@ export function KeysPage() {
       setError(err instanceof Error ? err.message : "Failed to create key");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleCopyMcpConfig() {
+    if (!mcpConfig) return;
+    try {
+      await navigator.clipboard.writeText(mcpConfig);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 2000);
+    } catch {
+      setCopyState("error");
     }
   }
 
@@ -125,6 +164,53 @@ export function KeysPage() {
           </Button>
         </Card>
       )}
+
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-label-sm text-on-surface">Use with MCP</p>
+            <p className="mt-1 text-body-sm text-on-surface-muted">
+              Generate a key, then copy this config into a different repository&apos;s{" "}
+              <code className="text-mono-sm">.cursor/mcp.json</code> to test LMX tools from outside
+              this workspace.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!mcpConfig}
+            onClick={() => void handleCopyMcpConfig()}
+          >
+            {copyState === "copied" ? (
+              <>
+                <Check className="h-4 w-4" strokeWidth={1.75} />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" strokeWidth={1.75} />
+                Copy config
+              </>
+            )}
+          </Button>
+        </div>
+
+        {mcpConfig ? (
+          <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-background p-4 text-mono-sm text-on-surface-muted">
+            <code>{mcpConfig}</code>
+          </pre>
+        ) : (
+          <p className="mt-4 text-body-sm text-on-surface-muted">
+            Create a key first to generate a config with a real bearer token.
+          </p>
+        )}
+        {copyState === "error" && (
+          <p className="mt-3 text-body-sm text-error">
+            Clipboard write failed. Copy manually from the block above.
+          </p>
+        )}
+      </Card>
 
       <DataTable
         title="Your keys"

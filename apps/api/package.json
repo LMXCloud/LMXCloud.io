@@ -10,6 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts",
     "test:x402": "tsx scripts/test-x402-chat.ts",
+    "test:x402:soak": "tsx scripts/test-x402-chat.ts --repeat 10 --delay-ms 1000",
+    "test:x402:mainnet-canary": "tsx scripts/test-x402-chat.ts --mainnet --pay",
+    "check:mainnet-balance": "tsx scripts/check-mainnet-balance.ts --mainnet",
+    "dev:mainnet": "tsx watch scripts/dev-mainnet.ts",
     "deploy:anchor": "node scripts/deploy-anchor.mjs",
     "verify:receipt": "tsx scripts/verify-receipt.ts"
   },

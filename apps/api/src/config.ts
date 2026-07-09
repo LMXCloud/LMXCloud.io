@@ -18,7 +18,10 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+const envFile =
+  process.env.LMX_ENV_FILE ??
+  (process.env.LMX_ENV === "mainnet" ? ".env.mainnet" : ".env");
+dotenv.config({ path: path.resolve(__dirname, "../../../", envFile) });
 
 
 
@@ -79,6 +82,7 @@ export interface Config {
     confirmations: number;
     pollIntervalMs: number;
     lookbackBlocks: number;
+    maxLogBlockRange: number;
     maxDepositUsdc: number;
   };
 
@@ -286,6 +290,11 @@ export function loadConfig(): Config {
             "DEPOSIT_LOOKBACK_BLOCKS",
             process.env.DEPOSIT_LOOKBACK_BLOCKS,
             100,
+          ),
+          maxLogBlockRange: parsePositiveInt(
+            "DEPOSIT_MAX_LOG_BLOCK_RANGE",
+            process.env.DEPOSIT_MAX_LOG_BLOCK_RANGE,
+            2000,
           ),
           maxDepositUsdc,
         }
