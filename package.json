@@ -14,6 +14,7 @@
     "typecheck": "pnpm --filter @lmxcloud/shared build && pnpm -r typecheck",
     "start": "pnpm --filter @lmxcloud/api start",
     "deploy:anchor": "pnpm --filter @lmxcloud/api deploy:anchor",
+    "deploy:anchor:mainnet": "pnpm --filter @lmxcloud/api deploy:anchor:mainnet",
     "verify:receipt": "pnpm --filter @lmxcloud/api verify:receipt"
   },
   "engines": {

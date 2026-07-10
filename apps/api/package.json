@@ -15,6 +15,7 @@
     "check:mainnet-balance": "tsx scripts/check-mainnet-balance.ts --mainnet",
     "dev:mainnet": "tsx watch scripts/dev-mainnet.ts",
     "deploy:anchor": "node scripts/deploy-anchor.mjs",
+    "deploy:anchor:mainnet": "node scripts/deploy-anchor-mainnet.mjs",
     "verify:receipt": "tsx scripts/verify-receipt.ts"
   },
   "dependencies": {
