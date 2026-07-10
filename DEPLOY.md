@@ -59,19 +59,13 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `USDC_CONTRACT_ADDRESS` | No | Mainnet default `0x833589…2913` |
    | `DEPOSIT_CONFIRMATIONS` | No | `10` |
    | `DEPOSIT_MAX_LOG_BLOCK_RANGE` | No | `10` on mainnet if Alchemy range errors |
-   | `ANCHOR_CONTRACT_ADDRESS` | Yes (verify) | `LmxLogAnchor` on Base — `pnpm deploy:anchor:mainnet` |
-   | `ANCHOR_PRIVATE_KEY` | Yes (verify) | Wallet that deployed the contract; keep ~0.001+ ETH for anchor gas |
-   | `ANCHOR_BATCH_INTERVAL_MS` | No | `300000` (5 min) |
-   | `ANCHOR_BATCH_MIN_EVENTS` | No | `1` |
-   | `ANCHOR_BATCH_MAX_EVENTS` | No | `5000` |
 
-   **Verifiable logs:** After deploy, the anchor poller batches receipt hashes and calls `anchor(root)` on-chain. Console **Verify** on request logs shows `pending` until the next batch, then `anchored` with Basescan links. Deploy mainnet contract from repo root:
+   **Verifiable logs (optional — local dev only):** Leave all `ANCHOR_*` variables **unset** on Railway for now. Production still records per-request receipt hashes; the console shows them under **Receipt** without on-chain Merkle proofs. For full verify locally, use Base Sepolia in `.env`:
 
    ```powershell
-   pnpm deploy:anchor:mainnet
+   # Sepolia — set ANCHOR_PRIVATE_KEY + BASE_RPC_URL + SIWE_CHAIN_ID=84532, then:
+   pnpm deploy:anchor
    ```
-
-   Copy `ANCHOR_CONTRACT_ADDRESS` from the script output into Railway (and use the deployer wallet private key as `ANCHOR_PRIVATE_KEY`). Redeploy/restart the API service after setting vars.
 
    Do **not** set `PORT` — Railway injects it automatically.
 

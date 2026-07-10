@@ -1,4 +1,4 @@
-import { ExternalLink, ShieldCheck, X } from "lucide-react";
+import { ExternalLink, FileJson, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchUsageLogProof, type UsageLogProofResponse } from "../../api";
 import { AlertBanner } from "./AlertBanner";
@@ -16,11 +16,32 @@ interface LogProofPanelProps {
   onClose: () => void;
 }
 
+function isAnchoringLive(
+  proof: UsageLogProofResponse,
+  anchoringEnabled?: boolean,
+): boolean {
+  if (proof.anchoring_enabled === true) return true;
+  if (proof.anchoring_enabled === false) return false;
+  return anchoringEnabled === true;
+}
+
+function displayStatusLabel(
+  proof: UsageLogProofResponse,
+  anchoringLive: boolean,
+): string {
+  if (proof.status === "pending" && !anchoringLive) return "receipt recorded";
+  if (proof.status === "anchored") return "anchored";
+  if (proof.status === "pending") return "pending anchor";
+  return proof.status;
+}
+
 function proofStatusTone(
-  status: UsageLogProofResponse["status"],
-): "success" | "warning" | "default" {
-  if (status === "anchored") return "success";
-  if (status === "pending") return "warning";
+  proof: UsageLogProofResponse,
+  anchoringLive: boolean,
+): "success" | "warning" | "error" | "info" | "default" {
+  if (proof.status === "anchored") return "success";
+  if (proof.status === "pending" && !anchoringLive) return "info";
+  if (proof.status === "pending") return "warning";
   return "default";
 }
 
@@ -42,7 +63,7 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
         if (!cancelled) setProof(res);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load proof");
+          setError(err instanceof Error ? err.message : "Failed to load receipt");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -55,13 +76,17 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
     };
   }, [apiKey, logId]);
 
+  const anchoringLive = proof ? isAnchoringLive(proof, anchoringEnabled) : false;
+  const panelTitle = anchoringLive ? "On-chain proof" : "Request receipt";
+  const PanelIcon = anchoringLive ? ShieldCheck : FileJson;
+
   return (
     <Card accent="primary" className="relative">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-primary" strokeWidth={1.75} />
+          <PanelIcon className="h-5 w-5 text-primary" strokeWidth={1.75} />
           <div>
-            <p className="text-label-sm text-primary">Receipt proof</p>
+            <p className="text-label-sm text-primary">{panelTitle}</p>
             <p className="text-mono-sm text-on-surface-muted">{logId}</p>
           </div>
         </div>
@@ -71,7 +96,7 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
       </div>
 
       {loading && (
-        <p className="mt-4 text-body-sm text-on-surface-muted">Loading proof data…</p>
+        <p className="mt-4 text-body-sm text-on-surface-muted">Loading receipt data…</p>
       )}
 
       {error && (
@@ -82,28 +107,23 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
 
       {proof && !loading && (
         <div className="mt-4 space-y-4">
-          {proof.anchoring_enabled === false && proof.status === "pending" && (
+          {!anchoringLive && proof.receipt_hash && (
             <AlertBanner tone="info">
-              Receipt hash is recorded. On-chain Merkle anchoring is not enabled on this
-              deployment yet — proofs will be available once the anchor contract is configured.
-            </AlertBanner>
-          )}
-
-          {anchoringEnabled === false && proof.anchoring_enabled === undefined && (
-            <AlertBanner tone="info">
-              On-chain anchoring is not enabled on this deployment. Receipt metadata is still
-              available below.
+              This deployment records cryptographic receipts for each request. On-chain Merkle
+              anchoring is a local-dev feature for now — production shows receipt metadata only.
             </AlertBanner>
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Chip tone={proofStatusTone(proof.status)}>{proof.status}</Chip>
+            <Chip tone={proofStatusTone(proof, anchoringLive)}>
+              {displayStatusLabel(proof, anchoringLive)}
+            </Chip>
             {proof.receipt_version && (
               <Chip tone="default">{proof.receipt_version}</Chip>
             )}
           </div>
 
-          {proof.status === "pending" && proof.anchoring_enabled !== false && (
+          {proof.status === "pending" && anchoringLive && (
             <p className="text-body-sm text-on-surface-muted">
               Receipt computed. Waiting for the next Merkle batch to anchor on-chain.
             </p>
@@ -111,7 +131,7 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
 
           {proof.status === "no_receipt" && (
             <p className="text-body-sm text-on-surface-muted">
-              This request predates receipt hashing or was not eligible for anchoring.
+              This request predates receipt hashing or was not eligible for a receipt.
             </p>
           )}
 
@@ -197,14 +217,16 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
             />
           )}
 
-          <div>
-            <p className="text-body-sm text-on-surface-muted">
-              Verify locally with the CLI (requires API access to this log):
-            </p>
-            <div className="mt-2">
-              <CodeBlock code={verifyReceiptCli(logId)} />
+          {anchoringLive && (
+            <div>
+              <p className="text-body-sm text-on-surface-muted">
+                Verify locally with the CLI:
+              </p>
+              <div className="mt-2">
+                <CodeBlock code={verifyReceiptCli(logId)} />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </Card>

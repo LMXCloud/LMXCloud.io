@@ -1,4 +1,4 @@
-import { ShieldCheck } from "lucide-react";
+import { FileJson, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { fetchStatus, fetchUsageLogs } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
@@ -91,12 +91,19 @@ export function LogsPage() {
     }
   }
 
+  const proofColumnLabel = anchoringEnabled ? "Proof" : "Receipt";
+  const proofButtonLabel = anchoringEnabled ? "Verify" : "Receipt";
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Monitor"
         title="Request logs"
-        description="Individual API calls across all linked keys. Verify anchored receipts on-chain."
+        description={
+          anchoringEnabled
+            ? "Individual API calls across all linked keys. Verify on-chain anchored receipts."
+            : "Individual API calls across all linked keys. Inspect cryptographic receipts per request."
+        }
         actions={
           <Tabs
             items={RANGE_OPTIONS.map((o) => ({ value: String(o.days), label: o.label }))}
@@ -110,9 +117,8 @@ export function LogsPage() {
 
       {anchoringEnabled === false && (
         <AlertBanner tone="info">
-          On-chain log anchoring is not configured on this API deployment. Receipt hashes are
-          still recorded — Merkle proofs and Basescan verification will appear once anchoring is
-          enabled. See the public <a href="/status" className="text-primary hover:underline">status page</a> for updates.
+          Receipt hashes are recorded for every request. Full on-chain Merkle verification is
+          available in local dev (Base Sepolia) — production shows receipt metadata only.
         </AlertBanner>
       )}
 
@@ -136,7 +142,7 @@ export function LogsPage() {
             <DataTableTh>Cost</DataTableTh>
             <DataTableTh>Latency</DataTableTh>
             <DataTableTh>Status</DataTableTh>
-            <DataTableTh className="text-right">Proof</DataTableTh>
+            <DataTableTh className="text-right">{proofColumnLabel}</DataTableTh>
           </tr>
         </DataTableHead>
         <DataTableBody>
@@ -187,8 +193,12 @@ export function LogsPage() {
                     size="sm"
                     onClick={() => setProofLogId(log.id)}
                   >
-                    <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    Verify
+                    {anchoringEnabled ? (
+                      <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    ) : (
+                      <FileJson className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    )}
+                    {proofButtonLabel}
                   </Button>
                 </DataTableCell>
               </DataTableRow>

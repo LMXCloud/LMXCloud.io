@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, Link2, RefreshCw } from "lucide-react";
+import { Activity, ArrowRight, FileJson, Link2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE, fetchStatus, type StatusResponse } from "../api";
@@ -162,6 +162,20 @@ export function StatusPage() {
                 );
               })}
             </div>
+          </Card>
+        )}
+
+        {status && !status.anchoring.enabled && (
+          <Card className="mt-8">
+            <div className="flex flex-wrap items-center gap-2">
+              <FileJson className="h-4 w-4 text-primary" strokeWidth={1.75} />
+              <p className="text-body-sm font-medium text-on-surface">Request receipts</p>
+            </div>
+            <p className="mt-3 text-body-sm text-on-surface-muted">
+              Each inference call gets a cryptographic receipt hash (provider, model, tokens, cost,
+              latency). On-chain Merkle anchoring is enabled in local dev only — production API
+              deployments record receipts without posting roots to Base.
+            </p>
           </Card>
         )}
 
