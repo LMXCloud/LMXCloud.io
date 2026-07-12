@@ -19,11 +19,13 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LandingChat } from "../components/LandingChat";
+import { SeoHead } from "../components/SeoHead";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
 import { cn } from "../lib/cn";
 import { formatHeroSavings, getHeroSavingsHint } from "../lib/openai-benchmark";
+import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from "../lib/seo";
 
 const SUPPORTED_MODEL_LIST = listUniqueModelAliases();
 
@@ -171,6 +173,7 @@ const MCP_ONBOARDING_STEPS = [
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
+      <SeoHead title={DEFAULT_TITLE} description={DEFAULT_DESCRIPTION} path="/" />
       <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-[clamp(20px,4vw,48px)]">
           <Link to="/" className="group flex items-center gap-3">

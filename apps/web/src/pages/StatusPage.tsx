@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE, fetchStatus, type StatusResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
+import { SeoHead } from "../components/SeoHead";
 import { PageHeader } from "../components/console/PageHeader";
 import {
   DataTable,
@@ -75,6 +76,11 @@ export function StatusPage() {
 
   return (
     <PublicLayout>
+      <SeoHead
+        title="Provider Status — LMX Cloud DePIN inference"
+        description="Live health status for LMX Cloud inference providers on io.net and Akash. Polled every 30 seconds — the same signal used for automatic failover."
+        path="/status"
+      />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
         <PageHeader
           eyebrow="Infrastructure"

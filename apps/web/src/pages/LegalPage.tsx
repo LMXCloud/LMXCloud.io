@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
+import { SeoHead } from "../components/SeoHead";
 import { PageHeader } from "../components/console/PageHeader";
 import { cn } from "../lib/cn";
 import {
@@ -9,6 +10,29 @@ import {
   SUPPORT_EMAIL,
   type LegalDocId,
 } from "../content/legal/constants";
+
+const LEGAL_SEO: Record<LegalDocId, { title: string; description: string }> = {
+  terms: {
+    title: "Terms of Service — LMX Cloud",
+    description:
+      "Beta terms of service for LMX Cloud, the OpenAI-compatible DePIN inference API for developers and autonomous agents.",
+  },
+  privacy: {
+    title: "Privacy Policy — LMX Cloud",
+    description:
+      "How LMX Cloud collects, uses, and protects account, wallet, and usage data for the inference API and console.",
+  },
+  "acceptable-use": {
+    title: "Acceptable Use Policy — LMX Cloud",
+    description:
+      "Rules for lawful and fair use of the LMX Cloud inference API, including prohibited abuse and reporting channels.",
+  },
+  contact: {
+    title: "Contact & Support — LMX Cloud",
+    description:
+      "Contact LMX Cloud for product feedback, abuse reports, and privacy requests at support@lmxcloud.io.",
+  },
+};
 
 function isLegalDocId(value: string | undefined): value is LegalDocId {
   return LEGAL_DOCS.some((doc) => doc.id === value);
@@ -23,9 +47,11 @@ export function LegalPage() {
   }
 
   const active = LEGAL_DOCS.find((item) => item.id === activeId)!;
+  const seo = LEGAL_SEO[activeId];
 
   return (
     <PublicLayout>
+      <SeoHead title={seo.title} description={seo.description} path={`/legal/${activeId}`} />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
         <PageHeader
           eyebrow="Trust"

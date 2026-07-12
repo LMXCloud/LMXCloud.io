@@ -1,0 +1,23 @@
+# https://www.lmxcloud.io/robots.txt
+User-agent: *
+Allow: /
+
+# Authenticated console and auth flows — not for indexing
+Disallow: /console
+Disallow: /console/
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /auth/
+Disallow: /login
+Disallow: /signup
+
+# Legacy console paths (redirect to /console/*)
+Disallow: /overview
+Disallow: /keys
+Disallow: /playground
+Disallow: /models
+Disallow: /usage
+Disallow: /logs
+Disallow: /billing
+
+Sitemap: https://www.lmxcloud.io/sitemap.xml

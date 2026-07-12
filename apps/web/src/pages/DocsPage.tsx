@@ -5,6 +5,7 @@ import { useLocation } from "react-router-dom";
 import { listUniqueModelAliases } from "@lmxcloud/shared";
 import { API_BASE, fetchModels, type ModelsResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
+import { SeoHead } from "../components/SeoHead";
 import { PageHeader } from "../components/console/PageHeader";
 import {
   DataTable,
@@ -72,6 +73,11 @@ export function DocsPage() {
 
   return (
     <PublicLayout>
+      <SeoHead
+        title="API Docs — LMX Cloud OpenAI-compatible inference"
+        description="Developer docs for LMX Cloud: OpenAI-compatible chat completions, API keys, wallet auth, streaming, DePIN routing, x402 USDC payments, MCP, and verifiable logs."
+        path="/docs"
+      />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
         <PageHeader
           eyebrow="Developers"

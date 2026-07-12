@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { HelmetProvider } from "react-helmet-async";
 import { WagmiProvider } from "wagmi";
 import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App";
@@ -24,20 +25,22 @@ function AppShell() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {CLERK_PUBLISHABLE_KEY ? (
-      <ClerkProvider
-        publishableKey={CLERK_PUBLISHABLE_KEY}
-        signInUrl="/sign-in"
-        signUpUrl="/sign-up"
-        afterSignInUrl="/auth/callback"
-        afterSignUpUrl="/auth/callback"
-      >
-        <ClerkBridge>
-          <AppShell />
-        </ClerkBridge>
-      </ClerkProvider>
-    ) : (
-      <AppShell />
-    )}
+    <HelmetProvider>
+      {CLERK_PUBLISHABLE_KEY ? (
+        <ClerkProvider
+          publishableKey={CLERK_PUBLISHABLE_KEY}
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          afterSignInUrl="/auth/callback"
+          afterSignUpUrl="/auth/callback"
+        >
+          <ClerkBridge>
+            <AppShell />
+          </ClerkBridge>
+        </ClerkProvider>
+      ) : (
+        <AppShell />
+      )}
+    </HelmetProvider>
   </StrictMode>,
 );
