@@ -10,6 +10,10 @@ import type {
   VerifyResultContext,
   VerifiedPaymentCanceledContext,
 } from "@x402/core/server";
+import {
+  bazaarResourceServerExtension,
+  declareDiscoveryExtension,
+} from "@x402/extensions/bazaar";
 import { paymentMiddlewareFromHTTPServer } from "@x402/fastify";
 import { UptoEvmScheme } from "@x402/evm/upto/server";
 import type { Network } from "@x402/core/types";
@@ -174,6 +178,7 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
 
   const resourceServer = new x402ResourceServer(facilitatorClient);
   resourceServer.register(deps.networkId, new UptoEvmScheme());
+  resourceServer.registerExtension(bazaarResourceServerExtension);
 
   if (deps.paymentStore) {
     resourceServer.onAfterVerify(async (context: VerifyResultContext) => {
@@ -244,8 +249,80 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
           return formatUsdPrice(quoteResult.quote.quotedAmount);
         },
       },
-      description: "LMX Cloud OpenAI-compatible chat completion",
+      description:
+        "Pay-per-request OpenAI-compatible chat completions on DePIN infrastructure. Generate text from Llama, Qwen, DeepSeek, and other models with USDC micropayments on Base — no prepaid API credits required.",
       mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          input: {
+            model: "llama-3-70b",
+            messages: [
+              { role: "user", content: "Say hello in one sentence." },
+            ],
+          },
+          inputSchema: {
+            properties: {
+              model: {
+                type: "string",
+                description:
+                  "LMX model alias (e.g. llama-3-70b, qwen-3.6-35b, deepseek-r1)",
+              },
+              messages: {
+                type: "array",
+                description: "OpenAI-style chat messages",
+                items: {
+                  type: "object",
+                  properties: {
+                    role: {
+                      type: "string",
+                      enum: ["system", "user", "assistant", "tool"],
+                    },
+                    content: { type: "string" },
+                  },
+                  required: ["role", "content"],
+                },
+              },
+              temperature: {
+                type: "number",
+                description: "Sampling temperature (optional)",
+              },
+              max_tokens: {
+                type: "integer",
+                description: "Maximum tokens to generate (optional)",
+              },
+              stream: {
+                type: "boolean",
+                description: "If true, stream the response as SSE (optional)",
+              },
+            },
+            required: ["model", "messages"],
+          },
+          bodyType: "json",
+          output: {
+            example: {
+              id: "chatcmpl-lmx-example",
+              object: "chat.completion",
+              created: 1718000000,
+              model: "llama-3-70b",
+              choices: [
+                {
+                  index: 0,
+                  message: {
+                    role: "assistant",
+                    content: "Hello! How can I help you today?",
+                  },
+                  finish_reason: "stop",
+                },
+              ],
+              usage: {
+                prompt_tokens: 12,
+                completion_tokens: 10,
+                total_tokens: 22,
+              },
+            },
+          },
+        }),
+      },
       unpaidResponseBody: (context) => {
         const quoteResult = buildChatQuoteFromHttpContext(
           context,

@@ -116,6 +116,31 @@ function decodePaymentError(header: string | null): string | undefined {
   }
 }
 
+/** Read EXTENSION-RESPONSES from a settle (paid) HTTP response. */
+function getExtensionResponsesHeader(headers: Headers): string | null {
+  return (
+    headers.get("extension-responses") ??
+    headers.get("EXTENSION-RESPONSES")
+  );
+}
+
+function decodeExtensionResponses(
+  header: string | null,
+): Record<string, unknown> | null {
+  if (!header) return null;
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(header, "base64").toString("utf8"),
+    ) as unknown;
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+      return { decodeError: true, raw: header };
+    }
+    return decoded as Record<string, unknown>;
+  } catch {
+    return { decodeError: true, raw: header };
+  }
+}
+
 async function ensurePermit2Allowance(
   account: ReturnType<typeof privateKeyToAccount>,
   tokenAddress: `0x${string}`,
@@ -241,14 +266,20 @@ async function paidRequest(): Promise<void> {
   const httpClient = new x402HTTPClient(client);
 
   const initial = await unpaidRequest();
+  const initialBody = await initial.json().catch(() => ({}));
+  if (initial.status !== 402) {
+    throw new Error(
+      `Expected 402 Payment Required from ${API_URL}/v1/chat/completions, ` +
+        `got ${initial.status}: ${JSON.stringify(initialBody)}. ` +
+        `If this is production, confirm X402_ENABLED=true and a redeploy completed ` +
+        `(GET /health should show "x402_enabled": true).`,
+    );
+  }
+
   const paymentRequired = httpClient.getPaymentRequiredResponse(
     (name) => initial.headers.get(name),
-    await initial.json().catch(() => ({})),
+    initialBody,
   );
-
-  if (initial.status !== 402) {
-    throw new Error(`Expected 402, got ${initial.status}: ${JSON.stringify(paymentRequired)}`);
-  }
 
   const tokenAddress = (paymentRequired.accepts[0]?.asset ?? USDC_ADDRESS) as `0x${string}`;
   const requiredAmount = BigInt(paymentRequired.accepts[0]?.amount ?? "1000");
@@ -279,6 +310,18 @@ async function paidRequest(): Promise<void> {
     // Settlement header is only present after successful on-chain settle.
   }
 
+  // Facilitator settle status for Bazaar / other extensions (docs: EXTENSION-RESPONSES).
+  const extensionResponsesHeader = getExtensionResponsesHeader(paid.headers);
+  const extensionResponses = decodeExtensionResponses(extensionResponsesHeader);
+  console.log(
+    `EXTENSION-RESPONSES (settle): ${extensionResponsesHeader ?? "(missing)"}`,
+  );
+  if (extensionResponses) {
+    console.log(
+      `EXTENSION-RESPONSES decoded: ${JSON.stringify(extensionResponses, null, 2)}`,
+    );
+  }
+
   console.log(JSON.stringify({
     status: paid.status,
     paymentError: decodePaymentError(
@@ -288,6 +331,8 @@ async function paidRequest(): Promise<void> {
     cost: paid.headers.get("x-lmx-cost"),
     paymentResponseHeader:
       paid.headers.get("payment-response") ?? paid.headers.get("x-payment-response"),
+    extensionResponsesHeader,
+    extensionResponses,
     settlement,
     responseHeaders,
     body,

@@ -60,6 +60,14 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `USDC_CONTRACT_ADDRESS` | No | Mainnet default `0x833589…2913` |
    | `DEPOSIT_CONFIRMATIONS` | No | `10` |
    | `DEPOSIT_MAX_LOG_BLOCK_RANGE` | No | `10` on mainnet if Alchemy range errors |
+   | `X402_ENABLED` | Yes (per-call pay) | `true` to enable anonymous x402 on `POST /v1/chat/completions` |
+   | `X402_FACILITATOR_URL` | No | Default `https://api.cdp.coinbase.com/platform/v2/x402` |
+   | `CDP_API_KEY_ID` | Yes (when x402 on) | Coinbase CDP API key id |
+   | `CDP_API_KEY_SECRET` | Yes (when x402 on) | Coinbase CDP API key secret |
+   | `X402_MIN_CALL_USDC` | No | Floor price per call (default `0.001`) |
+   | `X402_PRICING_MARGIN_PCT` | No | Pricing margin (default `0.25`) |
+
+   **x402 / Bazaar notes:** `GET /health` should report `"x402_enabled": true` after enabling. Bazaar discovery requires an `https://` resource URL (use `https://api.lmxcloud.io`, not localhost `http://`). CDP indexes the route after the first successful settle with Bazaar metadata.
 
    **Verifiable logs (optional — local dev only):** Leave all `ANCHOR_*` variables **unset** on Railway for now. Production still records per-request receipt hashes; the console shows them under **Receipt** without on-chain Merkle proofs. For full verify locally, use Base Sepolia in `.env`:
 
