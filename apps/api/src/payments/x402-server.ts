@@ -252,6 +252,10 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
       description:
         "Pay-per-request OpenAI-compatible chat completions on DePIN infrastructure. Generate text from Llama, Qwen, DeepSeek, and other models with USDC micropayments on Base — no prepaid API credits required.",
       mimeType: "application/json",
+      // Catalog siblings on resource (not inside declareDiscoveryExtension).
+      serviceName: "LMX Cloud",
+      tags: ["inference", "llm", "openai", "chat-completions", "depin"],
+      iconUrl: "https://lmxcloud.io/favicon.svg",
       extensions: {
         ...declareDiscoveryExtension({
           input: {
@@ -260,7 +264,9 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
               { role: "user", content: "Say hello in one sentence." },
             ],
           },
+          // Agentic.Market treats schemas without type:"object" as absent.
           inputSchema: {
+            type: "object",
             properties: {
               model: {
                 type: "string",
