@@ -537,11 +537,6 @@ async function startStdioServer() {
 
 async function startHttpServer() {
   await initX402();
-  const server = createLmxMcpServer("http");
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  await server.connect(transport);
 
   const httpServer = createServer(async (req, res) => {
     if (!enforceOriginLock(req, res)) return;
@@ -565,9 +560,55 @@ async function startHttpServer() {
     }
 
     if (url.pathname === "/mcp") {
-      await runWithRequestContext(requestContextFromHttp(req), async () => {
-        await transport.handleRequest(req, res);
+      const started = Date.now();
+      const server = createLmxMcpServer("http");
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
       });
+
+      try {
+        await server.connect(transport);
+        await runWithRequestContext(requestContextFromHttp(req), async () => {
+          await transport.handleRequest(req, res);
+        });
+      } catch (error) {
+        const detail =
+          error instanceof Error
+            ? `${error.message}${error.stack ? `\n${error.stack}` : ""}`
+            : String(error);
+        logToolEvent({
+          level: "error",
+          tool: "transport.handleRequest",
+          callerId: req.socket.remoteAddress ?? "unknown",
+          source: "streamable-http",
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail,
+        });
+
+        if (!res.headersSent) {
+          res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ error: "MCP request failed" }));
+        } else if (!res.writableEnded) {
+          res.end();
+        }
+      } finally {
+        await server.close().catch((error: unknown) => {
+          const detail =
+            error instanceof Error
+              ? `${error.message}${error.stack ? `\n${error.stack}` : ""}`
+              : String(error);
+          logToolEvent({
+            level: "error",
+            tool: "transport.close",
+            callerId: req.socket.remoteAddress ?? "unknown",
+            source: "streamable-http",
+            ok: false,
+            latencyMs: Date.now() - started,
+            detail,
+          });
+        });
+      }
       return;
     }
 
