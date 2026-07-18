@@ -58,6 +58,7 @@ export interface UsageLogEntry {
   created_at: string;
   api_key_id: string;
   route: string;
+  resource_type?: string;
   provider: string;
   model: string;
   prompt_tokens: number;
@@ -66,6 +67,7 @@ export interface UsageLogEntry {
   cost: number;
   latency_ms: number;
   fallback_used: boolean;
+  success?: boolean;
   status: number;
 }
 
@@ -158,6 +160,7 @@ export interface DepositHistoryResponse {
 export type PaymentEventStatus =
   | "quoted"
   | "verified"
+  | "fulfilling"
   | "settled"
   | "completed"
   | "failed"

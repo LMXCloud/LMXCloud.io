@@ -200,7 +200,10 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
           settledAmount,
         );
 
-        if (settled?.usageEventId) {
+        // Handler normally markCompleted while status=fulfilling before onSend.
+        // This covers the race where settle recording runs first, and webhook-style
+        // redelivery when usage is already linked but status is still settled.
+        if (settled?.usageEventId && settled.status !== "completed") {
           await deps.paymentStore!.markCompleted(settled.id, settled.usageEventId);
         }
       });
@@ -279,7 +282,38 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
                       type: "string",
                       enum: ["system", "user", "assistant", "tool"],
                     },
-                    content: { type: "string" },
+                    content: {
+                      description:
+                        "Plain text string, or OpenAI vision content parts (text + image_url with https or data:image/...;base64,...)",
+                      oneOf: [
+                        { type: "string" },
+                        {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              type: {
+                                type: "string",
+                                enum: ["text", "image_url"],
+                              },
+                              text: { type: "string" },
+                              image_url: {
+                                type: "object",
+                                properties: {
+                                  url: { type: "string" },
+                                  detail: {
+                                    type: "string",
+                                    enum: ["auto", "low", "high"],
+                                  },
+                                },
+                                required: ["url"],
+                              },
+                            },
+                            required: ["type"],
+                          },
+                        },
+                      ],
+                    },
                   },
                   required: ["role", "content"],
                 },

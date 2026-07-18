@@ -16,7 +16,7 @@ import {
 } from "./lmx-client.js";
 import { enforceOriginLock } from "./origin-lock.js";
 import { runWithRequestContext } from "./request-context.js";
-import { loadMcpX402Config, runX402ChatCompletion, type McpX402Config } from "./x402.js";
+import { loadMcpX402Config, runX402ChatCompletion, buildUserMessageContent, type McpX402Config } from "./x402.js";
 
 const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "llama-3-70b";
 const MCP_TRANSPORT = (process.env.LMX_MCP_TRANSPORT ?? "stdio") as "stdio" | "http";
@@ -332,10 +332,98 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
   );
 
   server.tool(
+    "web_search",
+    "Real-time web search via LMX (Brave Search passthrough). Fixed per-call USDC price from the caller's API key balance. Returns title/url/snippet results.",
+    {
+      query: z.string().min(1).describe("Search query string."),
+      max_results: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe("Max results to return (1–20, default 5)."),
+      api_key: optionalApiKeySchema,
+    },
+    async ({ query, max_results, api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "web_search",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: true,
+        allowAdminFallback: false,
+      });
+      if (!access.ok) {
+        return { isError: true, content: [{ type: "text", text: access.message }] };
+      }
+
+      const authError = await validateApiKey(access.auth.apiKey);
+      if (authError) {
+        logToolEvent({
+          tool: "web_search",
+          callerId: access.auth.callerId,
+          source: access.auth.source,
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail: authError,
+        });
+        return { isError: true, content: [{ type: "text", text: authError }] };
+      }
+
+      const search = await fetchJson<{
+        object: string;
+        query: string;
+        provider: string;
+        results: Array<{ title: string; url: string; snippet: string }>;
+      }>("/v1/web/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${access.auth.apiKey}`,
+        },
+        body: JSON.stringify({
+          query,
+          ...(typeof max_results === "number" ? { max_results } : {}),
+        }),
+      });
+
+      logToolEvent({
+        tool: "web_search",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok: search.ok,
+        latencyMs: Date.now() - started,
+        detail: search.ok ? undefined : search.error,
+      });
+
+      if (!search.ok) {
+        return { isError: true, content: [{ type: "text", text: search.error }] };
+      }
+
+      return jsonToolContent(search.data);
+    },
+  );
+
+  server.tool(
     "chat_completion",
-    "Call LMX Cloud OpenAI-compatible chat completions. Prefers a pre-funded API key (Bearer / api_key); when omitted and x402 is enabled, requires a USDC pay-per-call payment.",
+    "Call LMX Cloud OpenAI-compatible chat completions. Prefers a pre-funded API key (Bearer / api_key); when omitted and x402 is enabled, requires a USDC pay-per-call payment. Optional image_url / images enable vision input (OpenAI content-parts format) — use a vision model such as llama-3.2-90b-vision, qwen-3.6-35b, or qwen-3.5-35b.",
     {
       prompt: z.string().min(1).describe("User prompt to send to the selected model."),
+      image_url: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          "Optional image as an https URL or data:image/...;base64,... URI. Requires a vision-capable model.",
+        ),
+      images: z
+        .array(z.string().min(1))
+        .optional()
+        .describe(
+          "Optional additional images (https URLs or data:image/...;base64,... URIs). Requires a vision-capable model.",
+        ),
       model: z
         .string()
         .optional()
@@ -355,7 +443,7 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
         .describe("Optional sampling temperature."),
       api_key: optionalApiKeySchema,
     },
-    async ({ prompt, model, max_tokens, temperature, api_key }, extra) => {
+    async ({ prompt, image_url, images, model, max_tokens, temperature, api_key }, extra) => {
       const started = Date.now();
       const access = guardToolAccess({
         tool: "chat_completion",
@@ -392,7 +480,7 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
         }
 
         return runX402ChatCompletion({
-          args: { prompt, model, max_tokens, temperature, api_key },
+          args: { prompt, image_url, images, model, max_tokens, temperature, api_key },
           extra,
           defaultModel: DEFAULT_MODEL,
           x402: mcpX402,
@@ -456,7 +544,12 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
 
       const payload = {
         model: selectedModel,
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          {
+            role: "user",
+            content: buildUserMessageContent(prompt, image_url, images),
+          },
+        ],
         ...(max_tokens ? { max_tokens } : {}),
         ...(typeof temperature === "number" ? { temperature } : {}),
         stream: false,

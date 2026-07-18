@@ -26,6 +26,7 @@ Provider floors today:
 | Provider | Cost / 1k tokens | List / 1k (25% margin) |
 |----------|------------------|--------------------------|
 | AkashML  | $0.0001          | $0.000125                |
+| Nosana   | $0.00015         | $0.0001875               |
 | io.net   | $0.0002          | $0.000250                |
 
 For each model alias, the catalog picks the **cheapest configured provider** that supports the alias (same rule as `GET /v1/models`).
@@ -60,11 +61,25 @@ Both paths share the same provider routing and cost floors. x402 is **additive**
 
 ## Public pricing API
 
-`GET /v1/pricing` — full catalog from healthy providers.
+`GET /v1/pricing` — full catalog from healthy providers, plus fixed tool prices:
+
+```json
+{
+  "tools": {
+    "web_search": {
+      "provider": "brave",
+      "price_usdc": "0.010000",
+      "pricing": "per_call",
+      "configured": true,
+      "route": "/v1/web/search"
+    }
+  }
+}
+```
 
 `GET /v1/pricing?model=llama-3-70b&max_tokens=512&prompt_tokens=200` — single-model quote.
 
-This endpoint is the source of truth for docs, Bazaar listing metadata, and Sprint 2 `PAYMENT-REQUIRED` payloads.
+This endpoint is the source of truth for docs, Bazaar listing metadata, and Sprint 2 `PAYMENT-REQUIRED` payloads. Web search is balance-billed at the fixed `WEB_SEARCH_PRICE_USDC` (see [web-search.md](./web-search.md)); x402 on `web_search` is not enabled yet.
 
 ## Streaming
 

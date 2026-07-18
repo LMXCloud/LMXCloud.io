@@ -372,11 +372,34 @@ export interface StatusAnchoringInfo {
   }>;
 }
 
+export interface StatusReliabilityInfo {
+  window_days: number;
+  overall: {
+    attempts: number;
+    successes: number;
+    failures: number;
+    success_rate: number;
+    avg_latency_ms: number | null;
+    avg_unit_price: number | null;
+  };
+  by_provider: Array<{
+    resource_type: string;
+    provider: string;
+    attempts: number;
+    successes: number;
+    failures: number;
+    success_rate: number;
+    avg_latency_ms: number | null;
+    avg_unit_price: number | null;
+  }>;
+}
+
 export interface StatusResponse {
   object: "status";
   providers: Record<string, ProviderStatusInfo>;
   fallback_chain: string[];
   anchoring: StatusAnchoringInfo;
+  reliability?: StatusReliabilityInfo;
 }
 
 export interface UsageLogProofResponse {

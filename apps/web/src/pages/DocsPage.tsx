@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
-import { listUniqueModelAliases } from "@lmxcloud/shared";
+import { listUniqueModelAliases, listVisionModelAliases } from "@lmxcloud/shared";
 import { API_BASE, fetchModels, type ModelsResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
 import { SeoHead } from "../components/SeoHead";
@@ -31,6 +31,8 @@ const SECTIONS = [
   { id: "wallet-auth", label: "Wallet authentication" },
   { id: "usdc-funding", label: "Funding with USDC" },
   { id: "chat", label: "Chat completions" },
+  { id: "vision", label: "Vision" },
+  { id: "web-search", label: "Web search" },
   { id: "streaming", label: "Streaming" },
   { id: "routing", label: "Routing" },
   { id: "headers", label: "Response headers" },
@@ -45,6 +47,7 @@ const EXAMPLE_BASE = API_BASE;
 const MCP_HOSTED_BASE = "https://mcp.lmxcloud.io/mcp";
 
 const CATALOG_MODELS = listUniqueModelAliases();
+const VISION_ALIASES = listVisionModelAliases();
 
 export function DocsPage() {
   const [models, setModels] = useState<ModelsResponse | null>(null);
@@ -77,7 +80,7 @@ export function DocsPage() {
     <PublicLayout>
       <SeoHead
         title="API Docs — LMX Cloud OpenAI-compatible inference"
-        description="Developer docs for LMX Cloud: OpenAI-compatible chat completions, x402 USDC payments, MCP, ElizaOS plugin, wallet auth, DePIN routing, and verifiable logs."
+        description="Developer docs for LMX Cloud: OpenAI-compatible chat completions (vision), web search, x402 USDC payments, MCP, ElizaOS plugin, wallet auth, DePIN routing, and verifiable logs."
         path="/docs"
       />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
@@ -116,7 +119,13 @@ export function DocsPage() {
                 decentralized compute networks — primarily io.net and Akash — with automatic
                 fallback when a provider is slow or unavailable. Drop in your existing SDK, change
                 the base URL and API key, and you get the same chat completions interface you
-                already use, backed by DePIN infrastructure instead of a single centralized vendor.
+                already use (including vision{" "}
+                <code className="text-mono-sm">image_url</code> content on supported models),
+                plus balance-billed{" "}
+                <a href="#web-search" className="text-primary hover:text-primary-hover">
+                  web search
+                </a>
+                , backed by DePIN infrastructure instead of a single centralized vendor.
               </p>
               <p className="mt-4 text-body-md text-on-surface-muted">
                 It is also built for agents with no prior relationship: omit an API key on{" "}
@@ -266,7 +275,13 @@ console.log(response.choices[0].message.content);`}
                 <li>
                   <code className="text-mono-sm">chat_completion</code> — run inference (
                   <code className="text-mono-sm">POST /v1/chat/completions</code>; API key or x402
-                  pay-per-call)
+                  pay-per-call). Optional <code className="text-mono-sm">image_url</code> /{" "}
+                  <code className="text-mono-sm">images</code> for vision models.
+                </li>
+                <li>
+                  <code className="text-mono-sm">web_search</code> — real-time web search (
+                  <code className="text-mono-sm">POST /v1/web/search</code>; API key required,
+                  fixed per-call price)
                 </li>
               </ul>
 
@@ -276,13 +291,14 @@ console.log(response.choices[0].message.content);`}
                   Balance-funded — pass{" "}
                   <code className="text-mono-sm">Authorization: Bearer lmx_...</code> (or an{" "}
                   <code className="text-mono-sm">api_key</code> tool argument). Deducts from your
-                  console balance.
+                  console balance. Required for <code className="text-mono-sm">web_search</code>.
                 </li>
                 <li>
-                  x402 pay-per-call — omit the API key. The MCP seller wrapper returns payment
-                  requirements; your agent pays USDC on Base (same CDP facilitator +{" "}
-                  <code className="text-mono-sm">upto</code> scheme as the HTTP route). No LMX
-                  account required.
+                  x402 pay-per-call — omit the API key on{" "}
+                  <code className="text-mono-sm">chat_completion</code> only. The MCP seller
+                  wrapper returns payment requirements; your agent pays USDC on Base (same CDP
+                  facilitator + <code className="text-mono-sm">upto</code> scheme as the HTTP
+                  route). No LMX account required.
                 </li>
               </ul>
 
@@ -357,15 +373,17 @@ console.log(response.choices[0].message.content);`}
 3) quote_price(model="llama-3-70b", max_tokens=512, prompt_tokens=200)
 4) get_balance
 5) chat_completion(prompt="Reply with exactly: MCP test passed.", model="llama-3-70b")
-6) get_usage`}
+6) web_search(query="LMX Cloud DePIN inference", max_results=3)
+7) get_usage`}
                 </CodeBlock>
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 A passing balance-funded run confirms provider health, model discovery, quoting,
-                balance checks, inference billing, and usage accounting — all through MCP with your
-                API key. For x402, skip steps 4 and 6 (or expect auth errors) and invoke{" "}
-                <code className="text-mono-sm">chat_completion</code> with no key so payment settles
-                per call.
+                balance checks, inference billing, web search, and usage accounting — all through
+                MCP with your API key. For x402, skip balance/usage steps (or expect auth errors)
+                and invoke <code className="text-mono-sm">chat_completion</code> with no key so
+                payment settles per call. <code className="text-mono-sm">web_search</code> is
+                balance-only today.
               </p>
             </DocSection>
 
@@ -738,7 +756,9 @@ elizaos plugins add @lmxcloud/plugin-lmxcloud`}
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">POST /v1/chat/completions</code> accepts
                 OpenAI-compatible request bodies. LMX routes to the best available provider and
-                returns standard chat completion JSON.
+                returns standard chat completion JSON. Message{" "}
+                <code className="text-mono-sm">content</code> may be a plain string or an array of
+                content parts (see Vision).
               </p>
               <div className="mt-4">
                 <CodeBlock title="Request body">
@@ -757,6 +777,88 @@ elizaos plugins add @lmxcloud/plugin-lmxcloud`}
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 Optional routing preference via{" "}
                 <code className="text-mono-sm">x-lmx-prefer</code> header — see Routing below.
+              </p>
+            </DocSection>
+
+            <DocSection id="vision" title="Vision">
+              <p className="text-body-md text-on-surface-muted">
+                Vision-capable models accept OpenAI-style multimodal user messages:{" "}
+                <code className="text-mono-sm">text</code> and{" "}
+                <code className="text-mono-sm">image_url</code> parts. Image URLs may be public{" "}
+                <code className="text-mono-sm">https://</code> links or{" "}
+                <code className="text-mono-sm">data:image/...;base64,...</code> URIs.
+              </p>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Vision aliases today:{" "}
+                {VISION_ALIASES.map((alias, i) => (
+                  <span key={alias}>
+                    {i > 0 ? ", " : ""}
+                    <code className="text-mono-sm">{alias}</code>
+                  </span>
+                ))}
+                . Sending image content to a text-only model returns HTTP 400 naming those aliases.
+              </p>
+              <div className="mt-4">
+                <CodeBlock title="Vision request">
+                  {`curl ${EXAMPLE_BASE}/v1/chat/completions \\
+  -H "Authorization: Bearer lmx_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "qwen-3.6-35b",
+    "messages": [{
+      "role": "user",
+      "content": [
+        {"type": "text", "text": "What is in this image?"},
+        {"type": "image_url", "image_url": {"url": "https://example.com/photo.png"}}
+      ]
+    }]
+  }'`}
+                </CodeBlock>
+              </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                On MCP, pass optional <code className="text-mono-sm">image_url</code> /{" "}
+                <code className="text-mono-sm">images</code> to{" "}
+                <code className="text-mono-sm">chat_completion</code> with a vision model. Vision
+                traffic is still <code className="text-mono-sm">resource_type=chat</code> and is
+                covered by existing reliability telemetry automatically.
+              </p>
+            </DocSection>
+
+            <DocSection id="web-search" title="Web search">
+              <p className="text-body-md text-on-surface-muted">
+                <code className="text-mono-sm">POST /v1/web/search</code> is a Brave Search
+                passthrough behind LMX metering — not a DePIN{" "}
+                <code className="text-mono-sm">ProviderAdapter</code> route. Requires a balance-funded
+                API key. Fixed per-call price from{" "}
+                <code className="text-mono-sm">GET /v1/pricing</code> →{" "}
+                <code className="text-mono-sm">tools.web_search</code> (default $0.01 USDC).
+              </p>
+              <div className="mt-4">
+                <CodeBlock title="Request">
+                  {`curl ${EXAMPLE_BASE}/v1/web/search \\
+  -H "Authorization: Bearer lmx_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"query":"DePIN GPU inference","max_results":5}'`}
+                </CodeBlock>
+              </div>
+              <div className="mt-4">
+                <CodeBlock title="Response shape">
+                  {`{
+  "object": "web.search",
+  "query": "DePIN GPU inference",
+  "provider": "brave",
+  "results": [
+    {"title": "...", "url": "https://...", "snippet": "..."}
+  ]
+}`}
+                </CodeBlock>
+              </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Operators set <code className="text-mono-sm">BRAVE_SEARCH_API_KEY</code> on the API
+                service. Without it, the route returns 503. Usage is recorded as{" "}
+                <code className="text-mono-sm">resource_type=web_search</code> (ops-filterable) but
+                is not part of the DePIN multi-network reliability claim — see{" "}
+                <code className="text-mono-sm">docs/web-search.md</code>.
               </p>
             </DocSection>
 
@@ -1002,9 +1104,11 @@ data: {
             <DocSection id="pricing" title="Pricing (x402)">
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">GET /v1/pricing</code> returns per-model list
-                prices for x402 per-call payments. Prices are based on the cheapest healthy
-                provider for each alias plus a 25% margin, with a $0.001 USDC minimum per call.
-                No authentication required.
+                prices for x402 per-call payments, plus fixed tool prices under{" "}
+                <code className="text-mono-sm">tools</code> (e.g.{" "}
+                <code className="text-mono-sm">web_search</code>). Model prices use the cheapest
+                healthy provider for each alias plus a 25% margin, with a $0.001 USDC minimum per
+                call. No authentication required.
               </p>
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 Add <code className="text-mono-sm">?model=llama-3-70b</code> for a single-model
@@ -1012,7 +1116,8 @@ data: {
                 <code className="text-mono-sm">max_tokens</code>, and{" "}
                 <code className="text-mono-sm">max_completion_tokens</code> tune the ceiling
                 estimate. Full pricing rules are in{" "}
-                <code className="text-mono-sm">docs/x402-pricing.md</code>.
+                <code className="text-mono-sm">docs/x402-pricing.md</code>; web search details in{" "}
+                <code className="text-mono-sm">docs/web-search.md</code>.
               </p>
               <div className="mt-4">
                 <CodeBlock title="curl">
@@ -1052,7 +1157,14 @@ data: {
             <DocSection id="models" title="Models">
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">GET /v1/models</code> returns aliases available from
-                currently healthy providers. No authentication required.
+                currently healthy providers. No authentication required. Vision-capable aliases:{" "}
+                {VISION_ALIASES.map((alias, i) => (
+                  <span key={alias}>
+                    {i > 0 ? ", " : ""}
+                    <code className="text-mono-sm">{alias}</code>
+                  </span>
+                ))}
+                .
               </p>
               {modelsError && (
                 <p className="mt-4 text-body-sm text-error">{modelsError}</p>
@@ -1101,6 +1213,7 @@ data: {
                       <DataTableTh>Upstream ID</DataTableTh>
                       <DataTableTh>io.net</DataTableTh>
                       <DataTableTh>AkashML</DataTableTh>
+                      <DataTableTh>Nosana</DataTableTh>
                     </tr>
                   </DataTableHead>
                   <DataTableBody>
@@ -1114,14 +1227,20 @@ data: {
                         <DataTableCell>
                           {model.providers.includes("akash") ? "✓" : "—"}
                         </DataTableCell>
+                        <DataTableCell>
+                          {model.providers.includes("nosana") ? "✓" : "—"}
+                        </DataTableCell>
                       </DataTableRow>
                     ))}
                   </DataTableBody>
                 </DataTable>
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                Five models are on both io.net and AkashML; the rest route through io.net when
-                configured. See the{" "}
+                Overlap varies by network: several aliases span io.net + AkashML + Nosana; others
+                are single-network. Nosana activates when{" "}
+                <code className="font-mono text-on-surface">NOSANA_API_KEY</code> and{" "}
+                <code className="font-mono text-on-surface">NOSANA_ENDPOINTS</code> (per-model
+                deployment URLs) are set. See the{" "}
                 <Link to="/#models" className="text-primary hover:text-primary-hover">
                   landing page
                 </Link>{" "}
@@ -1138,8 +1257,14 @@ data: {
               <h3 className="mt-8 text-title-md text-on-surface">Shipped</h3>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-body-sm text-on-surface-muted">
                 <li>
-                  OpenAI-compatible API — chat completions, models list, and streaming with SSE
-                  metadata events.
+                  OpenAI-compatible API — chat completions (including vision{" "}
+                  <code className="text-mono-sm">image_url</code> content), models list, and
+                  streaming with SSE metadata events.
+                </li>
+                <li>
+                  Web search — <code className="text-mono-sm">POST /v1/web/search</code> and MCP{" "}
+                  <code className="text-mono-sm">web_search</code> via Brave Search, fixed per-call
+                  balance billing.
                 </li>
                 <li>
                   Multi-provider routing — io.net and Akash with health-aware fallback; routing
@@ -1165,8 +1290,9 @@ data: {
                 </li>
                 <li>
                   MCP server — hosted at <code className="text-mono-sm">https://mcp.lmxcloud.io/mcp</code>
-                  , balance + x402 on <code className="text-mono-sm">chat_completion</code>, listed
-                  as <code className="text-mono-sm">io.lmxcloud/mcp-server</code> in the official MCP
+                  , balance + x402 on <code className="text-mono-sm">chat_completion</code>, balance{" "}
+                  <code className="text-mono-sm">web_search</code>, listed as{" "}
+                  <code className="text-mono-sm">io.lmxcloud/mcp-server</code> in the official MCP
                   Registry.
                 </li>
                 <li>
@@ -1188,6 +1314,14 @@ data: {
 
               <h3 className="mt-8 text-title-md text-on-surface">Coming next</h3>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-body-sm text-on-surface-muted">
+                <li>
+                  x402 on <code className="text-mono-sm">web_search</code> — balance path is live;
+                  anonymous pay-per-call for search is deferred.
+                </li>
+                <li>
+                  Embeddings and image generation — parked until io.net/Akash (or a new provider)
+                  expose live SKUs; catalogs checked 2026-07-18.
+                </li>
                 <li>
                   x402 streaming — paid path currently returns{" "}
                   <code className="text-mono-sm">x402_stream_unsupported</code>; balance-funded
@@ -1219,10 +1353,11 @@ data: {
                 </li>
               </ul>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                If you are evaluating whether to build on LMX Cloud: inference, routing, wallet
-                identity, USDC funding, verifiable logs, x402 pay-per-call, MCP, and the ElizaOS
-                plugin are live today. Phase 1 distribution channels are findable; next work is
-                reliability, trust, and traffic — not the payment plumbing itself.
+                If you are evaluating whether to build on LMX Cloud: inference (including vision),
+                web search, routing, wallet identity, USDC funding, verifiable logs, x402
+                pay-per-call, MCP (8 tools), and the ElizaOS plugin are live today. Phase 1
+                distribution channels are findable; next work is reliability, trust, and traffic —
+                not the payment plumbing itself.
               </p>
             </DocSection>
 
@@ -1251,7 +1386,8 @@ data: {
                     <DataTableRow>
                       <DataTableCell mono>GET /v1/pricing</DataTableCell>
                       <DataTableCell>
-                        Per-model x402 list prices and optional quote for a single model
+                        Per-model x402 list prices, optional quote, and fixed tool prices (e.g.{" "}
+                        <code className="text-mono-sm">web_search</code>)
                       </DataTableCell>
                     </DataTableRow>
                     <DataTableRow>
@@ -1283,6 +1419,12 @@ data: {
                   </DataTableBody>
                 </DataTable>
               </div>
+              <p className="mt-6 text-body-sm text-on-surface-muted">
+                Authenticated (API key) surfaces include{" "}
+                <code className="text-mono-sm">POST /v1/chat/completions</code> and{" "}
+                <code className="text-mono-sm">POST /v1/web/search</code>. Chat also accepts
+                anonymous x402 payment; web search is balance-path only today.
+              </p>
             </DocSection>
           </div>
         </div>

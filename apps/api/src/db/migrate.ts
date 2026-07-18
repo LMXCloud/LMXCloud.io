@@ -114,13 +114,26 @@ const MIGRATIONS = [
     ON payment_events (payer_wallet, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_payment_events_status
     ON payment_events (status)
-    WHERE status IN ('verified', 'settled')`,
+    WHERE status IN ('verified', 'settled', 'fulfilling')`,
   `ALTER TABLE usage_events
     ADD COLUMN IF NOT EXISTS payer_wallet TEXT`,
   `ALTER TABLE usage_events
     ADD COLUMN IF NOT EXISTS payment_event_id UUID REFERENCES payment_events(id)`,
   `ALTER TABLE usage_events
     ALTER COLUMN api_key_id DROP NOT NULL`,
+  // Reliability telemetry (Goal 0): success/failure + resource type + unit price over time
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS resource_type TEXT NOT NULL DEFAULT 'chat'`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT true`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS error_code TEXT`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS unit_price NUMERIC(18, 8)`,
+  `CREATE INDEX IF NOT EXISTS idx_usage_events_reliability
+    ON usage_events (resource_type, provider, model, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_usage_events_success_created
+    ON usage_events (success, created_at DESC)`,
 ];
 
 export async function runMigrations(): Promise<void> {

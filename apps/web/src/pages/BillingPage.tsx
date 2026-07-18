@@ -79,7 +79,7 @@ function paymentStatusTone(
 ): "success" | "warning" | "error" | "info" | "default" {
   if (status === "completed" || status === "settled") return "success";
   if (status === "failed") return "error";
-  if (status === "verified" || status === "quoted") return "warning";
+  if (status === "verified" || status === "quoted" || status === "fulfilling") return "warning";
   if (status === "refunded") return "info";
   return "default";
 }

@@ -11,6 +11,7 @@ import type { UsageStore } from "../usage/store.js";
 import type { PaymentStore } from "../payments/store.js";
 import { parseChatBody } from "../payments/quote-context.js";
 import { hashPaymentPayload } from "../payments/idempotency.js";
+import { RESOURCE_TYPE_CHAT, recordProviderSuccess } from "../telemetry/index.js";
 
 interface ChatRouteDeps {
   router: InferenceRouter;
@@ -76,7 +77,7 @@ function x402RateLimitKey(request: FastifyRequest): string {
   return `x402:ip:${request.ip}`;
 }
 
-async function rejectReplayedX402Payment(
+async function claimX402PaymentOrReject(
   paymentStore: PaymentStore | null,
   request: FastifyRequest,
   reply: FastifyReply,
@@ -86,39 +87,46 @@ async function rejectReplayedX402Payment(
   const payloadHash = hashPaymentPayload(
     JSON.stringify(request.x402Context.paymentPayload),
   );
-  const payment = await paymentStore.findByPayloadHash(payloadHash);
-  if (!payment) return false;
 
-  const alreadyConsumed =
-    payment.status === "completed" ||
-    payment.status === "refunded" ||
-    payment.usageEventId !== null;
-  if (alreadyConsumed) {
-    await reply.status(409).send({
-      error: {
-        message: "Payment payload has already been consumed",
-        type: "invalid_request_error",
-        code: "x402_payment_replay",
-      },
+  // Verify recording is fire-and-forget; ensure the row exists before claiming.
+  const existing = await paymentStore.findByPayloadHash(payloadHash);
+  if (!existing) {
+    const requirements = request.x402Context.paymentRequirements as {
+      amount?: string;
+      network?: string;
+    };
+    const body = parseChatBody(request.body);
+    const model = typeof body === "string" ? "unknown" : body.model;
+    const network = requirements.network ?? "";
+    const chainId = Number(String(network).split(":")[1]) || 0;
+    const quotedAmount = requirements.amount
+      ? roundCredits(Number(requirements.amount) / 1e6)
+      : 0;
+
+    const created = await paymentStore.createQuoted({
+      payerWallet: extractX402Payer(request) ?? "unknown",
+      quotedAmount,
+      chainId,
+      paymentPayloadHash: payloadHash,
+      model,
     });
-    return true;
+    await paymentStore.markVerified(created.id);
   }
 
-  if (payment.status === "settled") {
-    await reply.status(409).send({
-      error: {
-        message: "Payment payload is already settled and cannot be reused",
-        type: "invalid_request_error",
-        code: "x402_payment_replay",
-      },
-    });
-    return true;
-  }
+  const claimed = await paymentStore.tryClaimForFulfillment(payloadHash);
+  if (claimed) return false;
 
-  return false;
+  await reply.status(409).send({
+    error: {
+      message: "Payment payload has already been consumed",
+      type: "invalid_request_error",
+      code: "x402_payment_replay",
+    },
+  });
+  return true;
 }
 
-async function linkX402Usage(
+async function completeX402Usage(
   paymentStore: PaymentStore | null,
   request: FastifyRequest,
   usageEventId: string | null,
@@ -131,7 +139,12 @@ async function linkX402Usage(
   const payment = await paymentStore.findByPayloadHash(payloadHash);
   if (!payment) return;
 
-  await paymentStore.linkUsageEvent(payment.id, usageEventId);
+  const completed = await paymentStore.markCompleted(payment.id, usageEventId);
+  if (!completed) {
+    throw new Error(
+      `Failed to complete x402 payment ${payment.id}: already linked or not claimable`,
+    );
+  }
 }
 
 async function handleProviderErrors(
@@ -234,10 +247,6 @@ export async function registerChatRoutes(
         });
     }
 
-    if (isX402 && await rejectReplayedX402Payment(deps.paymentStore, request, reply)) {
-      return;
-    }
-
     const validated = parseChatBody(request.body);
     if (typeof validated === "string") {
       return reply.status(400).send({
@@ -273,10 +282,21 @@ export async function registerChatRoutes(
       }
     }
 
+    // Claim after validation so invalid requests don't burn the payment slot,
+    // but before any provider call so concurrent replays cannot double-spend inference.
+    if (isX402 && await claimX402PaymentOrReject(deps.paymentStore, request, reply)) {
+      return;
+    }
+
     const preference = parseRoutingPreference(headerValue(request.headers["x-lmx-prefer"]));
+    const telemetry = {
+      resourceType: RESOURCE_TYPE_CHAT,
+      apiKeyId: isBalance ? request.apiKey!.id : undefined,
+      payerWallet: isX402 ? extractX402Payer(request) : undefined,
+    };
 
     try {
-      const result = await deps.router.route(validated, preference);
+      const result = await deps.router.route(validated, preference, telemetry);
 
       if (validated.stream && isBalance) {
         if (!result.stream) {
@@ -337,7 +357,7 @@ export async function registerChatRoutes(
             })}\n\n`,
           );
 
-          void deps.usageStore.recordUsage({
+          void recordProviderSuccess(deps.usageStore, {
             apiKeyId: request.apiKey!.id,
             provider: result.provider,
             model: validated.model,
@@ -346,6 +366,8 @@ export async function registerChatRoutes(
             latencyMs: result.latencyMs,
             fallbackUsed: result.fallbackUsed,
             cost: requestCost,
+            unitPrice: result.costPer1kTokens,
+            resourceType: RESOURCE_TYPE_CHAT,
           });
         } catch (streamErr) {
           request.log.error({ err: streamErr }, "Streaming response failed");
@@ -384,7 +406,7 @@ export async function registerChatRoutes(
 
       let usageEventId: string | null = null;
       try {
-        usageEventId = await deps.usageStore.recordUsage({
+        usageEventId = await recordProviderSuccess(deps.usageStore, {
           apiKeyId: isBalance ? request.apiKey!.id : undefined,
           payerWallet: isX402 ? extractX402Payer(request) : undefined,
           provider: result.provider,
@@ -394,6 +416,8 @@ export async function registerChatRoutes(
           latencyMs: result.latencyMs,
           fallbackUsed: result.fallbackUsed,
           cost: requestCost,
+          unitPrice: result.costPer1kTokens,
+          resourceType: RESOURCE_TYPE_CHAT,
         });
       } catch (usageErr) {
         request.log.error({ err: usageErr }, "usage recording failed");
@@ -401,7 +425,7 @@ export async function registerChatRoutes(
 
       if (isX402) {
         try {
-          await linkX402Usage(deps.paymentStore, request, usageEventId);
+          await completeX402Usage(deps.paymentStore, request, usageEventId);
         } catch (paymentErr) {
           request.log.error({ err: paymentErr }, "x402 payment linkage failed");
         }
@@ -415,6 +439,9 @@ export async function registerChatRoutes(
       reply.header("x-lmx-fallback", result.fallbackUsed ? "true" : "false");
       reply.header("x-lmx-latency", String(result.latencyMs));
       reply.header("x-lmx-cost", String(requestCost));
+      if (usageEventId) {
+        reply.header("x-lmx-usage-id", usageEventId);
+      }
       if (balance !== null) {
         reply.header("x-lmx-balance", String(roundCredits(balance)));
       }

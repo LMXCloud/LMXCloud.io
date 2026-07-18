@@ -11,8 +11,11 @@ import {
   DEFAULT_MAX_COMPLETION_TOKENS,
   MIN_CALL_USDC,
   PRICING_MARGIN_PCT,
+  WEB_SEARCH_PRICE_USDC,
   toCaip2ChainId,
 } from "./pricing/constants.js";
+import type { NosanaConfig, NosanaEndpoint } from "./providers/nosana.js";
+import { NOSANA_MODEL_MAP } from "./providers/model-maps.js";
 
 
 
@@ -47,6 +50,9 @@ export interface Config {
 
   akash?: ProviderConfig;
 
+  /** Per-deployment endpoints — not a single gateway like Akash/io.net. */
+  nosana?: NosanaConfig;
+
   together?: ProviderConfig;
 
   keyGenRateLimitMax: number;
@@ -60,6 +66,16 @@ export interface Config {
   initialCreditBalance: number;
 
   minChatCost: number;
+
+  /** Brave Search passthrough — optional; web_search returns 503 when unset. */
+  braveSearch?: { apiKey: string; baseUrl: string };
+
+  /** Fixed USDC price charged per successful web_search call. */
+  webSearchPriceUsdc: number;
+
+  webSearchRateLimitMax: number;
+
+  webSearchRateLimitWindowMs: number;
 
   sessionSecret: string;
 
@@ -237,14 +253,106 @@ function optionalProvider(prefix: string): ProviderConfig | undefined {
 
 
 
+  const baseUrl = process.env[baseUrlKey] ?? defaultUrls[prefix] ?? "";
+
+  if (!baseUrl) return undefined;
+
+
+
   return {
 
     apiKey,
 
-    baseUrl: process.env[baseUrlKey] ?? defaultUrls[prefix] ?? "",
+    baseUrl,
 
   };
 
+}
+
+
+
+/**
+ * Nosana: each model is a separate deployment URL.
+ * NOSANA_ENDPOINTS JSON map of LMX alias → URL string or { baseUrl, upstreamId? }.
+ * Example:
+ *   {"llama-3-70b":"https://abc.node.k8s.prd.nos.ci/v1","deepseek-r1":{"baseUrl":"https://def.../v1","upstreamId":"DeepSeek-R1"}}
+ */
+function optionalNosana(): NosanaConfig | undefined {
+  const apiKey = process.env.NOSANA_API_KEY;
+  if (!apiKey) return undefined;
+
+  if (process.env.NOSANA_BASE_URL) {
+    throw new Error(
+      "NOSANA_BASE_URL is not supported — Nosana has per-model deployment URLs. " +
+        "Set NOSANA_ENDPOINTS as a JSON map of LMX alias → endpoint instead.",
+    );
+  }
+
+  const raw = process.env.NOSANA_ENDPOINTS?.trim();
+  if (!raw) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("NOSANA_ENDPOINTS must be valid JSON");
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("NOSANA_ENDPOINTS must be a JSON object of alias → endpoint");
+  }
+
+  const endpoints: Record<string, NosanaEndpoint> = {};
+
+  for (const [alias, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!(alias in NOSANA_MODEL_MAP)) {
+      throw new Error(
+        `NOSANA_ENDPOINTS key "${alias}" is not a known Nosana catalog alias`,
+      );
+    }
+
+    const defaultUpstream = NOSANA_MODEL_MAP[alias]!;
+    let baseUrl: string;
+    let upstreamId = defaultUpstream;
+
+    if (typeof value === "string") {
+      baseUrl = value;
+    } else if (value && typeof value === "object" && !Array.isArray(value)) {
+      const obj = value as Record<string, unknown>;
+      const url = obj.baseUrl ?? obj.url;
+      if (typeof url !== "string" || !url.trim()) {
+        throw new Error(
+          `NOSANA_ENDPOINTS["${alias}"] must include a non-empty baseUrl (or url) string`,
+        );
+      }
+      baseUrl = url;
+      if (typeof obj.upstreamId === "string" && obj.upstreamId.trim()) {
+        upstreamId = obj.upstreamId.trim();
+      } else if (typeof obj.model === "string" && obj.model.trim()) {
+        upstreamId = obj.model.trim();
+      }
+    } else {
+      throw new Error(
+        `NOSANA_ENDPOINTS["${alias}"] must be a URL string or { baseUrl, upstreamId? } object`,
+      );
+    }
+
+    const normalized = baseUrl.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(normalized)) {
+      throw new Error(`NOSANA_ENDPOINTS["${alias}"] baseUrl must be an absolute http(s) URL`);
+    }
+
+    endpoints[alias] = { baseUrl: normalized, upstreamId };
+
+    // Also accept the catalog upstream ID as a request model key.
+    if (defaultUpstream !== alias && !endpoints[defaultUpstream]) {
+      endpoints[defaultUpstream] = endpoints[alias]!;
+    }
+  }
+
+  if (Object.keys(endpoints).length === 0) return undefined;
+
+  return { apiKey, endpoints };
 }
 
 
@@ -342,6 +450,7 @@ export function loadConfig(): Config {
       baseUrl: process.env.IONET_BASE_URL ?? "https://api.intelligence.io.solutions/api/v1",
     },
     akash: optionalProvider("AKASHML"),
+    nosana: optionalNosana(),
     together: optionalProvider("TOGETHER"),
     // Conservative default rate limit for key generation during free beta; can be loosened after monitoring abuse patterns.
     keyGenRateLimitMax: Number(process.env.KEY_GEN_RATE_LIMIT_MAX ?? 5),
@@ -351,6 +460,21 @@ export function loadConfig(): Config {
     chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 60_000),
     initialCreditBalance: Number(process.env.INITIAL_CREDIT_BALANCE ?? 1),
     minChatCost: Number(process.env.MIN_CHAT_COST ?? 0.00001),
+    braveSearch: process.env.BRAVE_SEARCH_API_KEY
+      ? {
+          apiKey: process.env.BRAVE_SEARCH_API_KEY,
+          baseUrl:
+            process.env.BRAVE_SEARCH_BASE_URL ??
+            "https://api.search.brave.com/res/v1",
+        }
+      : undefined,
+    webSearchPriceUsdc: Number(
+      process.env.WEB_SEARCH_PRICE_USDC ?? WEB_SEARCH_PRICE_USDC,
+    ),
+    webSearchRateLimitMax: Number(process.env.WEB_SEARCH_RATE_LIMIT_MAX ?? 30),
+    webSearchRateLimitWindowMs: Number(
+      process.env.WEB_SEARCH_RATE_LIMIT_WINDOW_MS ?? 60_000,
+    ),
     sessionSecret: requireEnv("SESSION_SECRET"),
     sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
     clerkSecretKey: process.env.CLERK_SECRET_KEY,

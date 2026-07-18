@@ -6,6 +6,7 @@ import * as readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 import type { ChatMessage } from "@lmxcloud/shared";
+import { textFromChatContent } from "@lmxcloud/shared";
 
 import { fetchBalance, fetchUsage, sendChatCompletion } from "./api.js";
 import { logout, persistAuth, resolveAuth } from "./auth.js";
@@ -171,7 +172,9 @@ async function runChat(auth: CliAuth, rl: readline.Interface): Promise<"exit" | 
       clearLine(output, 0);
       cursorTo(output, 0);
 
-      const content = response.choices[0]?.message?.content ?? "(no content)";
+      const rawContent = response.choices[0]?.message?.content;
+      const content =
+        rawContent != null ? textFromChatContent(rawContent) : "(no content)";
       messages.push({ role: "assistant", content });
 
       console.log(`Assistant: ${content}`);

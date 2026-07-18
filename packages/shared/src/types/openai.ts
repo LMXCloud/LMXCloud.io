@@ -1,8 +1,28 @@
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
+/** OpenAI-compatible text content part. */
+export interface ChatTextPart {
+  type: "text";
+  text: string;
+}
+
+/** OpenAI-compatible image content part (URL or data:image/...;base64,...). */
+export interface ChatImageUrlPart {
+  type: "image_url";
+  image_url: {
+    url: string;
+    detail?: "auto" | "low" | "high";
+  };
+}
+
+export type ChatContentPart = ChatTextPart | ChatImageUrlPart;
+
+/** String for text-only messages, or an array of parts for multimodal (vision) input. */
+export type ChatMessageContent = string | ChatContentPart[];
+
 export interface ChatMessage {
   role: ChatRole;
-  content: string;
+  content: ChatMessageContent;
 }
 
 export interface ChatCompletionRequest {
@@ -53,4 +73,22 @@ export interface ErrorResponse {
     type: string;
     code?: string;
   };
+}
+
+/** Flatten message content to plain text (ignores image parts). */
+export function textFromChatContent(content: ChatMessageContent): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((part): part is ChatTextPart => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
+
+export function chatContentHasImage(content: ChatMessageContent): boolean {
+  if (typeof content === "string") return false;
+  return content.some((part) => part.type === "image_url");
+}
+
+export function chatMessagesHaveImageContent(messages: ChatMessage[]): boolean {
+  return messages.some((message) => chatContentHasImage(message.content));
 }

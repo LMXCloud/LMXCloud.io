@@ -1,6 +1,7 @@
 export type PaymentEventStatus =
   | "quoted"
   | "verified"
+  | "fulfilling"
   | "settled"
   | "completed"
   | "failed"

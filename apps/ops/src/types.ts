@@ -22,6 +22,42 @@ export type OpsPayment = {
   channel: "x402";
 };
 
+export type OpsPaymentDetail = OpsPayment & {
+  object: "ops_payment";
+  usageEventId: string | null;
+  apiKeyId: string | null;
+  refundedAmount: number;
+  paymentPayloadHash: string;
+  facilitatorRef: string | null;
+  estimatedTokens: number | null;
+  failureReason: string | null;
+  verifiedAt: string | null;
+  settledAt: string | null;
+  completedAt: string | null;
+};
+
+export type OpsUsageDetail = {
+  object: "ops_usage";
+  id: string;
+  channel: OpsChannel;
+  provider: string;
+  model: string;
+  resourceType: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number;
+  latencyMs: number;
+  fallbackUsed: boolean;
+  success: boolean;
+  errorCode: string | null;
+  unitPrice: number | null;
+  payerWallet: string | null;
+  apiKeyId: string | null;
+  paymentEventId: string | null;
+  createdAt: string;
+};
+
 export type OpsUsageDay = {
   date: string;
   requests: number;
@@ -55,6 +91,10 @@ export type OpsMcpEvent = {
   level: string;
   latencyMs?: number;
   detail?: string;
+};
+
+export type OpsMcpEventDetail = OpsMcpEvent & {
+  object: "ops_mcp_event";
 };
 
 export type OpsActivityItem =
@@ -148,13 +188,53 @@ export type OpsOverview = {
       channel: OpsChannel;
       provider: string;
       model: string;
+      resourceType: string;
       totalTokens: number;
       cost: number;
       latencyMs: number;
       fallbackUsed: boolean;
+      success: boolean;
+      errorCode: string | null;
+      unitPrice: number | null;
       createdAt: string;
     }>;
   };
+  reliability: {
+    object: "reliability_telemetry";
+    windowDays: number;
+    resourceType: string | null;
+    overall: {
+      attempts: number;
+      successes: number;
+      failures: number;
+      successRate: number;
+      avgLatencyMs: number | null;
+      avgUnitPrice: number | null;
+    };
+    byProvider: Array<{
+      resourceType: string;
+      provider: string;
+      attempts: number;
+      successes: number;
+      failures: number;
+      successRate: number;
+      avgLatencyMs: number | null;
+      avgUnitPrice: number | null;
+    }>;
+    series: Array<{
+      date: string;
+      resourceType: string;
+      provider: string;
+      model: string;
+      attempts: number;
+      successes: number;
+      failures: number;
+      successRate: number;
+      avgLatencyMs: number | null;
+      avgUnitPrice: number | null;
+      avgCost: number | null;
+    }>;
+  } | null;
   mcp: {
     buffered: number;
     recent: OpsMcpEvent[];

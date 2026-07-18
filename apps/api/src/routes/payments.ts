@@ -104,7 +104,6 @@ export async function registerPaymentRoutes(
 
   app.get<{ Params: { id: string } }>(
     "/v1/billing/payments/:id",
-    { preHandler: deps.authenticate },
     async (request, reply) => {
       if (!deps.paymentStore) {
         return reply.status(503).send({
@@ -115,29 +114,8 @@ export async function registerPaymentRoutes(
         });
       }
 
-      const keys = await deps.apiKeyStore.listForRecord(request.apiKey!);
-      const apiKeyIds = new Set(keys.map((key) => key.id));
-      const payerWallets = new Set(
-        keys
-          .map((key) => key.wallet?.toLowerCase())
-          .filter((wallet): wallet is string => Boolean(wallet)),
-      );
-
       const payment = await deps.paymentStore.findById(request.params.id);
       if (!payment) {
-        return reply.status(404).send({
-          error: {
-            message: "Payment not found",
-            type: "invalid_request_error",
-          },
-        });
-      }
-
-      const ownedByWallet = payerWallets.has(payment.payerWallet.toLowerCase());
-      const ownedByKey =
-        payment.apiKeyId !== null && apiKeyIds.has(payment.apiKeyId);
-
-      if (!ownedByWallet && !ownedByKey) {
         return reply.status(404).send({
           error: {
             message: "Payment not found",

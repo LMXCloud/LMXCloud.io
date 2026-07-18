@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AnchorStore } from "../anchors/store.js";
+import { getReliabilityTelemetry } from "../ops/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
@@ -52,6 +53,9 @@ export async function registerStatusRoutes(
       anchoring = { enabled: false };
     }
 
+    // Compact reliability snapshot for StatusPage — full series via GET /v1/ops/reliability
+    const reliability = await getReliabilityTelemetry(7, null);
+
     return {
       object: "status",
       providers: Object.fromEntries(
@@ -71,6 +75,27 @@ export async function registerStatusRoutes(
       ),
       fallback_chain: getFallbackChain(deps.providers),
       anchoring,
+      reliability: {
+        window_days: reliability.windowDays,
+        overall: {
+          attempts: reliability.overall.attempts,
+          successes: reliability.overall.successes,
+          failures: reliability.overall.failures,
+          success_rate: reliability.overall.successRate,
+          avg_latency_ms: reliability.overall.avgLatencyMs,
+          avg_unit_price: reliability.overall.avgUnitPrice,
+        },
+        by_provider: reliability.byProvider.map((row) => ({
+          resource_type: row.resourceType,
+          provider: row.provider,
+          attempts: row.attempts,
+          successes: row.successes,
+          failures: row.failures,
+          success_rate: row.successRate,
+          avg_latency_ms: row.avgLatencyMs,
+          avg_unit_price: row.avgUnitPrice,
+        })),
+      },
     };
   });
 }

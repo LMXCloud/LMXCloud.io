@@ -1,8 +1,12 @@
+import type { ChatMessageContent } from "@lmxcloud/shared";
 import { roundCredits } from "../credits/pricing.js";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS,
   MIN_CALL_USDC,
 } from "./constants.js";
+
+/** Conservative per-image token floor for x402 ceiling quotes (high-detail-ish). */
+export const ESTIMATED_IMAGE_TOKENS = 765;
 
 export interface QuoteInput {
   listPricePer1k: number;
@@ -18,12 +22,32 @@ export interface QuoteResult {
   maxCompletionTokens: number;
 }
 
-/** Rough token estimate from message text (~4 characters per token). */
+function contentCharLength(content: ChatMessageContent): number {
+  if (typeof content === "string") return content.length;
+  return content.reduce((sum, part) => {
+    if (part.type === "text") return sum + part.text.length;
+    return sum;
+  }, 0);
+}
+
+function contentImageCount(content: ChatMessageContent): number {
+  if (typeof content === "string") return 0;
+  return content.filter((part) => part.type === "image_url").length;
+}
+
+/** Rough token estimate from message text (~4 chars/token) plus a per-image floor. */
 export function estimatePromptTokens(
-  messages: Array<{ content: string }>,
+  messages: Array<{ content: ChatMessageContent }>,
 ): number {
-  const chars = messages.reduce((sum, message) => sum + message.content.length, 0);
-  return Math.max(1, Math.ceil(chars / 4));
+  const chars = messages.reduce(
+    (sum, message) => sum + contentCharLength(message.content),
+    0,
+  );
+  const images = messages.reduce(
+    (sum, message) => sum + contentImageCount(message.content),
+    0,
+  );
+  return Math.max(1, Math.ceil(chars / 4) + images * ESTIMATED_IMAGE_TOKENS);
 }
 
 export function resolveMaxCompletionTokens(

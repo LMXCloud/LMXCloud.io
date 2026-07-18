@@ -50,6 +50,10 @@ export function listRecentMcpToolEvents(limit = 50): McpToolEvent[] {
   return events.slice(0, Math.max(1, Math.min(limit, MAX_EVENTS)));
 }
 
+export function getMcpToolEventById(id: string): McpToolEvent | null {
+  return events.find((event) => event.id === id) ?? null;
+}
+
 export function mcpToolEventCount(): number {
   return events.length;
 }

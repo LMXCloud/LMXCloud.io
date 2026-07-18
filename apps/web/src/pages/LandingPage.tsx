@@ -681,7 +681,7 @@ function ModelCategoryBlock({
         {models.map((model) => (
           <span
             key={model.alias}
-            title={`${model.label} · ${model.providers.map((p) => (p === "ionet" ? "io.net" : "AkashML")).join(" + ")}`}
+            title={`${model.label} · ${model.providers.map((p) => (p === "ionet" ? "io.net" : p === "akash" ? "AkashML" : "Nosana")).join(" + ")}`}
             className="rounded border border-border bg-background px-2 py-0.5 text-mono-sm text-on-surface-muted"
           >
             {model.alias}

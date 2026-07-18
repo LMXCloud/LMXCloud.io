@@ -15,6 +15,23 @@ describe("estimatePromptTokens", () => {
     );
     assert.equal(estimatePromptTokens([{ content: "" }]), 1);
   });
+
+  it("adds a per-image token floor for multimodal content", () => {
+    assert.equal(
+      estimatePromptTokens([
+        {
+          content: [
+            { type: "text", text: "abcd" },
+            {
+              type: "image_url",
+              image_url: { url: "https://example.com/a.png" },
+            },
+          ],
+        },
+      ]),
+      1 + 765,
+    );
+  });
 });
 
 describe("resolveMaxCompletionTokens", () => {

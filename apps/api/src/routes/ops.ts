@@ -4,6 +4,7 @@ import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
 import { requireOpsAuth } from "../ops/auth.js";
 import {
+  getMcpToolEventById,
   ingestMcpToolEvent,
   listRecentMcpToolEvents,
   mcpToolEventCount,
@@ -11,6 +12,9 @@ import {
 } from "../ops/mcp-events.js";
 import { detectIrregularities } from "../ops/irregularities.js";
 import {
+  getPaymentById,
+  getReliabilityTelemetry,
+  getUsageById,
   getUsageSummary,
   hasPostgres,
   listRecentPayments,
@@ -83,6 +87,65 @@ export async function registerOpsRoutes(
       },
     );
 
+    ops.get<{ Params: { id: string } }>(
+      "/v1/ops/payments/:id",
+      async (request, reply) => {
+        const payment = await getPaymentById(request.params.id);
+        if (!payment) {
+          return reply.status(404).send({
+            error: {
+              message: "Payment not found",
+              type: "invalid_request_error",
+            },
+          });
+        }
+        return { object: "ops_payment", ...payment };
+      },
+    );
+
+    ops.get<{ Params: { id: string } }>(
+      "/v1/ops/usage/:id",
+      async (request, reply) => {
+        const usage = await getUsageById(request.params.id);
+        if (!usage) {
+          return reply.status(404).send({
+            error: {
+              message: "Usage event not found",
+              type: "invalid_request_error",
+            },
+          });
+        }
+        return { object: "ops_usage", ...usage };
+      },
+    );
+
+    ops.get("/v1/ops/reliability", async (request) => {
+      const query = request.query as Record<string, unknown>;
+      const days = parseDays(query.days, 7);
+      const resourceType =
+        typeof query.resource_type === "string" && query.resource_type.trim()
+          ? query.resource_type.trim()
+          : null;
+      return getReliabilityTelemetry(days, resourceType);
+    });
+
+    ops.get<{ Params: { id: string } }>(
+      "/v1/ops/mcp-events/:id",
+      async (request, reply) => {
+        const event = getMcpToolEventById(request.params.id);
+        if (!event) {
+          return reply.status(404).send({
+            error: {
+              message:
+                "MCP event not found (in-memory buffer only — may be gone after restart)",
+              type: "invalid_request_error",
+            },
+          });
+        }
+        return { object: "ops_mcp_event", ...event };
+      },
+    );
+
     ops.get("/v1/ops/overview", async (request) => {
       const query = request.query as Record<string, unknown>;
       const days = parseDays(query.days, 7);
@@ -126,18 +189,27 @@ export async function registerOpsRoutes(
       };
       let paymentCounts: Record<string, number> = {};
       let stuckPayments: Awaited<ReturnType<typeof listStuckPayments>> = [];
+      let reliability: Awaited<ReturnType<typeof getReliabilityTelemetry>> | null = null;
       let dbError: string | null = null;
 
       try {
-        [payments, usageRecent, usageHistory, usageSummary, paymentCounts, stuckPayments] =
-          await Promise.all([
-            listRecentPayments(limit),
-            listRecentUsage(limit),
-            listUsageHistory(days),
-            getUsageSummary(days),
-            paymentStatusCounts(days),
-            listStuckPayments(15, 20),
-          ]);
+        [
+          payments,
+          usageRecent,
+          usageHistory,
+          usageSummary,
+          paymentCounts,
+          stuckPayments,
+          reliability,
+        ] = await Promise.all([
+          listRecentPayments(limit),
+          listRecentUsage(limit),
+          listUsageHistory(days),
+          getUsageSummary(days),
+          paymentStatusCounts(days),
+          listStuckPayments(15, 20),
+          getReliabilityTelemetry(days, null),
+        ]);
       } catch (err) {
         dbError = err instanceof Error ? err.message : "Database query failed";
         request.log.warn({ err }, "ops overview database queries failed");
@@ -206,7 +278,9 @@ export async function registerOpsRoutes(
             id: u.id,
             at: u.createdAt,
             channel: u.channel === "x402" ? "x402" : "balance",
-            label: `${u.provider}/${u.model}`,
+            label: u.success
+              ? `${u.provider}/${u.model}`
+              : `${u.provider}/${u.model} failed`,
             provider: u.provider,
             model: u.model,
             tokens: u.totalTokens,
@@ -292,6 +366,7 @@ export async function registerOpsRoutes(
           history: usageHistory,
           recent: usageRecent,
         },
+        reliability,
         mcp: {
           buffered: mcpToolEventCount(),
           recent: mcpEvents,

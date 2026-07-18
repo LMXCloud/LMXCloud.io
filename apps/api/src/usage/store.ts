@@ -22,6 +22,17 @@ export interface RecordUsageInput {
   latencyMs: number;
   fallbackUsed: boolean;
   cost?: number;
+  /** Resource kind — chat, embeddings, image, etc. Defaults to "chat". */
+  resourceType?: string;
+  /** False for failed provider attempts. Defaults to true. */
+  success?: boolean;
+  /** Machine-readable failure reason when success is false. */
+  errorCode?: string | null;
+  /**
+   * Provider list price at call time (e.g. cost-per-1k-tokens for chat).
+   * Recorded on both success and failure so price can be tracked over time.
+   */
+  unitPrice?: number | null;
 }
 
 export interface UsageDayBucket {
@@ -37,6 +48,7 @@ export interface UsageLogEntry {
   id: string;
   apiKeyId: string;
   route: string;
+  resourceType: string;
   provider: string;
   model: string;
   promptTokens: number;
@@ -45,6 +57,7 @@ export interface UsageLogEntry {
   cost: number;
   latencyMs: number;
   fallbackUsed: boolean;
+  success: boolean;
   status: number;
   createdAt: string;
 }
@@ -79,7 +92,17 @@ interface UsageEvent {
   cost: number;
   latencyMs: number;
   fallbackUsed: boolean;
+  resourceType: string;
+  success: boolean;
+  errorCode: string | null;
+  unitPrice: number | null;
   createdAt: string;
+}
+
+function routeForResourceType(resourceType: string): string {
+  if (resourceType === "chat") return "/v1/chat/completions";
+  if (resourceType === "web_search") return "/v1/web/search";
+  return `/v1/${resourceType}`;
 }
 
 export class FileUsageStore implements UsageStore {
@@ -120,6 +143,10 @@ export class FileUsageStore implements UsageStore {
         cost: event.cost ?? 0,
         latencyMs: event.latencyMs ?? 0,
         fallbackUsed: event.fallbackUsed ?? false,
+        resourceType: event.resourceType ?? "chat",
+        success: event.success ?? true,
+        errorCode: event.errorCode ?? null,
+        unitPrice: event.unitPrice ?? null,
         createdAt: event.createdAt!,
       }));
     } catch (err) {
@@ -151,8 +178,10 @@ export class FileUsageStore implements UsageStore {
 
     const promptTokens = input.promptTokens;
     const completionTokens = input.completionTokens;
+    const success = input.success !== false;
+    const resourceType = input.resourceType ?? "chat";
 
-    if (input.apiKeyId) {
+    if (input.apiKeyId && success) {
       const existing = this.stats.get(input.apiKeyId);
       const updated: KeyUsageStats = {
         apiKeyId: input.apiKeyId,
@@ -178,6 +207,10 @@ export class FileUsageStore implements UsageStore {
       cost: input.cost ?? 0,
       latencyMs: input.latencyMs,
       fallbackUsed: input.fallbackUsed,
+      resourceType,
+      success,
+      errorCode: input.errorCode ?? null,
+      unitPrice: input.unitPrice ?? null,
       createdAt: new Date().toISOString(),
     });
 
@@ -204,6 +237,7 @@ export class FileUsageStore implements UsageStore {
 
     for (const event of this.events) {
       if (!keySet.has(event.apiKeyId)) continue;
+      if (!event.success) continue;
       const created = Date.parse(event.createdAt);
       if (created < cutoff) continue;
 
@@ -237,6 +271,7 @@ export class FileUsageStore implements UsageStore {
 
     let filtered = this.events.filter((event) => {
       if (!keySet.has(event.apiKeyId)) return false;
+      if (!event.success) return false;
       if (cutoff !== null && Date.parse(event.createdAt) < cutoff) return false;
       return true;
     });
@@ -270,7 +305,8 @@ function toUsageLogEntry(event: UsageEvent): UsageLogEntry {
   return {
     id: event.id,
     apiKeyId: event.apiKeyId,
-    route: "/v1/chat/completions",
+    route: routeForResourceType(event.resourceType),
+    resourceType: event.resourceType,
     provider: event.provider,
     model: event.model,
     promptTokens: event.promptTokens,
@@ -279,7 +315,8 @@ function toUsageLogEntry(event: UsageEvent): UsageLogEntry {
     cost: event.cost,
     latencyMs: event.latencyMs,
     fallbackUsed: event.fallbackUsed,
-    status: 200,
+    success: event.success,
+    status: event.success ? 200 : 502,
     createdAt: event.createdAt,
   };
 }

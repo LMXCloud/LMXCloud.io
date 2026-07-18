@@ -1,13 +1,37 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 import {
   fetchOpsOverview,
   getApiBase,
-  getStoredOpsKey,
+  getEnvOpsKey,
+  resolveOpsKey,
   setStoredOpsKey,
 } from "./api";
+import {
+  McpDetailPage,
+  PaymentDetailPage,
+  UsageDetailPage,
+} from "./DetailPages";
+import {
+  formatLatency,
+  formatNum,
+  formatTime,
+  formatTokens,
+  formatUsd,
+  shortWallet,
+} from "./format";
+import { activityPath, relatedIdPath, recordPath } from "./routes";
 import type { OpsActivityItem, OpsIrregularity, OpsOverview } from "./types";
 
 const POLL_MS = 15_000;
+
 function severityClass(severity: string): string {
   if (severity === "critical") return "border-[var(--color-danger)]/50 bg-[rgba(232,93,108,0.1)]";
   if (severity === "warn") return "border-[var(--color-warn)]/40 bg-[rgba(230,184,77,0.08)]";
@@ -18,6 +42,34 @@ function severityLabelClass(severity: string): string {
   if (severity === "critical") return "text-[var(--color-danger)]";
   if (severity === "warn") return "text-[var(--color-warn)]";
   return "text-[var(--color-info)]";
+}
+
+function RelatedIds({ item }: { item: OpsIrregularity }) {
+  if (!item.relatedIds || item.relatedIds.length === 0) return null;
+
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 font-mono text-[10px] text-[var(--color-faint)]">
+      <span>ids:</span>
+      {item.relatedIds.map((id, index) => {
+        const href = relatedIdPath(item, id);
+        return (
+          <span key={id} className="inline-flex items-center">
+            {index > 0 ? <span className="mr-1">,</span> : null}
+            {href ? (
+              <Link
+                to={href}
+                className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+              >
+                {id}
+              </Link>
+            ) : (
+              <span>{id}</span>
+            )}
+          </span>
+        );
+      })}
+    </p>
+  );
 }
 
 function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
@@ -60,54 +112,12 @@ function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
               <span className="text-[var(--color-faint)]">Do: </span>
               {item.action}
             </p>
-            {item.relatedIds && item.relatedIds.length > 0 ? (
-              <p className="mt-1 truncate font-mono text-[10px] text-[var(--color-faint)]">
-                ids: {item.relatedIds.join(", ")}
-              </p>
-            ) : null}
+            <RelatedIds item={item} />
           </li>
         ))}
       </ul>
     </section>
   );
-}
-
-
-
-function formatUsd(n: number): string {
-  if (n >= 1) return `$${n.toFixed(4)}`;
-  return `$${n.toFixed(6)}`;
-}
-
-function formatNum(n: number): string {
-  return n.toLocaleString();
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return formatNum(n);
-}
-
-function formatLatency(ms: number | null | undefined): string {
-  if (ms == null) return "—";
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.round(ms)}ms`;
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function shortWallet(addr: string): string {
-  if (addr.length <= 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 function channelClass(channel: string): string {
@@ -252,58 +262,43 @@ function activityDetail(item: OpsActivityItem): string {
   return `${item.callerId.slice(0, 12)}${item.callerId.length > 12 ? "…" : ""} · ${item.authSource}${item.latencyMs != null ? ` · ${formatLatency(item.latencyMs)}` : ""}${item.detail ? ` · ${item.detail}` : ""}`;
 }
 
-export function App() {
-  const [opsKey, setOpsKey] = useState(() => getStoredOpsKey());
-  const [keyDraft, setKeyDraft] = useState(() => getStoredOpsKey());
-  const [days, setDays] = useState(7);
-  const [data, setData] = useState<OpsOverview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const apiBase = useMemo(() => getApiBase(), []);
-
-  const load = useCallback(
-    async (manual = false) => {
-      if (!opsKey) {
-        setError("Enter your LMX_OPS_API_KEY to load the overview.");
-        setData(null);
-        return;
-      }
-      if (manual) setLoading(true);
-      try {
-        const overview = await fetchOpsOverview(opsKey, { days, limit: 50 });
-        setData(overview);
-        setError(null);
-        setLastUpdated(new Date());
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load overview");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [opsKey, days],
-  );
-
-  useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [load]);
-
+function OverviewPage({
+  opsKey,
+  keyDraft,
+  setKeyDraft,
+  days,
+  setDays,
+  data,
+  error,
+  loading,
+  lastUpdated,
+  apiBase,
+  load,
+  saveKey,
+  clearKey,
+  hasEnvKey,
+}: {
+  opsKey: string;
+  keyDraft: string;
+  setKeyDraft: (key: string) => void;
+  days: number;
+  setDays: (days: number) => void;
+  data: OpsOverview | null;
+  error: string | null;
+  loading: boolean;
+  lastUpdated: Date | null;
+  apiBase: string;
+  load: (manual?: boolean) => Promise<void>;
+  saveKey: (e: FormEvent) => void;
+  clearKey: () => void;
+  hasEnvKey: boolean;
+}) {
   const providers = data
     ? Object.entries(data.health.providers).sort(([, a], [, b]) => a.tier - b.tier)
     : [];
 
-  function saveKey(e: FormEvent) {
-    e.preventDefault();
-    const next = keyDraft.trim();
-    setStoredOpsKey(next);
-    setOpsKey(next);
-  }
-
   return (
-    <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+    <>
       <header className="mb-6 flex flex-col gap-4 border-b border-[var(--color-line)] pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
@@ -318,9 +313,7 @@ export function App() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted)]">
-          <span className="font-mono">
-            {apiBase || "VITE_API_URL unset"}
-          </span>
+          <span className="font-mono">{apiBase || "VITE_API_URL unset"}</span>
           {lastUpdated ? (
             <span>Updated {lastUpdated.toLocaleTimeString()}</span>
           ) : null}
@@ -344,7 +337,10 @@ export function App() {
           <p className="mt-1 text-xs text-[var(--color-muted)]">
             Uses{" "}
             <code className="font-mono text-[var(--color-ink)]">LMX_OPS_API_KEY</code>{" "}
-            from the API. Stored only in this browser.
+            from the API. For local, set{" "}
+            <code className="font-mono text-[var(--color-ink)]">VITE_OPS_API_KEY</code>{" "}
+            in <code className="font-mono text-[var(--color-ink)]">apps/ops/.env</code>{" "}
+            to auto-connect.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
@@ -379,18 +375,19 @@ export function App() {
               <option value={30}>30d</option>
             </select>
           </label>
-          <button
-            type="button"
-            onClick={() => {
-              setStoredOpsKey("");
-              setOpsKey("");
-              setKeyDraft("");
-              setData(null);
-            }}
-            className="text-xs text-[var(--color-faint)] underline-offset-2 hover:text-[var(--color-muted)] hover:underline"
-          >
-            Disconnect key
-          </button>
+          {hasEnvKey ? (
+            <span className="font-mono text-[10px] text-[var(--color-faint)]">
+              auto-connected via VITE_OPS_API_KEY
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={clearKey}
+              className="text-xs text-[var(--color-faint)] underline-offset-2 hover:text-[var(--color-muted)] hover:underline"
+            >
+              Disconnect key
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -499,40 +496,45 @@ export function App() {
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Panel
               title="Recent activity"
-              subtitle="Payments, usage, and MCP tool calls"
+              subtitle="Payments, usage, and MCP tool calls — click a row for detail"
             >
               {data.activity.length === 0 ? (
                 <p className="text-sm text-[var(--color-muted)]">No recent activity.</p>
               ) : (
                 <ul className="divide-y divide-[var(--color-line)]/80">
                   {data.activity.map((item) => (
-                    <li key={`${item.kind}-${item.id}`} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
-                      <div className="mt-0.5 w-14 shrink-0">
-                        <ChannelChip channel={item.channel} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <span className="truncate text-sm font-medium">{item.label}</span>
-                          {item.kind === "payment" ? (
-                            <span className="font-mono text-[11px] text-[var(--color-muted)]">
-                              {item.status}
-                            </span>
-                          ) : null}
-                          {item.kind === "mcp" ? (
-                            <span
-                              className={`font-mono text-[11px] ${item.ok ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"}`}
-                            >
-                              {item.ok ? "ok" : "error"}
-                            </span>
-                          ) : null}
+                    <li key={`${item.kind}-${item.id}`} className="first:pt-0 last:pb-0">
+                      <Link
+                        to={activityPath(item)}
+                        className="flex gap-3 py-2.5 transition hover:bg-[var(--color-panel-raised)]/60"
+                      >
+                        <div className="mt-0.5 w-14 shrink-0">
+                          <ChannelChip channel={item.channel} />
                         </div>
-                        <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--color-muted)]">
-                          {activityDetail(item)}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <span className="truncate text-sm font-medium">{item.label}</span>
+                            {item.kind === "payment" ? (
+                              <span className="font-mono text-[11px] text-[var(--color-muted)]">
+                                {item.status}
+                              </span>
+                            ) : null}
+                            {item.kind === "mcp" ? (
+                              <span
+                                className={`font-mono text-[11px] ${item.ok ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"}`}
+                              >
+                                {item.ok ? "ok" : "error"}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--color-muted)]">
+                            {activityDetail(item)}
+                          </div>
                         </div>
-                      </div>
-                      <div className="shrink-0 font-mono text-[10px] text-[var(--color-faint)]">
-                        {formatTime(item.at)}
-                      </div>
+                        <div className="shrink-0 font-mono text-[10px] text-[var(--color-faint)]">
+                          {formatTime(item.at)}
+                        </div>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -564,7 +566,14 @@ export function App() {
                           <td className="py-1.5 font-mono">{p.status}</td>
                           <td className="py-1.5 font-mono">{shortWallet(p.payerWallet)}</td>
                           <td className="py-1.5 font-mono truncate max-w-[7rem]">{p.model}</td>
-                          <td className="py-1.5 font-mono text-[var(--color-faint)] truncate max-w-[8rem]">{p.id}</td>
+                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
+                            <Link
+                              to={recordPath("payment", p.id)}
+                              className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+                            >
+                              {p.id}
+                            </Link>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -586,6 +595,7 @@ export function App() {
                         <th className="pb-2 font-medium">Wallet</th>
                         <th className="pb-2 font-medium">Amount</th>
                         <th className="pb-2 font-medium">Model</th>
+                        <th className="pb-2 font-medium">Id</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -600,6 +610,14 @@ export function App() {
                             {formatUsd(p.settledAmount ?? p.quotedAmount)}
                           </td>
                           <td className="py-1.5 font-mono truncate max-w-[8rem]">{p.model}</td>
+                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
+                            <Link
+                              to={recordPath("payment", p.id)}
+                              className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+                            >
+                              {p.id.slice(0, 8)}…
+                            </Link>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -610,6 +628,132 @@ export function App() {
           </div>
         </>
       ) : null}
+    </>
+  );
+}
+
+function OpsShell() {
+  const hasEnvKey = Boolean(getEnvOpsKey());
+  const [opsKey, setOpsKey] = useState(() => resolveOpsKey());
+  const [keyDraft, setKeyDraft] = useState(() => resolveOpsKey());
+  const [days, setDays] = useState(7);
+  const [data, setData] = useState<OpsOverview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const apiBase = useMemo(() => getApiBase(), []);
+
+  const load = useCallback(
+    async (manual = false) => {
+      if (!opsKey) {
+        setError("Enter your LMX_OPS_API_KEY to load the overview.");
+        setData(null);
+        return;
+      }
+      if (manual) setLoading(true);
+      try {
+        const overview = await fetchOpsOverview(opsKey, { days, limit: 50 });
+        setData(overview);
+        setError(null);
+        setLastUpdated(new Date());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load overview");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [opsKey, days],
+  );
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  function saveKey(e: FormEvent) {
+    e.preventDefault();
+    const next = keyDraft.trim();
+    setStoredOpsKey(next);
+    setOpsKey(next);
+  }
+
+  function clearKey() {
+    setStoredOpsKey("");
+    setOpsKey(resolveOpsKey());
+    setKeyDraft(resolveOpsKey());
+    if (!resolveOpsKey()) setData(null);
+  }
+
+  return (
+    <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <OverviewPage
+              opsKey={opsKey}
+              keyDraft={keyDraft}
+              setKeyDraft={setKeyDraft}
+              days={days}
+              setDays={setDays}
+              data={data}
+              error={error}
+              loading={loading}
+              lastUpdated={lastUpdated}
+              apiBase={apiBase}
+              load={load}
+              saveKey={saveKey}
+              clearKey={clearKey}
+              hasEnvKey={hasEnvKey}
+            />
+          }
+        />
+        <Route
+          path="/payments/:id"
+          element={
+            <DetailLayout>
+              <PaymentDetailPage />
+            </DetailLayout>
+          }
+        />
+        <Route
+          path="/usage/:id"
+          element={
+            <DetailLayout>
+              <UsageDetailPage />
+            </DetailLayout>
+          }
+        />
+        <Route
+          path="/mcp/:id"
+          element={
+            <DetailLayout>
+              <McpDetailPage />
+            </DetailLayout>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </div>
   );
+}
+
+function DetailLayout({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <header className="mb-6 border-b border-[var(--color-line)] pb-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
+          LMX Cloud
+        </p>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Operations</h1>
+      </header>
+      {children}
+    </>
+  );
+}
+
+export function App() {
+  return <OpsShell />;
 }

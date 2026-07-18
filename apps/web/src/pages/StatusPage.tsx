@@ -78,7 +78,7 @@ export function StatusPage() {
     <PublicLayout>
       <SeoHead
         title="Provider Status — LMX Cloud DePIN inference"
-        description="Live health status for LMX Cloud inference providers on io.net and Akash. Polled every 30 seconds — the same signal used for automatic failover."
+        description="Live health status for LMX Cloud inference providers on io.net, Akash, and Nosana. Polled every 30 seconds — the same signal used for automatic failover."
         path="/status"
       />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
@@ -168,6 +168,68 @@ export function StatusPage() {
                 );
               })}
             </div>
+          </Card>
+        )}
+
+        {status?.reliability && status.reliability.overall.attempts > 0 && (
+          <Card className="mt-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" strokeWidth={1.75} />
+              <p className="text-body-sm font-medium text-on-surface">Reliability record</p>
+              <span className="text-body-sm text-on-surface-faint">
+                · last {status.reliability.window_days}d
+              </span>
+            </div>
+            <p className="mt-3 text-body-sm text-on-surface-muted">
+              Measured from routed provider attempts (success and failure), not point-in-time health
+              checks. {(status.reliability.overall.success_rate * 100).toFixed(1)}% success across{" "}
+              {status.reliability.overall.attempts.toLocaleString()} attempts
+              {status.reliability.overall.avg_latency_ms != null
+                ? ` · ${Math.round(status.reliability.overall.avg_latency_ms)}ms avg latency`
+                : ""}
+              .
+            </p>
+            {status.reliability.by_provider.length > 0 && (
+              <div className="mt-6">
+                <DataTable title="Per-provider reliability" minWidth={640}>
+                  <DataTableHead>
+                    <tr>
+                      <DataTableTh>Provider</DataTableTh>
+                      <DataTableTh>Resource</DataTableTh>
+                      <DataTableTh>Success rate</DataTableTh>
+                      <DataTableTh>Attempts</DataTableTh>
+                      <DataTableTh>Avg latency</DataTableTh>
+                      <DataTableTh>Avg unit price</DataTableTh>
+                    </tr>
+                  </DataTableHead>
+                  <DataTableBody>
+                    {status.reliability.by_provider.map((row) => (
+                      <DataTableRow key={`${row.resource_type}:${row.provider}`}>
+                        <DataTableCell className="font-medium">{row.provider}</DataTableCell>
+                        <DataTableCell>{row.resource_type}</DataTableCell>
+                        <DataTableCell>
+                          {(row.success_rate * 100).toFixed(1)}%
+                        </DataTableCell>
+                        <DataTableCell>
+                          {row.successes}/{row.attempts}
+                          {row.failures > 0 ? ` (${row.failures} fail)` : ""}
+                        </DataTableCell>
+                        <DataTableCell>
+                          {row.avg_latency_ms != null
+                            ? formatLatency(row.avg_latency_ms)
+                            : "—"}
+                        </DataTableCell>
+                        <DataTableCell>
+                          {row.avg_unit_price != null
+                            ? `$${row.avg_unit_price.toFixed(6)}`
+                            : "—"}
+                        </DataTableCell>
+                      </DataTableRow>
+                    ))}
+                  </DataTableBody>
+                </DataTable>
+              </div>
+            )}
           </Card>
         )}
 

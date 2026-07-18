@@ -1,6 +1,7 @@
 import type { Config } from "../config.js";
 import { createAkashAdapter } from "./akash.js";
 import { createIonetAdapter } from "./ionet.js";
+import { createNosanaAdapter } from "./nosana.js";
 import { createTogetherAdapter } from "./together.js";
 import type { ProviderAdapter } from "./types.js";
 
@@ -9,6 +10,10 @@ export function createProviderRegistry(config: Config): ProviderAdapter[] {
 
   if (config.akash) {
     providers.push(createAkashAdapter(config.akash));
+  }
+
+  if (config.nosana) {
+    providers.push(createNosanaAdapter(config.nosana));
   }
 
   if (config.together) {

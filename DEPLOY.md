@@ -66,6 +66,8 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `KEY_GEN_RATE_LIMIT_MAX` | No | `5` (conservative free-beta default) |
    | `KEY_GEN_RATE_LIMIT_WINDOW_MS` | No | `3600000` |
    | `CHAT_RATE_LIMIT_MAX` | No | `30` (conservative free-beta default) |
+   | `BRAVE_SEARCH_API_KEY` | No | Enables `POST /v1/web/search` + MCP `web_search` ([Brave Search API](https://brave.com/search/api/)) |
+   | `WEB_SEARCH_PRICE_USDC` | No | Fixed per-call list price (default `0.01`) |
    | `SIWE_DOMAIN` | Yes (wallet auth) | e.g. `lmxcloud.io` |
    | `SIWE_URI` | Yes (wallet auth) | e.g. `https://lmxcloud.io` |
    | `SIWE_CHAIN_ID` | No | `8453` (Base mainnet) |
@@ -125,7 +127,7 @@ Deploy MCP as a separate service so agent traffic does not couple to API contain
 4. Generate a Railway domain (example: `https://lmxcloud-mcp-production.up.railway.app`).
 5. Optional custom domain: `mcp.lmxcloud.io`.
 
-**Exposed tools:** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`. Users authenticate with `Authorization: Bearer lmx_...` in their MCP client config — do not rely on a shared server API key for production traffic.
+**Exposed tools:** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (optional vision images), `web_search`. Users authenticate with `Authorization: Bearer lmx_...` in their MCP client config — do not rely on a shared server API key for production traffic. `web_search` requires `BRAVE_SEARCH_API_KEY` on the API service.
 
 ### Cloudflare origin lock
 

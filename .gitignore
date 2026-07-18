@@ -10,3 +10,5 @@ contracts/out/
 *.log
 .DS_Store
 Thumbs.db
+
+apps/ops/.env

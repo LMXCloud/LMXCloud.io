@@ -8,6 +8,7 @@ import {
 import {
   DEFAULT_MAX_COMPLETION_TOKENS,
   MIN_CALL_USDC,
+  WEB_SEARCH_PRICE_USDC,
   toCaip2ChainId,
 } from "../pricing/constants.js";
 import {
@@ -20,6 +21,8 @@ interface PricingRouteDeps {
   providers: ProviderAdapter[];
   healthStore: HealthStore;
   chainId: number;
+  webSearchPriceUsdc?: number;
+  webSearchConfigured?: boolean;
 }
 
 function formatUsd(amount: number): string {
@@ -100,6 +103,15 @@ export async function registerPricingRoutes(
         list_price_per_1k_tokens: formatUsd(entry.listPricePer1kTokens),
         cost_price_per_1k_tokens: formatUsd(entry.costPer1kTokens),
       })),
+      tools: {
+        web_search: {
+          provider: "brave",
+          price_usdc: formatUsd(deps.webSearchPriceUsdc ?? WEB_SEARCH_PRICE_USDC),
+          pricing: "per_call",
+          configured: deps.webSearchConfigured ?? false,
+          route: "/v1/web/search",
+        },
+      },
     };
   });
 }

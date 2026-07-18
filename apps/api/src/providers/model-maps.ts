@@ -3,6 +3,7 @@ import { ProviderError } from "./types.js";
 
 export const IONET_MODEL_MAP = buildProviderModelMap("ionet");
 export const AKASH_MODEL_MAP = buildProviderModelMap("akash");
+export const NOSANA_MODEL_MAP = buildProviderModelMap("nosana");
 
 /** Together tier — optional fallback when TOGETHER_API_KEY is set. */
 export const TOGETHER_MODEL_MAP: Record<string, string> = {

@@ -7,6 +7,9 @@
  * Usage:
  *   pnpm test:x402
  *   API_URL=http://localhost:3000 MODEL=llama-3-70b PAYER_PRIVATE_KEY=0x... pnpm test:x402 -- --pay
+ *
+ * For concurrent replay / rate-limit / malformed load, see test-x402-burst.ts
+ * (pnpm test:x402:burst) — --repeat/--delay-ms here is sequential soak only.
  */
 import dotenv from "dotenv";
 import path from "path";

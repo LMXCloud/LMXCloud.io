@@ -18,6 +18,7 @@ import { createProviderRegistry, getFallbackChain } from "./providers/registry.j
 import { InferenceRouter } from "./routing/router.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerChatRoutes } from "./routes/chat.js";
+import { registerWebSearchRoutes } from "./routes/web-search.js";
 import { registerModelsRoutes } from "./routes/models.js";
 import { registerStatusRoutes } from "./routes/status.js";
 import { registerUsageRoutes } from "./routes/usage.js";
@@ -79,6 +80,7 @@ export async function buildServer() {
       "x-lmx-fallback",
       "x-lmx-latency",
       "x-lmx-cost",
+      "x-lmx-usage-id",
       "x-lmx-balance",
       "payment-required",
       "payment-response",
@@ -119,11 +121,11 @@ export async function buildServer() {
 
   );
 
-  const router = new InferenceRouter(providers, healthStore);
-
   const apiKeyStore = await createApiKeyStore();
 
   const usageStore = createUsageStore();
+
+  const router = new InferenceRouter(providers, healthStore, usageStore);
 
   const creditStore = createCreditStore();
 
@@ -290,6 +292,8 @@ export async function buildServer() {
     providers,
     healthStore,
     chainId: config.siwe.chainId,
+    webSearchPriceUsdc: config.webSearchPriceUsdc,
+    webSearchConfigured: Boolean(config.braveSearch),
   });
 
   await registerChatRoutes(app, {
@@ -311,6 +315,16 @@ export async function buildServer() {
     }),
     minChatCost: config.minChatCost,
     x402Enabled: config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
+  });
+  await registerWebSearchRoutes(app, {
+    brave: config.braveSearch ?? null,
+    usageStore,
+    creditStore,
+    priceUsdc: config.webSearchPriceUsdc,
+    rateLimit: createRateLimiter({
+      max: config.webSearchRateLimitMax,
+      windowMs: config.webSearchRateLimitWindowMs,
+    }),
   });
   await registerUsageRoutes(app, {
     store: usageStore,

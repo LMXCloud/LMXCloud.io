@@ -117,6 +117,7 @@ export async function registerUsageRoutes(
           created_at: entry.createdAt,
           api_key_id: entry.apiKeyId,
           route: entry.route,
+          resource_type: entry.resourceType,
           provider: entry.provider,
           model: entry.model,
           prompt_tokens: entry.promptTokens,
@@ -125,6 +126,7 @@ export async function registerUsageRoutes(
           cost: entry.cost,
           latency_ms: entry.latencyMs,
           fallback_used: entry.fallbackUsed,
+          success: entry.success,
           status: entry.status,
         })),
         has_more: result.hasMore,
@@ -135,7 +137,6 @@ export async function registerUsageRoutes(
 
   app.get<{ Params: { id: string } }>(
     "/v1/usage/logs/:id/proof",
-    { preHandler: deps.authenticate },
     async (request, reply) => {
       if (!deps.anchorStore) {
         return reply.status(503).send({
@@ -146,14 +147,12 @@ export async function registerUsageRoutes(
         });
       }
 
-      const keys = await deps.apiKeyStore.listForRecord(request.apiKey!);
-      const keyIds = keys.map((key) => key.id);
       const contractAddress =
         deps.anchorContractAddress ??
         ("0x0000000000000000000000000000000000000000" as `0x${string}`);
       const proof = await deps.anchorStore.getLogProof(
         request.params.id,
-        keyIds,
+        null,
         contractAddress,
       );
 

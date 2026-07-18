@@ -1,4 +1,4 @@
-export type DepinProvider = "ionet" | "akash";
+export type DepinProvider = "ionet" | "akash" | "nosana";
 
 export type ModelCategory =
   | "meta"
@@ -12,6 +12,9 @@ export type ModelCategory =
   | "minimax"
   | "other";
 
+/** Input modalities the model accepts. Defaults to text-only when omitted. */
+export type InputModality = "text" | "image";
+
 export interface SupportedModel {
   /** Short LMX alias used in API requests */
   alias: string;
@@ -21,22 +24,34 @@ export interface SupportedModel {
   upstreamId: string;
   providers: DepinProvider[];
   category: ModelCategory;
+  /**
+   * Confirmed against live provider catalogs (io.net / AkashML).
+   * Omitted means text-only.
+   */
+  inputModalities?: InputModality[];
 }
 
-/** Verified via chat completions against io.net + AkashML catalogs (2026-07). */
+/**
+ * Verified via chat completions against io.net + AkashML catalogs (2026-07).
+ * Nosana overlap confirmed against official vLLM/LMDeploy/Ollama templates
+ * (nosana-ci/pipeline-templates, 2026-07): Llama 70B family, DeepSeek-R1,
+ * Qwen 3.5/3.6, GLM 4.7 Flash, GPT-OSS, Gemma 4 26B. Nosana has no shared
+ * gateway — only aliases listed in NOSANA_ENDPOINTS (per-deployment /v1 URLs)
+ * are actually routable.
+ */
 export const SUPPORTED_MODELS: SupportedModel[] = [
   {
     alias: "llama-3-70b",
     label: "Llama 3.3 70B Instruct",
     upstreamId: "meta-llama/Llama-3.3-70B-Instruct",
-    providers: ["ionet", "akash"],
+    providers: ["ionet", "akash", "nosana"],
     category: "meta",
   },
   {
     alias: "llama-3.3-70b",
     label: "Llama 3.3 70B Instruct",
     upstreamId: "meta-llama/Llama-3.3-70B-Instruct",
-    providers: ["ionet", "akash"],
+    providers: ["ionet", "akash", "nosana"],
     category: "meta",
   },
   {
@@ -52,26 +67,29 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     upstreamId: "meta-llama/Llama-3.2-90B-Vision-Instruct",
     providers: ["ionet"],
     category: "meta",
+    inputModalities: ["text", "image"],
   },
   {
     alias: "qwen-3.6-35b",
     label: "Qwen 3.6 35B",
     upstreamId: "Qwen/Qwen3.6-35B-A3B",
-    providers: ["ionet", "akash"],
+    providers: ["ionet", "akash", "nosana"],
     category: "qwen",
+    inputModalities: ["text", "image"],
   },
   {
     alias: "qwen-3.5-35b",
     label: "Qwen 3.5 35B",
     upstreamId: "Qwen/Qwen3.5-35B-A3B",
-    providers: ["akash"],
+    providers: ["akash", "nosana"],
     category: "qwen",
+    inputModalities: ["text", "image"],
   },
   {
     alias: "qwen-3.6-27b",
     label: "Qwen 3.6 27B",
     upstreamId: "Qwen/Qwen3.6-27B",
-    providers: ["ionet"],
+    providers: ["ionet", "nosana"],
     category: "qwen",
   },
   {
@@ -113,7 +131,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "deepseek-r1",
     label: "DeepSeek R1",
     upstreamId: "deepseek-ai/DeepSeek-R1-0528",
-    providers: ["ionet"],
+    providers: ["ionet", "nosana"],
     category: "deepseek",
   },
   {
@@ -148,7 +166,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "glm-4.7-flash",
     label: "GLM 4.7 Flash",
     upstreamId: "zai-org/GLM-4.7-Flash",
-    providers: ["ionet"],
+    providers: ["ionet", "nosana"],
     category: "glm",
   },
   {
@@ -211,21 +229,21 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "gpt-oss-120b",
     label: "GPT-OSS 120B",
     upstreamId: "openai/gpt-oss-120b",
-    providers: ["ionet"],
+    providers: ["ionet", "nosana"],
     category: "openai",
   },
   {
     alias: "gpt-oss-20b",
     label: "GPT-OSS 20B",
     upstreamId: "openai/gpt-oss-20b",
-    providers: ["ionet"],
+    providers: ["ionet", "nosana"],
     category: "openai",
   },
   {
     alias: "gemma-4-26b",
     label: "Gemma 4 26B",
     upstreamId: "google/gemma-4-26b-a4b-it",
-    providers: ["ionet"],
+    providers: ["ionet", "nosana"],
     category: "google",
   },
   {
@@ -268,10 +286,17 @@ export const MODEL_CATEGORIES: Record<ModelCategory, string> = {
   other: "Other",
 };
 
+const PROVIDER_LABELS: Record<DepinProvider, string> = {
+  ionet: "io.net",
+  akash: "AkashML",
+  nosana: "Nosana",
+};
+
 export function formatModelProviders(model: SupportedModel): string {
-  if (model.providers.length === 2) return "io.net + AkashML";
-  if (model.providers[0] === "ionet") return "io.net only";
-  return "AkashML only";
+  if (model.providers.length === 1) {
+    return `${PROVIDER_LABELS[model.providers[0]!]} only`;
+  }
+  return model.providers.map((p) => PROVIDER_LABELS[p]).join(" + ");
 }
 
 /** Unique aliases (drops duplicate upstream rows like llama-3-70b / llama-3.3-70b). */
@@ -286,4 +311,26 @@ export function listUniqueModelAliases(): SupportedModel[] {
   }
 
   return result;
+}
+
+export function resolveSupportedModel(modelId: string): SupportedModel | undefined {
+  return SUPPORTED_MODELS.find(
+    (model) => model.alias === modelId || model.upstreamId === modelId,
+  );
+}
+
+export function modelInputModalities(modelId: string): InputModality[] {
+  const model = resolveSupportedModel(modelId);
+  return model?.inputModalities ?? ["text"];
+}
+
+export function modelSupportsImageInput(modelId: string): boolean {
+  return modelInputModalities(modelId).includes("image");
+}
+
+/** Unique aliases for models that accept image content parts. */
+export function listVisionModelAliases(): string[] {
+  return listUniqueModelAliases()
+    .filter((model) => (model.inputModalities ?? ["text"]).includes("image"))
+    .map((model) => model.alias);
 }

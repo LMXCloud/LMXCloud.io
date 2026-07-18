@@ -48,7 +48,7 @@ curl https://api.lmxcloud.io/v1/chat/completions \
   }'
 ```
 
-That's it — same shape as any OpenAI-compatible client. Point your existing SDK's base URL at LMX Cloud and it works as-is. 30 model aliases are available across providers, from Llama and Qwen to DeepSeek and GLM — check `GET /v1/models` for what's live right now.
+That's it — same shape as any OpenAI-compatible client. Point your existing SDK's base URL at LMX Cloud and it works as-is. 30 model aliases are available across providers, from Llama and Qwen to DeepSeek and GLM — check `GET /v1/models` for what's live right now. Vision models accept OpenAI-style `image_url` content parts; `POST /v1/web/search` adds real-time web lookup behind the same API key balance.
 
 ## Building an agent, not an app?
 
@@ -63,10 +63,10 @@ From that point on, the agent authenticates and spends exactly like any other AP
 
 ## What's coming
 
-LMX Cloud is actively moving toward true pay-per-call support for agent payments (the emerging x402 standard), and toward being listed where autonomous agents already discover services — public agent-service directories, an MCP server for any MCP-compatible agent framework, and a plugin for ElizaOS-based agents. Verifiable, cryptographically-anchored request logs are also on the way, so routing and cost claims are something you can check yourself rather than take on trust.
+x402 pay-per-call, MCP (8 tools including vision-capable `chat_completion` and `web_search`), ElizaOS plugin, and verifiable Merkle-anchored logs are already live. Near-term work is reliability/ops polish, x402 on streaming and `web_search`, and embeddings/image generation once providers expose live SKUs.
 
 ## Get involved
 
-- **Docs:** full request/response reference, streaming, wallet auth, and USDC funding details live on the docs page of your LMX Cloud dashboard.
+- **Docs:** full request/response reference, vision, web search, streaming, wallet auth, and USDC funding details live on the docs page.
 - **Status:** live provider health is public — check before you build, not after something breaks.
 - **Feedback:** found a bug, have a feature request, or want to build something on top of LMX Cloud? Open an issue or reach out — early feedback shapes what gets built next.

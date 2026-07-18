@@ -1,8 +1,18 @@
-import type { OpsOverview } from "./types";
+import type {
+  OpsMcpEventDetail,
+  OpsOverview,
+  OpsPaymentDetail,
+  OpsUsageDetail,
+} from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+const ENV_OPS_KEY = (import.meta.env.VITE_OPS_API_KEY as string | undefined)?.trim() ?? "";
 
 const OPS_KEY_STORAGE = "lmx_ops_api_key";
+
+export function getEnvOpsKey(): string {
+  return ENV_OPS_KEY;
+}
 
 export function getStoredOpsKey(): string {
   try {
@@ -10,6 +20,11 @@ export function getStoredOpsKey(): string {
   } catch {
     return "";
   }
+}
+
+/** Prefer browser override, then Vite env (local auto-connect). */
+export function resolveOpsKey(): string {
+  return getStoredOpsKey() || ENV_OPS_KEY;
 }
 
 export function setStoredOpsKey(key: string): void {
@@ -25,10 +40,7 @@ export function getApiBase(): string {
   return API_BASE;
 }
 
-export async function fetchOpsOverview(
-  opsKey: string,
-  opts: { days?: number; limit?: number } = {},
-): Promise<OpsOverview> {
+async function opsFetch<T>(opsKey: string, path: string): Promise<T> {
   if (!API_BASE) {
     throw new Error("VITE_API_URL is not set");
   }
@@ -36,12 +48,7 @@ export async function fetchOpsOverview(
     throw new Error("Ops API key required");
   }
 
-  const params = new URLSearchParams();
-  if (opts.days) params.set("days", String(opts.days));
-  if (opts.limit) params.set("limit", String(opts.limit));
-
-  const url = `${API_BASE}/v1/ops/overview${params.size ? `?${params}` : ""}`;
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${path}`, {
     headers: {
       authorization: `Bearer ${opsKey}`,
       accept: "application/json",
@@ -59,5 +66,47 @@ export async function fetchOpsOverview(
     throw new Error(message);
   }
 
-  return (await res.json()) as OpsOverview;
+  return (await res.json()) as T;
+}
+
+export async function fetchOpsOverview(
+  opsKey: string,
+  opts: { days?: number; limit?: number } = {},
+): Promise<OpsOverview> {
+  const params = new URLSearchParams();
+  if (opts.days) params.set("days", String(opts.days));
+  if (opts.limit) params.set("limit", String(opts.limit));
+
+  const query = params.size ? `?${params}` : "";
+  return opsFetch<OpsOverview>(opsKey, `/v1/ops/overview${query}`);
+}
+
+export async function fetchOpsPayment(
+  opsKey: string,
+  id: string,
+): Promise<OpsPaymentDetail> {
+  return opsFetch<OpsPaymentDetail>(
+    opsKey,
+    `/v1/ops/payments/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function fetchOpsUsage(
+  opsKey: string,
+  id: string,
+): Promise<OpsUsageDetail> {
+  return opsFetch<OpsUsageDetail>(
+    opsKey,
+    `/v1/ops/usage/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function fetchOpsMcpEvent(
+  opsKey: string,
+  id: string,
+): Promise<OpsMcpEventDetail> {
+  return opsFetch<OpsMcpEventDetail>(
+    opsKey,
+    `/v1/ops/mcp-events/${encodeURIComponent(id)}`,
+  );
 }

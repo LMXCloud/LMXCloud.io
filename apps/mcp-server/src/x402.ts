@@ -104,20 +104,54 @@ export async function loadMcpX402Config(): Promise<McpX402LoadResult> {
   };
 }
 
-function estimatePromptTokens(prompt: string): number {
-  return Math.max(1, Math.ceil(prompt.length / 4));
+function estimatePromptTokens(prompt: string, imageCount = 0): number {
+  /** Keep in sync with apps/api ESTIMATED_IMAGE_TOKENS for ceiling quotes. */
+  const IMAGE_TOKENS = 765;
+  return Math.max(1, Math.ceil(prompt.length / 4) + imageCount * IMAGE_TOKENS);
+}
+
+export function buildUserMessageContent(
+  prompt: string,
+  imageUrl?: string,
+  images?: string[],
+): string | Array<
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+> {
+  const urls = [
+    ...(imageUrl ? [imageUrl] : []),
+    ...(images ?? []),
+  ].filter((url) => url.trim() !== "");
+
+  if (urls.length === 0) return prompt;
+
+  return [
+    { type: "text" as const, text: prompt },
+    ...urls.map((url) => ({
+      type: "image_url" as const,
+      image_url: { url },
+    })),
+  ];
+}
+
+function countImages(imageUrl?: string, images?: string[]): number {
+  return [
+    ...(imageUrl ? [imageUrl] : []),
+    ...(images ?? []),
+  ].filter((url) => url.trim() !== "").length;
 }
 
 async function quoteChatCall(params: {
   model: string;
   prompt: string;
   maxTokens?: number;
+  imageCount?: number;
 }): Promise<{ ok: true; amount: number; estimatedTokens?: number } | { ok: false; error: string }> {
   const quote = await fetchJson<PricingQuoteResponse>(
     pricingQuotePath({
       model: params.model,
       max_tokens: params.maxTokens,
-      prompt_tokens: estimatePromptTokens(params.prompt),
+      prompt_tokens: estimatePromptTokens(params.prompt, params.imageCount ?? 0),
     }),
     {
       method: "GET",
@@ -152,6 +186,8 @@ async function quoteChatCall(params: {
 
 export type ChatCompletionArgs = {
   prompt: string;
+  image_url?: string;
+  images?: string[];
   model?: string;
   max_tokens?: number;
   temperature?: number;
@@ -159,7 +195,7 @@ export type ChatCompletionArgs = {
 };
 
 const CHAT_TOOL_DESCRIPTION =
-  "Pay-per-request OpenAI-compatible chat completions on DePIN infrastructure. Generate text from Llama, Qwen, DeepSeek, and other models with USDC micropayments on Base — no prepaid API credits required.";
+  "Pay-per-request OpenAI-compatible chat completions on DePIN infrastructure. Generate text from Llama, Qwen, DeepSeek, and other models with USDC micropayments on Base — no prepaid API credits required. Optional image_url / images for vision models (llama-3.2-90b-vision, qwen-3.6-35b, qwen-3.5-35b).";
 
 /**
  * Run an x402-gated chat_completion: quote → build payment requirements →
@@ -179,6 +215,7 @@ export async function runX402ChatCompletion(options: {
 }> {
   const { args, extra, defaultModel, x402, started } = options;
   const selectedModel = args.model ?? defaultModel;
+  const imageCount = countImages(args.image_url, args.images);
 
   const models = await getSupportedModels(x402.fulfillmentApiKey);
   if (!models.ok) {
@@ -224,6 +261,7 @@ export async function runX402ChatCompletion(options: {
     model: selectedModel,
     prompt: args.prompt,
     maxTokens: args.max_tokens,
+    imageCount,
   });
   if (!quoted.ok) {
     logToolEvent({
@@ -266,7 +304,7 @@ export async function runX402ChatCompletion(options: {
       description: CHAT_TOOL_DESCRIPTION,
       mimeType: "application/json",
       serviceName: "LMX Cloud",
-      tags: ["inference", "llm", "openai", "chat-completions", "depin", "mcp"],
+      tags: ["inference", "llm", "openai", "chat-completions", "depin", "mcp", "vision"],
       iconUrl: "https://lmxcloud.io/favicon.svg",
     },
     extensions: declareDiscoveryExtension({
@@ -280,10 +318,20 @@ export async function runX402ChatCompletion(options: {
             type: "string",
             description: "User prompt to send to the selected model.",
           },
+          image_url: {
+            type: "string",
+            description:
+              "Optional image as https URL or data:image/...;base64,... URI (vision models only).",
+          },
+          images: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional additional images (vision models only).",
+          },
           model: {
             type: "string",
             description:
-              "LMX model alias (e.g. llama-3-70b, qwen-3.6-35b, deepseek-r1)",
+              "LMX model alias (e.g. llama-3-70b, llama-3.2-90b-vision, qwen-3.6-35b)",
           },
           max_tokens: {
             type: "integer",
@@ -310,13 +358,23 @@ export async function runX402ChatCompletion(options: {
   });
 
   return paid(async (paidArgs) => {
-    const fulfillmentModel = paidArgs.model ?? defaultModel;
+    const fulfillment = paidArgs as ChatCompletionArgs;
+    const fulfillmentModel = fulfillment.model ?? defaultModel;
     const payload = {
       model: fulfillmentModel,
-      messages: [{ role: "user", content: paidArgs.prompt }],
-      ...(paidArgs.max_tokens ? { max_tokens: paidArgs.max_tokens } : {}),
-      ...(typeof paidArgs.temperature === "number"
-        ? { temperature: paidArgs.temperature }
+      messages: [
+        {
+          role: "user",
+          content: buildUserMessageContent(
+            fulfillment.prompt,
+            fulfillment.image_url,
+            fulfillment.images,
+          ),
+        },
+      ],
+      ...(fulfillment.max_tokens ? { max_tokens: fulfillment.max_tokens } : {}),
+      ...(typeof fulfillment.temperature === "number"
+        ? { temperature: fulfillment.temperature }
         : {}),
       stream: false,
     };

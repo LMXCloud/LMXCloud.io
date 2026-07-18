@@ -10,17 +10,25 @@ import type {
   UsageStore,
 } from "./store.js";
 
+function routeForResourceType(resourceType: string): string {
+  if (resourceType === "chat") return "/v1/chat/completions";
+  if (resourceType === "web_search") return "/v1/web/search";
+  return `/v1/${resourceType}`;
+}
+
 export class PostgresUsageStore implements UsageStore {
   async recordUsage(input: RecordUsageInput): Promise<string | null> {
     const pool = getPool();
     const totalTokens = input.promptTokens + input.completionTokens;
     const cost = input.cost ?? 0;
+    const success = input.success !== false;
+    const resourceType = input.resourceType ?? "chat";
     const client = await pool.connect();
 
     try {
       await client.query("BEGIN");
 
-      if (input.apiKeyId) {
+      if (input.apiKeyId && success) {
         await client.query(
           `INSERT INTO key_usage (
              api_key_id, request_count, prompt_tokens, completion_tokens, total_tokens, last_request_at
@@ -41,8 +49,9 @@ export class PostgresUsageStore implements UsageStore {
       }>(
         `INSERT INTO usage_events (
            api_key_id, payer_wallet, payment_event_id, provider, model,
-           prompt_tokens, completion_tokens, total_tokens, cost, latency_ms, fallback_used
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           prompt_tokens, completion_tokens, total_tokens, cost, latency_ms, fallback_used,
+           resource_type, success, error_code, unit_price
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING id, created_at`,
         [
           input.apiKeyId ?? null,
@@ -56,28 +65,36 @@ export class PostgresUsageStore implements UsageStore {
           cost,
           input.latencyMs,
           input.fallbackUsed,
+          resourceType,
+          success,
+          input.errorCode ?? null,
+          input.unitPrice ?? null,
         ],
       );
 
       const row = inserted.rows[0]!;
-      const createdAt = row.created_at.toISOString();
-      const receiptHash = hashReceipt({
-        id: row.id,
-        provider: input.provider,
-        model: input.model,
-        promptTokens: input.promptTokens,
-        completionTokens: input.completionTokens,
-        totalTokens,
-        cost,
-        latencyMs: input.latencyMs,
-        fallbackUsed: input.fallbackUsed,
-        createdAt,
-      });
 
-      await client.query(
-        `UPDATE usage_events SET receipt_hash = $2 WHERE id = $1`,
-        [row.id, receiptHash],
-      );
+      // Receipts remain a success/delivery proof — failures are telemetry only.
+      if (success) {
+        const createdAt = row.created_at.toISOString();
+        const receiptHash = hashReceipt({
+          id: row.id,
+          provider: input.provider,
+          model: input.model,
+          promptTokens: input.promptTokens,
+          completionTokens: input.completionTokens,
+          totalTokens,
+          cost,
+          latencyMs: input.latencyMs,
+          fallbackUsed: input.fallbackUsed,
+          createdAt,
+        });
+
+        await client.query(
+          `UPDATE usage_events SET receipt_hash = $2 WHERE id = $1`,
+          [row.id, receiptHash],
+        );
+      }
 
       await client.query("COMMIT");
       return row.id;
@@ -137,6 +154,7 @@ export class PostgresUsageStore implements UsageStore {
          SUM(cost)::text AS cost
        FROM usage_events
        WHERE api_key_id = ANY($1::uuid[])
+         AND success = true
          AND created_at >= NOW() - ($2::int || ' days')::interval
        GROUP BY DATE(created_at AT TIME ZONE 'UTC')
        ORDER BY date`,
@@ -159,7 +177,7 @@ export class PostgresUsageStore implements UsageStore {
     }
 
     const params: unknown[] = [apiKeyIds];
-    const filters = ["api_key_id = ANY($1::uuid[])"];
+    const filters = ["api_key_id = ANY($1::uuid[])", "success = true"];
 
     if (query.days !== undefined) {
       params.push(query.days);
@@ -189,12 +207,14 @@ export class PostgresUsageStore implements UsageStore {
       cost: string;
       latency_ms: number | null;
       fallback_used: boolean;
+      resource_type: string;
+      success: boolean;
       created_at: Date;
     }>(
       `SELECT
          id, api_key_id, provider, model,
          prompt_tokens, completion_tokens, total_tokens,
-         cost, latency_ms, fallback_used, created_at
+         cost, latency_ms, fallback_used, resource_type, success, created_at
        FROM usage_events
        WHERE ${filters.join(" AND ")}
        ORDER BY created_at DESC, id DESC
@@ -209,7 +229,8 @@ export class PostgresUsageStore implements UsageStore {
       data: rows.map((row): UsageLogEntry => ({
         id: row.id,
         apiKeyId: row.api_key_id,
-        route: "/v1/chat/completions",
+        route: routeForResourceType(row.resource_type),
+        resourceType: row.resource_type,
         provider: row.provider,
         model: row.model,
         promptTokens: row.prompt_tokens,
@@ -218,7 +239,8 @@ export class PostgresUsageStore implements UsageStore {
         cost: Number(row.cost),
         latencyMs: row.latency_ms ?? 0,
         fallbackUsed: row.fallback_used,
-        status: 200,
+        success: row.success,
+        status: row.success ? 200 : 502,
         createdAt: row.created_at.toISOString(),
       })),
       hasMore,

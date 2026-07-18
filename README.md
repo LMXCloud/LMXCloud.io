@@ -9,23 +9,25 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 ### Inference & routing
 - Multi-provider routing with health-aware fallback and transparent `x-lmx-*` headers
 - Streaming chat completions (SSE) with billing metadata
+- Vision input on chat (OpenAI `image_url` content parts) for flagged models
 - 30 model aliases mapped to healthy DePIN providers (`GET /v1/models`)
+- Web search passthrough (`POST /v1/web/search`) via Brave Search — fixed per-call price
 
 ### Auth & funding
 - Email sign-in (Clerk) or wallet sign-in (SIWE) with session tokens and API keys
-- Internal credit balance per key; cost deducted after successful inference
+- Internal credit balance per key; cost deducted after successful inference / search
 - USDC deposits on Base credited after on-chain confirmations
 - Dashboard at `apps/web` — keys, usage, billing, per-request logs, provider status
 
 ### x402 pay-per-call (no API key required)
 - Dual path on `POST /v1/chat/completions`: Bearer key → balance, or anonymous USDC payment via x402 on Base
-- `GET /v1/pricing` / quote for per-model list prices
+- `GET /v1/pricing` / quote for per-model list prices plus fixed `tools.web_search` price
 - Coinbase CDP Facilitator verify + settle; payments persisted in `payment_events`
 - Discoverable on **x402 Bazaar / Agentic.Market** via automatic catalog indexing after mainnet settlement
 
 ### Agent distribution
 - **MCP server** (`apps/mcp-server`) — hosted at `https://mcp.lmxcloud.io/mcp`, published to the official MCP Registry as [`io.lmxcloud/mcp-server`](https://registry.modelcontextprotocol.io)
-- Seven tools: `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (balance key **or** x402)
+- Eight tools: `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (balance key **or** x402; optional vision images), `web_search` (balance key)
 - **ElizaOS plugin** — [`@lmxcloud/plugin-lmxcloud`](https://www.npmjs.com/package/@lmxcloud/plugin-lmxcloud) (separate repo: [LMXCloud/plugin-lmxcloud](https://github.com/LMXCloud/plugin-lmxcloud)); x402-only, no API key — wallet pays USDC per call on Base
 
 ### Trust
@@ -36,7 +38,8 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 - Node.js 20+
 - pnpm
 - io.net API key from [ai.io.net](https://ai.io.net/ai/api-keys)
-- Optional: [AkashML](https://akashml.com) and [Together.ai](https://api.together.xyz) keys for fallback tiers
+- Optional: [AkashML](https://akashml.com), [Nosana](https://deploy.nosana.com) (`NOSANA_API_KEY` + per-model `NOSANA_ENDPOINTS`), and [Together.ai](https://api.together.xyz) keys for fallback tiers
+- Optional: [Brave Search API](https://brave.com/search/api/) key (`BRAVE_SEARCH_API_KEY`) to enable `web_search` / `POST /v1/web/search`
 
 ## Setup
 
@@ -71,6 +74,8 @@ Wallet auth and USDC deposits are configured in `apps/api/src/config.ts`. Set th
 Deposits activate only when `DATABASE_URL`, `BASE_RPC_URL`, and `TREASURY_ADDRESS` are all set. `CREDITS_ALLOW_SELF_TOPUP` must not be enabled in production.
 
 For x402 pay-per-call locally, also set `X402_ENABLED=true`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, and treasury/chain vars. See `docs/x402-pricing.md`, `docs/x402-verification.md`, and [DEPLOY.md](./DEPLOY.md).
+
+For web search, set `BRAVE_SEARCH_API_KEY` (optional `WEB_SEARCH_PRICE_USDC`, default `$0.01`/call). See [docs/web-search.md](./docs/web-search.md).
 
 ## Wallet auth and USDC funding (local)
 
@@ -152,9 +157,11 @@ LMX ships a hosted MCP server so agents can discover pricing, check balance, and
 
 **Registry:** [`io.lmxcloud/mcp-server`](https://registry.modelcontextprotocol.io) (streamable HTTP remote)
 
-**Tools (7):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`
+**Tools (8):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`, `web_search`
 
-`chat_completion` accepts an API key **or** x402 pay-per-call when no key is provided.
+`chat_completion` accepts an API key **or** x402 pay-per-call when no key is provided. Optional `image_url` / `images` enable vision on models such as `qwen-3.6-35b`, `qwen-3.5-35b`, and `llama-3.2-90b-vision`.
+
+`web_search` requires a balance-funded API key (Brave passthrough; fixed per-call price from `GET /v1/pricing` → `tools.web_search`).
 
 **Client config** (`.cursor/mcp.json` in any repo):
 
@@ -223,6 +230,33 @@ curl http://localhost:3000/v1/chat/completions \
   -d '{"model":"llama-3-70b","messages":[{"role":"user","content":"Hello from LMX Cloud"}]}'
 ```
 
+Vision example (image URL or `data:image/...;base64,...`):
+
+```bash
+curl http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"qwen-3.6-35b",
+    "messages":[{
+      "role":"user",
+      "content":[
+        {"type":"text","text":"What is in this image?"},
+        {"type":"image_url","image_url":{"url":"https://example.com/photo.png"}}
+      ]
+    }]
+  }'
+```
+
+Web search (requires `BRAVE_SEARCH_API_KEY` on the API):
+
+```bash
+curl http://localhost:3000/v1/web/search \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"DePIN GPU inference","max_results":5}'
+```
+
 Response headers: `x-lmx-provider`, `x-lmx-fallback`, `x-lmx-latency`, `x-lmx-cost`, `x-lmx-balance`.
 
 Authenticated endpoints (usage, balance, keys) use the same `Authorization: Bearer lmx_...` header — see the docs page for full reference.
@@ -233,9 +267,10 @@ Authenticated endpoints (usage, balance, keys) use the same `Authorization: Bear
 |------|------------|-------------|------------------|
 | 1    | io.net     | DePIN       | `IONET_API_KEY`  |
 | 2    | AkashML    | DePIN       | `AKASHML_API_KEY`|
+| 3    | Nosana     | DePIN       | `NOSANA_API_KEY` + `NOSANA_ENDPOINTS` |
 | 4    | Together   | Centralized | `TOGETHER_API_KEY`|
 
-Providers without API keys are skipped. When Tier 4 serves a request, `x-lmx-fallback` and `x-lmx-provider` reflect it — no silent centralization.
+Providers without API keys are skipped. Nosana is **per-deployment** (no shared gateway): `NOSANA_ENDPOINTS` is a JSON map of LMX alias → `https://<job-id>.node.k8s.prd.nos.ci/v1` (optional `{ baseUrl, upstreamId }` when the served model name differs). When Tier 4 serves a request, `x-lmx-fallback` and `x-lmx-provider` reflect it — no silent centralization.
 
 ## Project structure
 
@@ -255,17 +290,20 @@ Repos: [LMXCloud/LMXCloud.io](https://github.com/LMXCloud/LMXCloud.io) · [LMXCl
 
 ## Supported models (aliases)
 
-LMX exposes **30 short aliases** mapped to io.net and AkashML upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live chat completions.
+LMX exposes **30 short aliases** mapped to io.net, AkashML, and Nosana upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live chat completions.
 
 `GET /v1/models` returns aliases from **healthy** providers only. The router skips providers that do not support the requested alias.
 
-| LMX alias | Upstream ID | io.net | AkashML |
-|-----------|-------------|:------:|:-------:|
-| `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct` | ✓ | ✓ |
-| `llama-3.3-70b` | same | ✓ | ✓ |
-| `qwen-3.6-35b` | `Qwen/Qwen3.6-35B-A3B` | ✓ | ✓ |
-| `deepseek-v4-flash` | `deepseek-ai/DeepSeek-V4-Flash` | ✓ | ✓ |
-| `glm-5.2` | `zai-org/GLM-5.2` | ✓ | ✓ |
-| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ |
+| LMX alias | Upstream ID | io.net | AkashML | Nosana | Notes |
+|-----------|-------------|:------:|:-------:|:------:|-------|
+| `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct` | ✓ | ✓ | ✓ | |
+| `llama-3.3-70b` | same | ✓ | ✓ | ✓ | |
+| `qwen-3.6-35b` | `Qwen/Qwen3.6-35B-A3B` | ✓ | ✓ | ✓ | vision |
+| `deepseek-v4-flash` | `deepseek-ai/DeepSeek-V4-Flash` | ✓ | ✓ | | |
+| `glm-5.2` | `zai-org/GLM-5.2` | ✓ | ✓ | | |
+| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ | ✓ | vision |
+| `llama-3.2-90b-vision` | `meta-llama/Llama-3.2-90B-Vision-Instruct` | ✓ | | | vision |
+| `deepseek-r1` | `deepseek-ai/DeepSeek-R1-0528` | ✓ | | ✓ | |
+| `gpt-oss-120b` | `openai/gpt-oss-120b` | ✓ | | ✓ | |
 
-Plus io.net-only models (`llama-4-maverick`, `deepseek-r1`, `kimi-k2.6`, `gpt-oss-120b`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list.
+Plus other io.net / Nosana overlaps (`qwen-3.6-27b`, `glm-4.7-flash`, `gpt-oss-20b`, `gemma-4-26b`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400.

@@ -132,7 +132,7 @@ export function detectIrregularities(
       severity: input.stuckPayments.length >= 5 ? "critical" : "warn",
       category: "payments",
       title: "Payments stuck before settlement",
-      detail: `${input.stuckPayments.length} payment(s) still quoted/verified for ≥15m (oldest ${oldest.ageMinutes}m, ${oldest.status}).`,
+      detail: `${input.stuckPayments.length} payment(s) still quoted/verified/fulfilling for ≥15m (oldest ${oldest.ageMinutes}m, ${oldest.status}).`,
       action: "Inspect CDP verify/settle latency and whether the agent abandoned after 402.",
       metric: `${input.stuckPayments.length} stuck`,
       relatedIds: input.stuckPayments.slice(0, 8).map((p) => p.id),

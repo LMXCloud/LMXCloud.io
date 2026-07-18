@@ -44,7 +44,7 @@ export interface AnchorStore {
   listRecentAnchoredBatches(limit: number): Promise<AnchorBatchRecord[]>;
   getLogProof(
     logId: string,
-    apiKeyIds: string[],
+    apiKeyIds: string[] | null,
     contractAddress: `0x${string}`,
   ): Promise<UsageLogProofResult | null>;
 }
@@ -203,14 +203,12 @@ export class PostgresAnchorStore implements AnchorStore {
 
   async getLogProof(
     logId: string,
-    apiKeyIds: string[],
+    apiKeyIds: string[] | null,
     contractAddress: `0x${string}`,
   ): Promise<UsageLogProofResult | null> {
-    if (apiKeyIds.length === 0) return null;
-
     const eventResult = await getPool().query<{
       id: string;
-      api_key_id: string;
+      api_key_id: string | null;
       provider: string;
       model: string;
       prompt_tokens: number;
@@ -228,7 +226,8 @@ export class PostgresAnchorStore implements AnchorStore {
               total_tokens, cost, latency_ms, fallback_used, created_at,
               receipt_hash, anchor_batch_id, leaf_index
        FROM usage_events
-       WHERE id = $1 AND api_key_id = ANY($2::uuid[])`,
+       WHERE id = $1
+         AND ($2::uuid[] IS NULL OR api_key_id = ANY($2::uuid[]))`,
       [logId, apiKeyIds],
     );
 

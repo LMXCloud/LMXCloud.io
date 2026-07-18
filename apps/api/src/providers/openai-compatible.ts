@@ -7,14 +7,44 @@ export interface OpenAiCompatibleConfig {
   costPer1kTokens: number;
   isDepin: boolean;
   apiKey: string;
-  baseUrl: string;
+  /** Single gateway URL (io.net / Akash / Together). Ignored when resolveBaseUrl is set. */
+  baseUrl?: string;
+  /**
+   * Per-request base URL (e.g. Nosana per-deployment endpoints).
+   * When set, takes precedence over baseUrl.
+   */
+  resolveBaseUrl?: (requestModel: string) => string;
+  /**
+   * URLs probed by healthCheck. Defaults to [baseUrl] when only baseUrl is set.
+   * Healthy if any URL responds OK; latency is the minimum successful probe.
+   */
+  healthBaseUrls?: string[];
   resolveModel: (model: string) => string;
   aliases: string[];
   timeoutMs?: number;
 }
 
+function resolveRequestBaseUrl(
+  config: OpenAiCompatibleConfig,
+  requestModel: string,
+): string {
+  if (config.resolveBaseUrl) {
+    return config.resolveBaseUrl(requestModel);
+  }
+  if (config.baseUrl) {
+    return config.baseUrl;
+  }
+  throw new ProviderError(
+    `${config.name} has no base URL configured`,
+    config.name,
+    500,
+  );
+}
+
 export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): ProviderAdapter {
   const timeoutMs = config.timeoutMs ?? 30_000;
+  const healthUrls =
+    config.healthBaseUrls ?? (config.baseUrl ? [config.baseUrl] : []);
 
   return {
     name: config.name,
@@ -28,29 +58,43 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
     },
 
     async healthCheck(): Promise<ProviderHealthResult> {
-      const start = performance.now();
-
-      try {
-        const response = await fetch(`${config.baseUrl}/models`, {
-          headers: { Authorization: `Bearer ${config.apiKey}` },
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-
-        return {
-          healthy: response.ok,
-          latencyMs: Math.round(performance.now() - start),
-        };
-      } catch {
-        return {
-          healthy: false,
-          latencyMs: null,
-        };
+      if (healthUrls.length === 0) {
+        return { healthy: false, latencyMs: null };
       }
+
+      const results = await Promise.all(
+        healthUrls.map(async (baseUrl) => {
+          const start = performance.now();
+          try {
+            const response = await fetch(`${baseUrl}/models`, {
+              headers: { Authorization: `Bearer ${config.apiKey}` },
+              signal: AbortSignal.timeout(timeoutMs),
+            });
+            return {
+              healthy: response.ok,
+              latencyMs: Math.round(performance.now() - start),
+            };
+          } catch {
+            return { healthy: false, latencyMs: null as number | null };
+          }
+        }),
+      );
+
+      const healthy = results.filter((r) => r.healthy);
+      if (healthy.length === 0) {
+        return { healthy: false, latencyMs: null };
+      }
+
+      return {
+        healthy: true,
+        latencyMs: Math.min(...healthy.map((r) => r.latencyMs!)),
+      };
     },
 
     async chatCompletion(request: ChatCompletionRequest) {
       const start = performance.now();
       const upstreamModel = config.resolveModel(request.model);
+      const baseUrl = resolveRequestBaseUrl(config, request.model);
 
       const body: Record<string, unknown> = {
         model: upstreamModel,
@@ -74,7 +118,7 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
 
       let response: Response;
       try {
-        response = await fetch(`${config.baseUrl}/chat/completions`, {
+        response = await fetch(`${baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${config.apiKey}`,

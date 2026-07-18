@@ -7,7 +7,7 @@ export const DEFAULT_TITLE =
   "LMX Cloud — OpenAI-compatible DePIN inference API";
 
 export const DEFAULT_DESCRIPTION =
-  "OpenAI-compatible inference API routed across DePIN networks (io.net and Akash). Wallet auth, USDC funding, and x402 pay-per-call for developers and autonomous agents.";
+  "OpenAI-compatible inference API routed across DePIN networks (io.net, Akash, and Nosana). Wallet auth, USDC funding, and x402 pay-per-call for developers and autonomous agents.";
 
 export function absoluteUrl(path = "/"): string {
   if (!path || path === "/") return `${SITE_URL}/`;

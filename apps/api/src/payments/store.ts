@@ -23,7 +23,15 @@ export interface PaymentStore {
     txHash: string,
     settledAmount: number,
   ): Promise<PaymentEvent | null>;
-  linkUsageEvent(paymentId: string, usageEventId: string): Promise<void>;
+  /**
+   * Atomically claim a payment for inference fulfillment.
+   * Exactly one concurrent caller wins; losers get null (replay / already claimed).
+   */
+  tryClaimForFulfillment(payloadHash: string): Promise<PaymentEvent | null>;
+  /**
+   * Atomically attach usage and mark completed. Returns null if already claimed
+   * by another fulfillment (or not in a completable status).
+   */
   markCompleted(id: string, usageEventId: string): Promise<PaymentEvent | null>;
   markFailed(id: string, reason: string): Promise<PaymentEvent | null>;
   markRefunded(
@@ -210,38 +218,33 @@ export class PostgresPaymentStore implements PaymentStore {
     txHash: string,
     settledAmount: number,
   ): Promise<PaymentEvent | null> {
+    // Settlement runs in onSend after the chat handler. The handler may already
+    // have markCompleted the row (fulfilling → completed); still record tx fields.
     const result = await getPool().query<PaymentEventRow>(
       `UPDATE payment_events
-       SET status = 'settled',
+       SET status = CASE WHEN status = 'completed' THEN 'completed' ELSE 'settled' END,
            tx_hash = $2,
            settled_amount = $3,
            settled_at = NOW()
-       WHERE id = $1 AND status IN ('quoted', 'verified')
+       WHERE id = $1
+         AND status IN ('quoted', 'verified', 'fulfilling', 'completed')
        RETURNING *`,
       [id, txHash, roundCredits(settledAmount)],
     );
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   }
 
-  async linkUsageEvent(paymentId: string, usageEventId: string): Promise<void> {
-    const client = await getPool().connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        `UPDATE payment_events SET usage_event_id = $2 WHERE id = $1`,
-        [paymentId, usageEventId],
-      );
-      await client.query(
-        `UPDATE usage_events SET payment_event_id = $1 WHERE id = $2`,
-        [paymentId, usageEventId],
-      );
-      await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
+  async tryClaimForFulfillment(payloadHash: string): Promise<PaymentEvent | null> {
+    const result = await getPool().query<PaymentEventRow>(
+      `UPDATE payment_events
+       SET status = 'fulfilling'
+       WHERE payment_payload_hash = $1
+         AND status IN ('quoted', 'verified')
+         AND usage_event_id IS NULL
+       RETURNING *`,
+      [payloadHash],
+    );
+    return result.rows[0] ? mapRow(result.rows[0]) : null;
   }
 
   async markCompleted(
@@ -252,12 +255,15 @@ export class PostgresPaymentStore implements PaymentStore {
     try {
       await client.query("BEGIN");
 
+      // Single atomic claim-and-link for usage: only one usage_event_id wins.
       const updated = await client.query<PaymentEventRow>(
         `UPDATE payment_events
          SET status = 'completed',
              usage_event_id = $2,
              completed_at = NOW()
-         WHERE id = $1 AND status IN ('settled', 'verified')
+         WHERE id = $1
+           AND status IN ('fulfilling', 'settled', 'verified')
+           AND usage_event_id IS NULL
          RETURNING *`,
         [id, usageEventId],
       );
@@ -305,7 +311,7 @@ export class PostgresPaymentStore implements PaymentStore {
        SET status = 'refunded',
            refunded_amount = $2,
            tx_hash = COALESCE($3, tx_hash)
-       WHERE id = $1 AND status IN ('settled', 'failed', 'verified')
+       WHERE id = $1 AND status IN ('settled', 'failed', 'verified', 'fulfilling')
        RETURNING *`,
       [id, roundCredits(refundedAmount), txHash ?? null],
     );
