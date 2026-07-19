@@ -1,7 +1,13 @@
 import { Activity, ArrowRight, FileJson, Link2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { API_BASE, fetchStatus, type StatusResponse } from "../api";
+import {
+  API_BASE,
+  fetchStatus,
+  fetchStatusHistory,
+  type StatusHistoryResponse,
+  type StatusResponse,
+} from "../api";
 import { PublicLayout } from "../components/PublicLayout";
 import { SeoHead } from "../components/SeoHead";
 import { PageHeader } from "../components/console/PageHeader";
@@ -21,6 +27,7 @@ import { Chip } from "../components/ui/Chip";
 import { formatDateTime, formatLatency, contractExplorerUrl } from "../lib/format";
 
 const POLL_MS = 30_000;
+const HISTORY_DAYS = 7;
 
 function formatLastCheck(timestamp: number | null): string {
   if (timestamp === null) return "—";
@@ -39,8 +46,28 @@ function txUrl(chainId: number, txHash: string): string {
   return `${base}${txHash}`;
 }
 
+function summarizeHistory(history: StatusHistoryResponse) {
+  const checks = history.by_provider.reduce((sum, row) => sum + row.checks, 0);
+  const healthy = history.by_provider.reduce((sum, row) => sum + row.healthy_checks, 0);
+  const latencyRows = history.by_provider.filter((row) => row.avg_latency_ms != null);
+  const avgLatency =
+    latencyRows.length === 0
+      ? null
+      : Math.round(
+          latencyRows.reduce((sum, row) => sum + (row.avg_latency_ms ?? 0), 0) /
+            latencyRows.length,
+        );
+  return {
+    checks,
+    healthy,
+    uptime: checks === 0 ? 0 : Math.round((healthy / checks) * 10_000) / 10_000,
+    avgLatency,
+  };
+}
+
 export function StatusPage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [history, setHistory] = useState<StatusHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -49,8 +76,12 @@ export function StatusPage() {
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const data = await fetchStatus();
-      setStatus(data);
+      const [statusData, historyData] = await Promise.all([
+        fetchStatus(),
+        fetchStatusHistory(HISTORY_DAYS),
+      ]);
+      setStatus(statusData);
+      setHistory(historyData);
       setError(null);
       setLastUpdated(new Date());
     } catch (err) {
@@ -73,6 +104,7 @@ export function StatusPage() {
   const healthyCount = providers.filter(([, p]) => p.healthy).length;
   const allHealthy = providers.length > 0 && healthyCount === providers.length;
   const noneHealthy = providers.length > 0 && healthyCount === 0;
+  const historySummary = history ? summarizeHistory(history) : null;
 
   return (
     <PublicLayout>
@@ -171,48 +203,56 @@ export function StatusPage() {
           </Card>
         )}
 
-        {status?.reliability && status.reliability.overall.attempts > 0 && (
+        {history && (
           <Card className="mt-6">
             <div className="flex flex-wrap items-center gap-2">
               <Activity className="h-4 w-4 text-primary" strokeWidth={1.75} />
-              <p className="text-body-sm font-medium text-on-surface">Reliability record</p>
+              <p className="text-body-sm font-medium text-on-surface">Uptime record</p>
               <span className="text-body-sm text-on-surface-faint">
-                · last {status.reliability.window_days}d
+                · last {history.window_days}d
               </span>
             </div>
             <p className="mt-3 text-body-sm text-on-surface-muted">
-              Measured from routed provider attempts (success and failure), not point-in-time health
-              checks. {(status.reliability.overall.success_rate * 100).toFixed(1)}% success across{" "}
-              {status.reliability.overall.attempts.toLocaleString()} attempts
-              {status.reliability.overall.avg_latency_ms != null
-                ? ` · ${Math.round(status.reliability.overall.avg_latency_ms)}ms avg latency`
-                : ""}
-              .
+              Measured from health polls every 30 seconds (persisted).{" "}
+              {historySummary && historySummary.checks > 0 ? (
+                <>
+                  {(historySummary.uptime * 100).toFixed(1)}% uptime across{" "}
+                  {historySummary.checks.toLocaleString()} checks
+                  {historySummary.avgLatency != null
+                    ? ` · ${formatLatency(historySummary.avgLatency)} avg latency`
+                    : ""}
+                  .
+                </>
+              ) : (
+                <>Waiting for the first persisted health checks…</>
+              )}
             </p>
-            {status.reliability.by_provider.length > 0 && (
-              <div className="mt-6">
-                <DataTable title="Per-provider reliability" minWidth={640}>
-                  <DataTableHead>
-                    <tr>
-                      <DataTableTh>Provider</DataTableTh>
-                      <DataTableTh>Resource</DataTableTh>
-                      <DataTableTh>Success rate</DataTableTh>
-                      <DataTableTh>Attempts</DataTableTh>
-                      <DataTableTh>Avg latency</DataTableTh>
-                      <DataTableTh>Avg unit price</DataTableTh>
-                    </tr>
-                  </DataTableHead>
-                  <DataTableBody>
-                    {status.reliability.by_provider.map((row) => (
-                      <DataTableRow key={`${row.resource_type}:${row.provider}`}>
+            <div className="mt-6">
+              <DataTable title="Per-provider uptime" minWidth={640}>
+                <DataTableHead>
+                  <tr>
+                    <DataTableTh>Provider</DataTableTh>
+                    <DataTableTh>Uptime</DataTableTh>
+                    <DataTableTh>Checks</DataTableTh>
+                    <DataTableTh>Avg latency</DataTableTh>
+                    <DataTableTh>p50</DataTableTh>
+                    <DataTableTh>p95</DataTableTh>
+                  </tr>
+                </DataTableHead>
+                <DataTableBody>
+                  {history.by_provider.length === 0 ? (
+                    <DataTableEmpty colSpan={6}>No providers configured.</DataTableEmpty>
+                  ) : (
+                    history.by_provider.map((row) => (
+                      <DataTableRow key={row.provider}>
                         <DataTableCell className="font-medium">{row.provider}</DataTableCell>
-                        <DataTableCell>{row.resource_type}</DataTableCell>
                         <DataTableCell>
-                          {(row.success_rate * 100).toFixed(1)}%
+                          {row.checks > 0 ? `${(row.uptime * 100).toFixed(1)}%` : "—"}
                         </DataTableCell>
                         <DataTableCell>
-                          {row.successes}/{row.attempts}
-                          {row.failures > 0 ? ` (${row.failures} fail)` : ""}
+                          {row.checks > 0
+                            ? `${row.healthy_checks}/${row.checks}`
+                            : "0"}
                         </DataTableCell>
                         <DataTableCell>
                           {row.avg_latency_ms != null
@@ -220,16 +260,21 @@ export function StatusPage() {
                             : "—"}
                         </DataTableCell>
                         <DataTableCell>
-                          {row.avg_unit_price != null
-                            ? `$${row.avg_unit_price.toFixed(6)}`
+                          {row.p50_latency_ms != null
+                            ? formatLatency(row.p50_latency_ms)
+                            : "—"}
+                        </DataTableCell>
+                        <DataTableCell>
+                          {row.p95_latency_ms != null
+                            ? formatLatency(row.p95_latency_ms)
                             : "—"}
                         </DataTableCell>
                       </DataTableRow>
-                    ))}
-                  </DataTableBody>
-                </DataTable>
-              </div>
-            )}
+                    ))
+                  )}
+                </DataTableBody>
+              </DataTable>
+            </div>
           </Card>
         )}
 

@@ -402,6 +402,22 @@ export interface StatusResponse {
   reliability?: StatusReliabilityInfo;
 }
 
+export interface StatusHistoryProviderRow {
+  provider: string;
+  checks: number;
+  healthy_checks: number;
+  uptime: number;
+  avg_latency_ms: number | null;
+  p50_latency_ms: number | null;
+  p95_latency_ms: number | null;
+}
+
+export interface StatusHistoryResponse {
+  object: "provider_health_history";
+  window_days: number;
+  by_provider: StatusHistoryProviderRow[];
+}
+
 export interface UsageLogProofResponse {
   object: "usage_log_proof";
   log_id: string;
@@ -438,6 +454,12 @@ export async function fetchStatus(): Promise<StatusResponse> {
   const res = await fetch(`${API_BASE}/v1/status`);
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<StatusResponse>;
+}
+
+export async function fetchStatusHistory(days = 7): Promise<StatusHistoryResponse> {
+  const res = await fetch(`${API_BASE}/v1/status/history?days=${days}`);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<StatusHistoryResponse>;
 }
 
 export async function fetchModels(): Promise<ModelsResponse> {

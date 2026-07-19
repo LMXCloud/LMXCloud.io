@@ -12,6 +12,7 @@ import { MIN_DEPOSIT_USDC } from "./deposits/limits.js";
 import { createDepositStore } from "./deposits/store.js";
 import { AnchorPoller } from "./anchors/poller.js";
 import { createAnchorStore } from "./anchors/store.js";
+import { createProviderHealthHistoryStore } from "./health/history.js";
 import { HealthMonitor } from "./health/monitor.js";
 import { InMemoryHealthStore } from "./health/store.js";
 import { createProviderRegistry, getFallbackChain } from "./providers/registry.js";
@@ -110,15 +111,15 @@ export async function buildServer() {
   const providers = createProviderRegistry(config);
 
   const healthStore = new InMemoryHealthStore();
+  const healthHistoryStore = createProviderHealthHistoryStore((err) => {
+    app.log.error({ err }, "provider health history write failed");
+  });
 
   const healthMonitor = new HealthMonitor(
-
     providers,
-
     healthStore,
-
     config.healthPollIntervalMs,
-
+    healthHistoryStore,
   );
 
   const apiKeyStore = await createApiKeyStore();

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AnchorStore } from "../anchors/store.js";
+import { getProviderHealthHistory } from "../health/queries.js";
 import { getReliabilityTelemetry } from "../ops/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
@@ -13,6 +14,12 @@ interface StatusRouteDeps {
     chainId: number;
     contractAddress: `0x${string}`;
   };
+}
+
+function parseDays(raw: unknown, fallback: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(Math.floor(n), 90));
 }
 
 export async function registerStatusRoutes(
@@ -96,6 +103,34 @@ export async function registerStatusRoutes(
           avg_unit_price: row.avgUnitPrice,
         })),
       },
+    };
+  });
+
+  /**
+   * Historical health-poll uptime / latency (survives restarts).
+   * Distinct from `reliability` on /v1/status, which is derived from usage events.
+   * Query: ?days=1|7|30 (default 30, max 90).
+   */
+  app.get<{ Querystring: { days?: string } }>("/v1/status/history", async (request) => {
+    const days = parseDays(request.query.days, 30);
+    const history = await getProviderHealthHistory(days);
+    const byName = new Map(history.byProvider.map((row) => [row.provider, row]));
+
+    return {
+      object: history.object,
+      window_days: history.windowDays,
+      by_provider: deps.providers.map((provider) => {
+        const row = byName.get(provider.name);
+        return {
+          provider: provider.name,
+          checks: row?.checks ?? 0,
+          healthy_checks: row?.healthyChecks ?? 0,
+          uptime: row?.uptime ?? 0,
+          avg_latency_ms: row?.avgLatencyMs ?? null,
+          p50_latency_ms: row?.p50LatencyMs ?? null,
+          p95_latency_ms: row?.p95LatencyMs ?? null,
+        };
+      }),
     };
   });
 }

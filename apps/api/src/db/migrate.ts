@@ -134,6 +134,18 @@ const MIGRATIONS = [
     ON usage_events (resource_type, provider, model, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_usage_events_success_created
     ON usage_events (success, created_at DESC)`,
+  // Provider health poll history (uptime / latency time series)
+  `CREATE TABLE IF NOT EXISTS provider_health_checks (
+    id BIGSERIAL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    healthy BOOLEAN NOT NULL,
+    latency_ms INTEGER,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_provider_health_checks_provider_checked
+    ON provider_health_checks (provider, checked_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_provider_health_checks_checked
+    ON provider_health_checks (checked_at)`,
 ];
 
 export async function runMigrations(): Promise<void> {

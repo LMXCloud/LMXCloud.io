@@ -82,7 +82,14 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
 
       const healthy = results.filter((r) => r.healthy);
       if (healthy.length === 0) {
-        return { healthy: false, latencyMs: null };
+        const withLatency = results.filter((r) => r.latencyMs != null);
+        return {
+          healthy: false,
+          // Keep measured latency on failed checks so history isn't null-skewed.
+          latencyMs: withLatency.length
+            ? Math.min(...withLatency.map((r) => r.latencyMs!))
+            : null,
+        };
       }
 
       return {
