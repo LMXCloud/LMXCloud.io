@@ -1,4 +1,5 @@
 import type { Config } from "../config.js";
+import { createAethirAdapter } from "./aethir.js";
 import { createAkashAdapter } from "./akash.js";
 import { createIonetAdapter } from "./ionet.js";
 import { createNosanaAdapter } from "./nosana.js";
@@ -10,6 +11,10 @@ export function createProviderRegistry(config: Config): ProviderAdapter[] {
 
   if (config.akash) {
     providers.push(createAkashAdapter(config.akash));
+  }
+
+  if (config.aethir) {
+    providers.push(createAethirAdapter(config.aethir));
   }
 
   if (config.nosana) {

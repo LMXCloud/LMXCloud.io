@@ -58,6 +58,8 @@ export interface Config {
 
   together?: ProviderConfig;
 
+  aethir?: ProviderConfig;
+
   keyGenRateLimitMax: number;
 
   keyGenRateLimitWindowMs: number;
@@ -271,6 +273,8 @@ function optionalProvider(prefix: string): ProviderConfig | undefined {
 
     AKASHML: "https://api.akashml.com/v1",
 
+    AETHIR: "https://mesh-api.aethir.com/v1",
+
     TOGETHER: "https://api.together.xyz/v1",
 
   };
@@ -479,6 +483,7 @@ export function loadConfig(): Config {
     akash: optionalProvider("AKASHML"),
     nosana: optionalNosana(),
     together: optionalProvider("TOGETHER"),
+    aethir: optionalProvider("AETHIR"),
     // Conservative default rate limit for key generation during free beta; can be loosened after monitoring abuse patterns.
     keyGenRateLimitMax: Number(process.env.KEY_GEN_RATE_LIMIT_MAX ?? 5),
     keyGenRateLimitWindowMs: Number(process.env.KEY_GEN_RATE_LIMIT_WINDOW_MS ?? 3_600_000),
