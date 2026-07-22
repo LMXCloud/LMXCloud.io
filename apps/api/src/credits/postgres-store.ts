@@ -37,7 +37,7 @@ export class PostgresCreditStore implements CreditStore {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async credit(apiKeyId: string, amount: number): Promise<number> {
+  async credit(apiKeyId: string, amount: number, _meta?: unknown): Promise<number> {
     const added = roundCredits(amount);
     if (added <= 0) {
       return this.getBalance(apiKeyId);

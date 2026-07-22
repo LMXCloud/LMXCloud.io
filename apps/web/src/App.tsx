@@ -94,6 +94,14 @@ function AppRoutes() {
         <Route path="logs" element={<LogsPage />} />
         <Route path="billing" element={<BillingPage />} />
       </Route>
+      <Route
+        path="/demo"
+        element={
+          <ProtectedRoute>
+            <Navigate to="/console/playground" replace />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/login" element={<Navigate to="/sign-in" replace />} />
       <Route path="/signup" element={<Navigate to="/sign-up" replace />} />
       <Route path="/overview" element={<Navigate to="/console/overview" replace />} />

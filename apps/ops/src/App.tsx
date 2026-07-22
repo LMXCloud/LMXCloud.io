@@ -123,6 +123,7 @@ function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
 function channelClass(channel: string): string {
   if (channel === "x402") return "text-[#5b9fd4] bg-[rgba(91,159,212,0.12)]";
   if (channel === "mcp") return "text-[#3ecf8e] bg-[rgba(62,207,142,0.12)]";
+  if (channel === "signup") return "text-[#f0b35a] bg-[rgba(240,179,90,0.12)]";
   return "text-[#9b8cff] bg-[rgba(155,140,255,0.12)]";
 }
 
@@ -259,7 +260,65 @@ function activityDetail(item: OpsActivityItem): string {
   if (item.kind === "usage") {
     return `${formatTokens(item.tokens)} tok · ${formatUsd(item.cost)} · ${formatLatency(item.latencyMs)}${item.fallbackUsed ? " · fallback" : ""}`;
   }
+  if (item.kind === "signup") {
+    const identity = item.email ?? (item.wallet ? shortWallet(item.wallet) : item.id.slice(0, 8));
+    return `${identity} · balance ${formatUsd(item.creditBalance)}`;
+  }
+  if (item.kind === "credit") {
+    return `${item.source}${item.wallet ? ` · ${shortWallet(item.wallet)}` : ""} · key ${item.apiKeyId.slice(0, 8)}…${item.txHash ? ` · ${item.txHash.slice(0, 10)}…` : ""}`;
+  }
   return `${item.callerId.slice(0, 12)}${item.callerId.length > 12 ? "…" : ""} · ${item.authSource}${item.latencyMs != null ? ` · ${formatLatency(item.latencyMs)}` : ""}${item.detail ? ` · ${item.detail}` : ""}`;
+}
+
+function ActivityRow({ item }: { item: OpsActivityItem }) {
+  const href = activityPath(item);
+  const inner = (
+    <>
+      <div className="mt-0.5 w-14 shrink-0">
+        <ChannelChip channel={item.channel} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="truncate text-sm font-medium">{item.label}</span>
+          {item.kind === "payment" ? (
+            <span className="font-mono text-[11px] text-[var(--color-muted)]">
+              {item.status}
+            </span>
+          ) : null}
+          {item.kind === "mcp" ? (
+            <span
+              className={`font-mono text-[11px] ${item.ok ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"}`}
+            >
+              {item.ok ? "ok" : "error"}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--color-muted)]">
+          {activityDetail(item)}
+        </div>
+      </div>
+      <div className="shrink-0 font-mono text-[10px] text-[var(--color-faint)]">
+        {formatTime(item.at)}
+      </div>
+    </>
+  );
+
+  if (!href) {
+    return (
+      <div className="flex gap-3 py-2.5">
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={href}
+      className="flex gap-3 py-2.5 transition hover:bg-[var(--color-panel-raised)]/60"
+    >
+      {inner}
+    </Link>
+  );
 }
 
 function OverviewPage({
@@ -401,7 +460,7 @@ function OverviewPage({
         <>
           <AttentionPanel items={data.irregularities ?? []} />
 
-          <div className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4 sm:grid-cols-3 lg:grid-cols-7">
+          <div className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4 sm:grid-cols-4 lg:grid-cols-8">
             <Stat
               label="Attention"
               value={String(
@@ -427,6 +486,11 @@ function OverviewPage({
             <Stat
               label="Avg latency"
               value={formatLatency(data.usage.summary.avgLatencyMs)}
+            />
+            <Stat
+              label="Signups"
+              value={formatNum(data.signups?.recent.length ?? 0)}
+              hint="recent keys"
             />
             <Stat
               label="Payments"
@@ -496,7 +560,7 @@ function OverviewPage({
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Panel
               title="Recent activity"
-              subtitle="Payments, usage, and MCP tool calls — click a row for detail"
+              subtitle="Signups, credits, payments, usage, and MCP — click rows with detail pages"
             >
               {data.activity.length === 0 ? (
                 <p className="text-sm text-[var(--color-muted)]">No recent activity.</p>
@@ -504,37 +568,7 @@ function OverviewPage({
                 <ul className="divide-y divide-[var(--color-line)]/80">
                   {data.activity.map((item) => (
                     <li key={`${item.kind}-${item.id}`} className="first:pt-0 last:pb-0">
-                      <Link
-                        to={activityPath(item)}
-                        className="flex gap-3 py-2.5 transition hover:bg-[var(--color-panel-raised)]/60"
-                      >
-                        <div className="mt-0.5 w-14 shrink-0">
-                          <ChannelChip channel={item.channel} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <span className="truncate text-sm font-medium">{item.label}</span>
-                            {item.kind === "payment" ? (
-                              <span className="font-mono text-[11px] text-[var(--color-muted)]">
-                                {item.status}
-                              </span>
-                            ) : null}
-                            {item.kind === "mcp" ? (
-                              <span
-                                className={`font-mono text-[11px] ${item.ok ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"}`}
-                              >
-                                {item.ok ? "ok" : "error"}
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--color-muted)]">
-                            {activityDetail(item)}
-                          </div>
-                        </div>
-                        <div className="shrink-0 font-mono text-[10px] text-[var(--color-faint)]">
-                          {formatTime(item.at)}
-                        </div>
-                      </Link>
+                      <ActivityRow item={item} />
                     </li>
                   ))}
                 </ul>
@@ -573,6 +607,84 @@ function OverviewPage({
                             >
                               {p.id}
                             </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Recent signups" subtitle="New API keys (all channels)">
+              {(data.signups?.recent ?? []).length === 0 ? (
+                <p className="text-sm text-[var(--color-muted)]">No signups yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-[var(--color-faint)]">
+                      <tr>
+                        <th className="pb-2 font-medium">When</th>
+                        <th className="pb-2 font-medium">Email</th>
+                        <th className="pb-2 font-medium">Wallet</th>
+                        <th className="pb-2 font-medium">Balance</th>
+                        <th className="pb-2 font-medium">Key</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.signups?.recent ?? []).map((s) => (
+                        <tr key={s.id} className="border-t border-[var(--color-line)]/70">
+                          <td className="py-1.5 font-mono text-[var(--color-muted)] whitespace-nowrap">
+                            {formatTime(s.createdAt)}
+                          </td>
+                          <td className="py-1.5 font-mono truncate max-w-[10rem]">
+                            {s.email ?? "—"}
+                          </td>
+                          <td className="py-1.5 font-mono">
+                            {s.wallet ? shortWallet(s.wallet) : "—"}
+                          </td>
+                          <td className="py-1.5 font-mono">{formatUsd(s.creditBalance)}</td>
+                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
+                            {s.id.slice(0, 8)}…
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Credit events" subtitle="USDC deposits credited on-chain">
+              {(data.credits?.recent ?? []).length === 0 ? (
+                <p className="text-sm text-[var(--color-muted)]">No credited deposits.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-[var(--color-faint)]">
+                      <tr>
+                        <th className="pb-2 font-medium">When</th>
+                        <th className="pb-2 font-medium">Amount</th>
+                        <th className="pb-2 font-medium">Wallet</th>
+                        <th className="pb-2 font-medium">Key</th>
+                        <th className="pb-2 font-medium">Tx</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.credits?.recent ?? []).map((c) => (
+                        <tr key={c.id} className="border-t border-[var(--color-line)]/70">
+                          <td className="py-1.5 font-mono text-[var(--color-muted)] whitespace-nowrap">
+                            {formatTime(c.creditedAt)}
+                          </td>
+                          <td className="py-1.5 font-mono">{formatUsd(c.amount)}</td>
+                          <td className="py-1.5 font-mono">
+                            {c.wallet ? shortWallet(c.wallet) : "—"}
+                          </td>
+                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
+                            {c.apiKeyId.slice(0, 8)}…
+                          </td>
+                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
+                            {c.txHash ? `${c.txHash.slice(0, 10)}…` : "—"}
                           </td>
                         </tr>
                       ))}

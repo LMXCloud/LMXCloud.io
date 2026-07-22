@@ -17,7 +17,9 @@ import {
   getUsageById,
   getUsageSummary,
   hasPostgres,
+  listRecentCreditEvents,
   listRecentPayments,
+  listRecentSignups,
   listRecentUsage,
   listStuckPayments,
   listUsageHistory,
@@ -189,6 +191,8 @@ export async function registerOpsRoutes(
       };
       let paymentCounts: Record<string, number> = {};
       let stuckPayments: Awaited<ReturnType<typeof listStuckPayments>> = [];
+      let signups: Awaited<ReturnType<typeof listRecentSignups>> = [];
+      let creditEvents: Awaited<ReturnType<typeof listRecentCreditEvents>> = [];
       let reliability: Awaited<ReturnType<typeof getReliabilityTelemetry>> | null = null;
       let dbError: string | null = null;
 
@@ -200,6 +204,8 @@ export async function registerOpsRoutes(
           usageSummary,
           paymentCounts,
           stuckPayments,
+          signups,
+          creditEvents,
           reliability,
         ] = await Promise.all([
           listRecentPayments(limit),
@@ -208,6 +214,8 @@ export async function registerOpsRoutes(
           getUsageSummary(days),
           paymentStatusCounts(days),
           listStuckPayments(15, 20),
+          listRecentSignups(limit),
+          listRecentCreditEvents(limit),
           getReliabilityTelemetry(days, null),
         ]);
       } catch (err) {
@@ -255,6 +263,29 @@ export async function registerOpsRoutes(
             authSource: string;
             latencyMs?: number;
             detail?: string;
+          }
+        | {
+            kind: "signup";
+            id: string;
+            at: string;
+            channel: "signup";
+            label: string;
+            email: string | null;
+            wallet: string | null;
+            creditBalance: number;
+          }
+        | {
+            kind: "credit";
+            id: string;
+            at: string;
+            channel: "balance";
+            label: string;
+            apiKeyId: string;
+            amount: number;
+            balanceAfter: number | null;
+            source: string;
+            txHash: string | null;
+            wallet: string | null;
           };
 
       const activity: ActivityItem[] = [
@@ -302,6 +333,33 @@ export async function registerOpsRoutes(
             authSource: e.authSource,
             latencyMs: e.latencyMs,
             detail: e.detail,
+          }),
+        ),
+        ...signups.map(
+          (s): ActivityItem => ({
+            kind: "signup",
+            id: s.id,
+            at: s.createdAt,
+            channel: "signup",
+            label: s.email ?? s.wallet ?? s.id,
+            email: s.email,
+            wallet: s.wallet,
+            creditBalance: s.creditBalance,
+          }),
+        ),
+        ...creditEvents.map(
+          (c): ActivityItem => ({
+            kind: "credit",
+            id: c.id,
+            at: c.creditedAt,
+            channel: "balance",
+            label: `+$${c.amount.toFixed(4)}`,
+            apiKeyId: c.apiKeyId,
+            amount: c.amount,
+            balanceAfter: c.balanceAfter,
+            source: c.source,
+            txHash: c.txHash,
+            wallet: c.wallet,
           }),
         ),
       ]
@@ -370,6 +428,12 @@ export async function registerOpsRoutes(
         mcp: {
           buffered: mcpToolEventCount(),
           recent: mcpEvents,
+        },
+        signups: {
+          recent: signups,
+        },
+        credits: {
+          recent: creditEvents,
         },
         paymentsStuck: stuckPayments,
         attention,

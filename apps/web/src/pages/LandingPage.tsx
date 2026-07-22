@@ -22,15 +22,21 @@ import {
   Store,
   Wallet,
 } from "lucide-react";
+import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
-import { LandingChat } from "../components/LandingChat";
+import { LandingFaq } from "../components/LandingFaq";
+import { PartnerMarquee } from "../components/PartnerMarquee";
 import { SeoHead } from "../components/SeoHead";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
 import { cn } from "../lib/cn";
-import { formatHeroSavings, getHeroSavingsHint } from "../lib/openai-benchmark";
+import { formatHeroSavings, LMX_PROVIDER_RATES } from "../lib/openai-benchmark";
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from "../lib/seo";
+
+const HeroNetworkGlobe = lazy(() =>
+  import("../components/HeroNetworkGlobe").then((m) => ({ default: m.HeroNetworkGlobe })),
+);
 
 const SUPPORTED_MODEL_LIST = listUniqueModelAliases();
 
@@ -40,12 +46,15 @@ const ACTIVE_DEPIN_PROVIDERS = DEPIN_PROVIDER_ORDER.filter((provider) =>
 
 const ROUTING_NETWORKS = ACTIVE_DEPIN_PROVIDERS.map((provider) => PROVIDER_LABELS[provider]);
 
+const HERO_PROVIDER_NODES = ACTIVE_DEPIN_PROVIDERS.map((provider) => ({
+  id: provider,
+  label: PROVIDER_LABELS[provider],
+}));
+
 const ROUTING_NETWORKS_PHRASE =
   ROUTING_NETWORKS.length <= 1
     ? ROUTING_NETWORKS[0] ?? "DePIN networks"
     : `${ROUTING_NETWORKS.slice(0, -1).join(", ")}, and ${ROUTING_NETWORKS.at(-1)}`;
-
-const ROUTING_NETWORKS_HINT = `${ROUTING_NETWORKS.join(" + ")} · auto-failover`;
 
 const MODELS_BY_CATEGORY = SUPPORTED_MODEL_LIST.reduce<
   Partial<Record<ModelCategory, SupportedModel[]>>
@@ -67,29 +76,6 @@ const CATEGORY_ORDER: ModelCategory[] = [
   "openai",
   "google",
   "minimax",
-];
-
-const HERO_STATS = [
-  {
-    label: "Cost savings",
-    value: formatHeroSavings(),
-    hint: getHeroSavingsHint(),
-    tone: "success" as const,
-  },
-  {
-    label: "DePIN routing",
-    value: String(ROUTING_NETWORKS.length),
-    unit: "networks",
-    hint: ROUTING_NETWORKS_HINT,
-    tone: "info" as const,
-  },
-  {
-    label: "Model catalog",
-    value: String(SUPPORTED_MODEL_LIST.length),
-    unit: "models",
-    hint: "Llama, Qwen, DeepSeek & more",
-    tone: "primary" as const,
-  },
 ];
 
 const FEATURES = [
@@ -173,6 +159,46 @@ const AGENT_CHANNELS = [
   },
 ];
 
+const FLOOR_RATE_PER_1K = Math.min(...Object.values(LMX_PROVIDER_RATES));
+
+const PLATFORM_KPIS = [
+  {
+    label: "Cost savings",
+    value: formatHeroSavings(),
+    tone: "success" as const,
+  },
+  {
+    label: "DePIN networks",
+    value: String(ROUTING_NETWORKS.length),
+    unit: "networks",
+    tone: "info" as const,
+  },
+  {
+    label: "Model catalog",
+    value: String(SUPPORTED_MODEL_LIST.length),
+    unit: "models",
+    tone: "primary" as const,
+  },
+  {
+    label: "Floor rate",
+    value: `$${FLOOR_RATE_PER_1K.toFixed(4)}`,
+    unit: "/1k",
+    tone: "success" as const,
+  },
+  {
+    label: "Start free",
+    value: "$1.00",
+    unit: "credits",
+    tone: "primary" as const,
+  },
+  {
+    label: "Agent channels",
+    value: String(AGENT_CHANNELS.length),
+    unit: "paths",
+    tone: "info" as const,
+  },
+] as const;
+
 const STEPS = [
   {
     step: "01",
@@ -232,7 +258,6 @@ export function LandingPage() {
                 { href: "#for-agents", label: "For agents" },
                 { href: "#models", label: "Models" },
                 { href: "#how-it-works", label: "How it works" },
-                { href: "#try-chat", label: "Live demo" },
               ] as const
             ).map((item) => (
               <a
@@ -245,6 +270,7 @@ export function LandingPage() {
             ))}
             {(
               [
+                { to: "/demo", label: "Live demo" },
                 { to: "/docs", label: "Docs" },
                 { to: "/status", label: "Status" },
               ] as const
@@ -278,8 +304,8 @@ export function LandingPage() {
       </header>
 
       <main>
-        {/* Hero */}
-        <section className="relative overflow-hidden border-b border-border">
+        {/* Hero — copy left, full globe right */}
+        <section className="relative min-h-[calc(100dvh-4rem)] overflow-hidden">
           <div
             className="pointer-events-none absolute inset-0 opacity-40"
             aria-hidden
@@ -291,77 +317,65 @@ export function LandingPage() {
               backgroundSize: "64px 64px",
             }}
           />
-          <div className="relative mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-16 sm:py-20 lg:py-24">
-            <div className="grid items-start gap-12 lg:grid-cols-[1fr_420px] xl:grid-cols-[1fr_460px]">
-              <div className="max-w-xl">
-                <div className="mb-5 flex flex-wrap gap-2">
-                  <Chip tone="primary">OpenAI-compatible</Chip>
-                  <Chip tone="info">DePIN routing</Chip>
-                  <Chip tone="success">x402 · USDC on Base</Chip>
-                </div>
-                <h1 className="text-display font-semibold text-on-surface">
-                  Inference infrastructure
-                </h1>
-                <p className="mt-2 text-headline-md font-semibold text-on-surface-muted">
-                  for <span className="text-primary">developers</span> and{" "}
-                  <span className="text-primary">autonomous agents</span>
-                </p>
-                <p className="mt-6 max-w-lg text-body-md text-on-surface-muted">
-                  A neutral multi-network router — not a single DePIN wrapper. Chat completions
-                  failover across providers with measured reliability, not asserted uptime from one
-                  network. Human developers get a dashboard, wallet auth, and USDC funding. Agents
-                  pay per call via x402 — no signup, no API key. Drop in your OpenAI SDK or try the
-                  live demo below.
-                </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <Button to="/sign-up" size="lg">
-                    Get started free
-                    <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
-                  </Button>
-                  <Button to="/docs#pricing" variant="secondary" size="lg">
-                    Agent payments (x402)
-                  </Button>
-                  <Button to="/docs#mcp" variant="secondary" size="lg">
-                    Use via MCP
-                  </Button>
-                </div>
 
-                <div className="mt-10 grid min-w-0 gap-3.5 sm:grid-cols-3">
-                  {HERO_STATS.map((stat) => (
-                    <HeroStat key={stat.label} {...stat} />
-                  ))}
-                </div>
-
-                <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-label-sm text-on-surface-faint">Routed via</span>
-                    {ROUTING_NETWORKS.map((network) => (
-                      <Chip key={network} tone="default">
-                        {network}
-                      </Chip>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-label-sm text-on-surface-faint">Payments</span>
-                    <Chip tone="success">x402</Chip>
-                    <Chip tone="success">USDC on Base</Chip>
-                  </div>
-                </div>
+          <div className="relative z-10 mx-auto grid min-h-[calc(100dvh-4rem)] max-w-[1200px] grid-cols-1 items-center gap-8 px-[clamp(20px,4vw,48px)] py-10 lg:grid-cols-[minmax(0,1fr)_min(44vw,520px)] lg:items-center lg:gap-8 lg:py-0">
+            <div className="flex flex-col justify-center py-6 text-left lg:py-12">
+              <div className="mb-4 flex flex-wrap gap-2">
+                <Chip tone="primary">OpenAI-compatible</Chip>
+                <Chip tone="info">DePIN routing</Chip>
+                <Chip tone="success">x402 · USDC on Base</Chip>
               </div>
-
-              <div id="try-chat" className="w-full lg:sticky lg:top-24">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-label-sm text-on-surface-muted">Live demo</p>
-                  <Chip tone="success" className="gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                    No signup
-                  </Chip>
-                </div>
-                <LandingChat />
+              <h1 className="text-display font-semibold text-on-surface">
+                Inference infrastructure
+              </h1>
+              <p className="mt-2 text-headline-md font-semibold text-on-surface-muted">
+                for <span className="text-primary">developers</span> and{" "}
+                <span className="text-primary">autonomous agents</span>
+              </p>
+              <p className="mt-4 max-w-lg text-body-md text-on-surface-muted">
+                Neutral multi-network routing across decentralized compute — measured failover,
+                wallet auth, and x402 pay-per-call for agents.
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Button to="/sign-up" size="lg">
+                  Get started free
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+                <Button to="/docs#pricing" variant="secondary" size="lg">
+                  Agent payments (x402)
+                </Button>
+                <Button to="/docs#mcp" variant="secondary" size="lg">
+                  Use via MCP
+                </Button>
               </div>
+            </div>
+
+            <div className="relative hidden lg:flex lg:items-center lg:justify-center">
+              <Suspense
+                fallback={
+                  <div
+                    className="aspect-square size-[min(calc(100dvh-6rem),min(44vw,520px))]"
+                    aria-hidden
+                  />
+                }
+              >
+                <HeroNetworkGlobe layout="side" providerNodes={HERO_PROVIDER_NODES} />
+              </Suspense>
             </div>
           </div>
         </section>
+
+        {/* KPI strip */}
+        <section
+          className="border-y border-border-strong bg-surface"
+          aria-label="Platform metrics"
+        >
+          <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-5 sm:py-6">
+            <PlatformMetricsStrip />
+          </div>
+        </section>
+
+        <PartnerMarquee />
 
         {/* Features */}
         <section id="features" className="border-b border-border bg-surface py-16 sm:py-20">
@@ -570,6 +584,8 @@ export function LandingPage() {
             </Card>
           </div>
         </section>
+
+        <LandingFaq />
       </main>
 
       <footer className="border-t border-border bg-surface">
@@ -596,9 +612,12 @@ export function LandingPage() {
             <a href="#how-it-works" className="hover:text-on-surface">
               How it works
             </a>
-            <a href="#try-chat" className="hover:text-on-surface">
-              Live demo
+            <a href="#faq" className="hover:text-on-surface">
+              FAQ
             </a>
+            <Link to="/demo" className="hover:text-on-surface">
+              Live demo
+            </Link>
             <Link to="/docs" className="hover:text-on-surface">
               Docs
             </Link>
@@ -653,37 +672,57 @@ function SectionHeader({
   );
 }
 
-function HeroStat({
+function PlatformMetricsStrip() {
+  return (
+    <ul className="grid w-full grid-cols-3 sm:grid-cols-6">
+      {PLATFORM_KPIS.map((stat, index) => (
+        <li
+          key={stat.label}
+          className={cn(
+            "flex min-w-0 flex-col items-center px-2 py-1 text-center sm:px-3",
+            index % 3 !== 0 && "border-l border-border-strong",
+            index > 0 && "sm:border-l sm:border-border-strong",
+            index >= 3 && "max-sm:border-t max-sm:border-border-strong max-sm:pt-4",
+          )}
+        >
+          <PlatformKpiInline {...stat} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PlatformKpiInline({
   label,
   value,
   unit,
   tone,
-  hint,
 }: {
   label: string;
   value: string;
   unit?: string;
   tone: "success" | "info" | "primary";
-  hint: string;
 }) {
-  const hairline = {
-    success: "bg-success",
-    info: "bg-info",
-    primary: "bg-primary",
+  const accent = {
+    success: "text-success",
+    info: "text-info",
+    primary: "text-primary",
   }[tone];
 
   return (
-    <div className="relative flex min-h-[6.75rem] min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-surface px-5 py-4">
-      <div className={cn("absolute inset-x-0 top-0 h-0.5", hairline)} aria-hidden />
-      <p className="text-label-sm text-on-surface-muted">{label}</p>
-      <div className="mt-2.5 flex min-h-[2.125rem] flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-hero-stat text-on-surface">{value}</span>
+    <>
+      <p className={cn("text-[0.65rem] font-medium uppercase tracking-wide sm:text-label-sm", accent)}>
+        {label}
+      </p>
+      <p className="mt-1 flex flex-wrap items-baseline justify-center gap-x-1 gap-y-0">
+        <span className="text-[clamp(1rem,1.6vw,1.5rem)] font-semibold leading-none tracking-tight text-on-surface">
+          {value}
+        </span>
         {unit ? (
-          <span className="text-title-md font-medium text-on-surface-muted">{unit}</span>
+          <span className="text-[0.7rem] text-on-surface-muted sm:text-body-sm">{unit}</span>
         ) : null}
-      </div>
-      <p className="mt-auto pt-2.5 text-body-sm leading-snug text-on-surface-faint">{hint}</p>
-    </div>
+      </p>
+    </>
   );
 }
 

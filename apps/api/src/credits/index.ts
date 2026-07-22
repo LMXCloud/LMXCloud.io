@@ -1,21 +1,21 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { FileCreditStore } from "./file-store.js";
+import { NotifyingCreditStore } from "./notifying-store.js";
 import { PostgresCreditStore } from "./postgres-store.js";
 import type { CreditStore } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function createCreditStore(): CreditStore {
-  if (process.env.DATABASE_URL) {
-    return new PostgresCreditStore();
-  }
+  const inner = process.env.DATABASE_URL
+    ? new PostgresCreditStore()
+    : new FileCreditStore(
+        process.env.CREDITS_FILE ??
+          path.resolve(__dirname, "../../../../data/credits.json"),
+      );
 
-  const dataPath =
-    process.env.CREDITS_FILE ??
-    path.resolve(__dirname, "../../../../data/credits.json");
-
-  return new FileCreditStore(dataPath);
+  return new NotifyingCreditStore(inner);
 }
 
 export { calculateRequestCost, roundCredits } from "./pricing.js";

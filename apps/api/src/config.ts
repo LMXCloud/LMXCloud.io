@@ -129,6 +129,12 @@ export interface Config {
     marginPct: number;
   };
 
+  /** Optional Telegram ops alerts — disabled when either env var is unset. */
+  telegram?: {
+    botToken: string;
+    chatId: string;
+  };
+
 }
 
 
@@ -534,6 +540,11 @@ export function loadConfig(): Config {
       ),
       marginPct: Number(process.env.X402_PRICING_MARGIN_PCT ?? PRICING_MARGIN_PCT),
     },
+    telegram: (() => {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+      const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+      return botToken && chatId ? { botToken, chatId } : undefined;
+    })(),
   };
 
   assertProductionSafety(config);

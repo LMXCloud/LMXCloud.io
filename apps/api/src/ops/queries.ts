@@ -52,6 +52,25 @@ export type OpsRecentUsage = {
   createdAt: string;
 };
 
+export type OpsRecentSignup = {
+  id: string;
+  email: string | null;
+  wallet: string | null;
+  createdAt: string;
+  creditBalance: number;
+};
+
+export type OpsCreditEvent = {
+  id: string;
+  apiKeyId: string;
+  amount: number;
+  balanceAfter: number | null;
+  source: "usdc_deposit" | "unknown";
+  txHash: string | null;
+  wallet: string | null;
+  creditedAt: string;
+};
+
 interface PaymentEventRow {
   id: string;
   usage_event_id: string | null;
@@ -228,6 +247,71 @@ export async function getUsageSummary(days = 7): Promise<OpsUsageSummary> {
     uniquePayers: Number(row.unique_payers),
     uniqueApiKeys: Number(row.unique_api_keys),
   };
+}
+
+export async function listRecentSignups(limit = 40): Promise<OpsRecentSignup[]> {
+  if (!hasPostgres()) return [];
+
+  const result = await getPool().query<{
+    id: string;
+    email: string | null;
+    wallet: string | null;
+    created_at: Date;
+    credit_balance: string;
+  }>(
+    `SELECT id, email, wallet, created_at, credit_balance
+     FROM api_keys
+     WHERE revoked_at IS NULL
+     ORDER BY created_at DESC, id DESC
+     LIMIT $1`,
+    [Math.max(1, Math.min(limit, 200))],
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    email: row.email,
+    wallet: row.wallet,
+    createdAt: row.created_at.toISOString(),
+    creditBalance: Number(row.credit_balance),
+  }));
+}
+
+export async function listRecentCreditEvents(limit = 40): Promise<OpsCreditEvent[]> {
+  if (!hasPostgres()) return [];
+
+  const result = await getPool().query<{
+    tx_hash: string;
+    api_key_id: string;
+    from_address: string;
+    amount_usdc: string;
+    credited_at: Date;
+    credit_balance: string | null;
+  }>(
+    `SELECT
+       d.tx_hash,
+       d.api_key_id,
+       d.from_address,
+       d.amount_usdc,
+       d.credited_at,
+       k.credit_balance
+     FROM usdc_deposits d
+     LEFT JOIN api_keys k ON k.id = d.api_key_id
+     WHERE d.status = 'credited' AND d.credited_at IS NOT NULL
+     ORDER BY d.credited_at DESC, d.tx_hash DESC
+     LIMIT $1`,
+    [Math.max(1, Math.min(limit, 200))],
+  );
+
+  return result.rows.map((row) => ({
+    id: `${row.tx_hash}:${row.api_key_id}`,
+    apiKeyId: row.api_key_id,
+    amount: Number(row.amount_usdc),
+    balanceAfter: row.credit_balance === null ? null : Number(row.credit_balance),
+    source: "usdc_deposit" as const,
+    txHash: row.tx_hash,
+    wallet: row.from_address,
+    creditedAt: row.credited_at.toISOString(),
+  }));
 }
 
 export async function listRecentUsage(limit = 40): Promise<OpsRecentUsage[]> {

@@ -58,7 +58,7 @@ export class FileCreditStore implements CreditStore {
     return true;
   }
 
-  async credit(apiKeyId: string, amount: number): Promise<number> {
+  async credit(apiKeyId: string, amount: number, _meta?: unknown): Promise<number> {
     await this.ensureLoaded();
     const added = roundCredits(amount);
     const next = roundCredits((this.balances.get(apiKeyId) ?? 0) + added);

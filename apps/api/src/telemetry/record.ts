@@ -1,3 +1,4 @@
+import { notifyFirstApiUsage } from "../notify/events.js";
 import { RESOURCE_TYPE_CHAT } from "./types.js";
 import type { RecordUsageInput, UsageStore } from "../usage/store.js";
 
@@ -26,13 +27,24 @@ export async function recordProviderSuccess(
   usageStore: UsageStore,
   input: RecordSuccessInput,
 ): Promise<string | null> {
-  return usageStore.recordUsage({
+  const usageEventId = await usageStore.recordUsage({
     ...input,
     resourceType: input.resourceType ?? RESOURCE_TYPE_CHAT,
     success: true,
     errorCode: null,
     unitPrice: input.unitPrice ?? null,
   });
+
+  if (input.apiKeyId) {
+    notifyFirstApiUsage(usageStore, {
+      apiKeyId: input.apiKeyId,
+      provider: input.provider,
+      model: input.model,
+      resourceType: input.resourceType ?? RESOURCE_TYPE_CHAT,
+    });
+  }
+
+  return usageEventId;
 }
 
 /** In-route failure recorder for non-InferenceRouter dependencies. */

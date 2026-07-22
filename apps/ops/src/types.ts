@@ -97,6 +97,25 @@ export type OpsMcpEventDetail = OpsMcpEvent & {
   object: "ops_mcp_event";
 };
 
+export type OpsCreditEvent = {
+  id: string;
+  apiKeyId: string;
+  amount: number;
+  balanceAfter: number | null;
+  source: "usdc_deposit" | "unknown";
+  txHash: string | null;
+  wallet: string | null;
+  creditedAt: string;
+};
+
+export type OpsRecentSignup = {
+  id: string;
+  email: string | null;
+  wallet: string | null;
+  createdAt: string;
+  creditBalance: number;
+};
+
 export type OpsActivityItem =
   | {
       kind: "payment";
@@ -135,6 +154,29 @@ export type OpsActivityItem =
       authSource: string;
       latencyMs?: number;
       detail?: string;
+    }
+  | {
+      kind: "signup";
+      id: string;
+      at: string;
+      channel: "signup";
+      label: string;
+      email: string | null;
+      wallet: string | null;
+      creditBalance: number;
+    }
+  | {
+      kind: "credit";
+      id: string;
+      at: string;
+      channel: "balance";
+      label: string;
+      apiKeyId: string;
+      amount: number;
+      balanceAfter: number | null;
+      source: string;
+      txHash: string | null;
+      wallet: string | null;
     };
 
 export type IrregularitySeverity = "info" | "warn" | "critical";
@@ -238,6 +280,12 @@ export type OpsOverview = {
   mcp: {
     buffered: number;
     recent: OpsMcpEvent[];
+  };
+  signups: {
+    recent: OpsRecentSignup[];
+  };
+  credits: {
+    recent: OpsCreditEvent[];
   };
   paymentsStuck: StuckPayment[];
   attention: {

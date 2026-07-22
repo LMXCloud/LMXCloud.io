@@ -21,6 +21,7 @@ import {
 import { base, baseSepolia } from "viem/chains";
 
 import type { ApiKeyStore } from "../auth/store.js";
+import { notifyCreditsAdded } from "../notify/events.js";
 import type { DepositStore } from "./store.js";
 import { isDepositAmountAllowed } from "./limits.js";
 
@@ -465,6 +466,14 @@ export class DepositPoller {
         continue;
 
       }
+
+      notifyCreditsAdded({
+        apiKeyId: record.id,
+        amount: credited.amount,
+        balance: credited.balance,
+        source: "usdc_deposit",
+        detail: `tx ${deposit.txHash.slice(0, 10)}…`,
+      });
 
       this.log(
 

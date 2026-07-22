@@ -34,7 +34,7 @@ export interface DepositStore {
     txHash: string,
     logIndex: number,
     apiKeyId: string,
-  ): Promise<boolean>;
+  ): Promise<{ amount: number; balance: number } | null>;
 }
 
 export interface DepositRecord {
@@ -193,7 +193,7 @@ export class PostgresDepositStore implements DepositStore {
     txHash: string,
     logIndex: number,
     apiKeyId: string,
-  ): Promise<boolean> {
+  ): Promise<{ amount: number; balance: number } | null> {
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
@@ -208,15 +208,15 @@ export class PostgresDepositStore implements DepositStore {
 
       if ((pending.rowCount ?? 0) === 0) {
         await client.query("ROLLBACK");
-        return false;
+        return null;
       }
 
       const amount = roundCredits(Number(pending.rows[0]!.amount_usdc));
-      const credited = await client.query(
+      const credited = await client.query<{ credit_balance: string }>(
         `UPDATE api_keys
          SET credit_balance = credit_balance + $2
          WHERE id = $1 AND revoked_at IS NULL
-         RETURNING id`,
+         RETURNING credit_balance`,
         [apiKeyId, amount],
       );
 
@@ -226,7 +226,10 @@ export class PostgresDepositStore implements DepositStore {
       }
 
       await client.query("COMMIT");
-      return true;
+      return {
+        amount,
+        balance: Number(credited.rows[0]!.credit_balance),
+      };
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;

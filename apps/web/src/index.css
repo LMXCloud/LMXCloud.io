@@ -144,3 +144,22 @@ body {
   font-weight: var(--text-hero-stat--font-weight);
   font-variant-numeric: tabular-nums;
 }
+
+@keyframes partner-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.partner-marquee-track {
+  animation: partner-marquee 45s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partner-marquee-track {
+    animation: none;
+  }
+}

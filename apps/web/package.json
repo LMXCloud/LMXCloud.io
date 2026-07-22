@@ -13,6 +13,7 @@
     "@clerk/clerk-react": "^5.61.3",
     "@lmxcloud/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
+    "cobe": "^2.0.1",
     "lucide-react": "^1.23.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

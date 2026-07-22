@@ -12,6 +12,7 @@ import { normalizeWalletAddress } from "../auth/wallet.js";
 import type { WalletNonceStore } from "../auth/wallet-nonce.js";
 import type { CreditStore } from "../credits/store.js";
 import { roundCredits } from "../credits/pricing.js";
+import { notifyAccountCreated } from "../notify/events.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
 
@@ -195,8 +196,16 @@ export async function registerAuthRoutes(
     if (!record) {
       const created = await deps.store.create({ email: clerkUser.email });
       record = created.record;
-      await deps.creditStore.credit(record.id, deps.initialCreditBalance);
+      await deps.creditStore.credit(record.id, deps.initialCreditBalance, {
+        source: "initial",
+      });
       createdAccount = true;
+      notifyAccountCreated({
+        apiKeyId: record.id,
+        source: "clerk",
+        email: clerkUser.email,
+        isNewAccount: true,
+      });
     }
 
     const sessionToken = createSessionToken(
@@ -318,8 +327,16 @@ export async function registerAuthRoutes(
     if (!record) {
       const created = await deps.store.create({ wallet: address });
       record = created.record;
-      await deps.creditStore.credit(record.id, deps.initialCreditBalance);
+      await deps.creditStore.credit(record.id, deps.initialCreditBalance, {
+        source: "initial",
+      });
       createdAccount = true;
+      notifyAccountCreated({
+        apiKeyId: record.id,
+        source: "siwe",
+        wallet: address,
+        isNewAccount: true,
+      });
     }
 
     const sessionToken = createSessionTokenForIdentity(
@@ -374,8 +391,18 @@ export async function registerAuthRoutes(
     }
 
     const { record, plainKey } = await deps.store.create(validated);
-    await deps.creditStore.credit(record.id, deps.initialCreditBalance);
+    await deps.creditStore.credit(record.id, deps.initialCreditBalance, {
+      source: "initial",
+    });
     const balance = await deps.creditStore.getBalance(record.id);
+
+    notifyAccountCreated({
+      apiKeyId: record.id,
+      source: "public_key",
+      email: record.email,
+      wallet: record.wallet,
+      isNewAccount: true,
+    });
 
     return reply.status(201).send({
       object: "api_key",
@@ -411,8 +438,18 @@ export async function registerAuthRoutes(
           : { wallet: owner.wallet! };
 
       const { record, plainKey } = await deps.store.create(input);
-      await deps.creditStore.credit(record.id, deps.initialCreditBalance);
+      await deps.creditStore.credit(record.id, deps.initialCreditBalance, {
+        source: "initial",
+      });
       const balance = await deps.creditStore.getBalance(record.id);
+
+      notifyAccountCreated({
+        apiKeyId: record.id,
+        source: "authenticated_key",
+        email: record.email,
+        wallet: record.wallet,
+        isNewAccount: false,
+      });
 
       return reply.status(201).send({
         object: "api_key",

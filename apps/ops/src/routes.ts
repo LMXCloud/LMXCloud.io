@@ -8,10 +8,11 @@ export function recordPath(kind: RecordKind, id: string): string {
   return `/mcp/${encodeURIComponent(id)}`;
 }
 
-export function activityPath(item: OpsActivityItem): string {
+export function activityPath(item: OpsActivityItem): string | null {
   if (item.kind === "payment") return recordPath("payment", item.id);
   if (item.kind === "usage") return recordPath("usage", item.id);
-  return recordPath("mcp", item.id);
+  if (item.kind === "mcp") return recordPath("mcp", item.id);
+  return null;
 }
 
 /** Map alert relatedIds to detail routes when they are entity IDs. */

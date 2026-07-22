@@ -148,6 +148,7 @@ export async function registerBalanceRoutes(
         const balance = await deps.creditStore.credit(
           request.apiKey!.id,
           validated.amount!,
+          { source: "dev_topup" },
         );
 
         return reply.status(200).send({
