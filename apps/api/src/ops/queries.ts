@@ -443,34 +443,25 @@ export async function paymentStatusCounts(days = 7): Promise<Record<string, numb
   );
 }
 
-export type StuckPaymentSummary = {
-  id: string;
-  status: string;
-  payerWallet: string;
-  model: string;
-  quotedAmount: number;
-  createdAt: string;
+export type StuckPaymentDetail = OpsPaymentRow & {
   ageMinutes: number;
 };
+
+/** @deprecated alias — stuck rows now include full payment fields */
+export type StuckPaymentSummary = StuckPaymentDetail;
 
 export async function listStuckPayments(
   olderThanMinutes = 15,
   limit = 20,
-): Promise<StuckPaymentSummary[]> {
+): Promise<StuckPaymentDetail[]> {
   if (!hasPostgres()) return [];
 
-  const result = await getPool().query<{
-    id: string;
-    status: string;
-    payer_wallet: string;
-    model: string;
-    quoted_amount: string;
-    created_at: Date;
-    age_minutes: string;
-  }>(
+  const result = await getPool().query<
+    PaymentEventRow & { age_minutes: string }
+  >(
     `SELECT
-       id, status, payer_wallet, model, quoted_amount, created_at,
-       ROUND(EXTRACT(EPOCH FROM (NOW() - created_at)) / 60)::text AS age_minutes
+       payment_events.*,
+       ROUND(EXTRACT(EPOCH FROM (NOW() - payment_events.created_at)) / 60)::text AS age_minutes
      FROM payment_events
      WHERE status IN ('quoted', 'verified', 'fulfilling')
        AND created_at < NOW() - ($1::int || ' minutes')::interval
@@ -480,12 +471,7 @@ export async function listStuckPayments(
   );
 
   return result.rows.map((row) => ({
-    id: row.id,
-    status: row.status,
-    payerWallet: row.payer_wallet,
-    model: row.model,
-    quotedAmount: Number(row.quoted_amount),
-    createdAt: row.created_at.toISOString(),
+    ...mapPayment(row),
     ageMinutes: Number(row.age_minutes),
   }));
 }

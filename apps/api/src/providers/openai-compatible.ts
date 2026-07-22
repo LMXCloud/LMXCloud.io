@@ -41,6 +41,67 @@ function resolveRequestBaseUrl(
   );
 }
 
+async function readProbeErrorDetail(response: Response): Promise<string | undefined> {
+  const text = await response.text().catch(() => "");
+  if (!text) return undefined;
+  try {
+    const json = JSON.parse(text) as Record<string, unknown>;
+    const msg =
+      json.detail ??
+      json.message ??
+      (typeof json.error === "string"
+        ? json.error
+        : typeof json.error === "object" &&
+            json.error &&
+            "message" in json.error
+          ? (json.error as { message?: string }).message
+          : undefined);
+    if (typeof msg === "string" && msg.trim()) return msg.trim().slice(0, 200);
+  } catch {
+    /* plain text body */
+  }
+  return text.trim().slice(0, 200) || undefined;
+}
+
+type ProbeResult = ProviderHealthResult & { baseUrl: string };
+
+async function probeHealthUrl(
+  baseUrl: string,
+  apiKey: string,
+  timeoutMs: number,
+): Promise<ProbeResult> {
+  const checkUrl = `${baseUrl}/models`;
+  const start = performance.now();
+  try {
+    const response = await fetch(checkUrl, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const latencyMs = Math.round(performance.now() - start);
+    if (response.ok) {
+      return { healthy: true, latencyMs, statusCode: response.status, checkUrl, baseUrl };
+    }
+    const errorDetail = await readProbeErrorDetail(response);
+    return {
+      healthy: false,
+      latencyMs,
+      statusCode: response.status,
+      errorDetail,
+      checkUrl,
+      baseUrl,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Connection failed";
+    return {
+      healthy: false,
+      latencyMs: null,
+      errorDetail: message.slice(0, 200),
+      checkUrl,
+      baseUrl,
+    };
+  }
+}
+
 export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): ProviderAdapter {
   const timeoutMs = config.timeoutMs ?? 30_000;
   const healthUrls =
@@ -63,38 +124,37 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
       }
 
       const results = await Promise.all(
-        healthUrls.map(async (baseUrl) => {
-          const start = performance.now();
-          try {
-            const response = await fetch(`${baseUrl}/models`, {
-              headers: { Authorization: `Bearer ${config.apiKey}` },
-              signal: AbortSignal.timeout(timeoutMs),
-            });
-            return {
-              healthy: response.ok,
-              latencyMs: Math.round(performance.now() - start),
-            };
-          } catch {
-            return { healthy: false, latencyMs: null as number | null };
-          }
-        }),
+        healthUrls.map((baseUrl) => probeHealthUrl(baseUrl, config.apiKey, timeoutMs)),
       );
 
       const healthy = results.filter((r) => r.healthy);
-      if (healthy.length === 0) {
-        const withLatency = results.filter((r) => r.latencyMs != null);
+      if (healthy.length > 0) {
+        const best = healthy.reduce((a, b) =>
+          (a.latencyMs ?? Infinity) <= (b.latencyMs ?? Infinity) ? a : b,
+        );
         return {
-          healthy: false,
-          // Keep measured latency on failed checks so history isn't null-skewed.
-          latencyMs: withLatency.length
-            ? Math.min(...withLatency.map((r) => r.latencyMs!))
-            : null,
+          healthy: true,
+          latencyMs: best.latencyMs,
+          statusCode: best.statusCode,
+          checkUrl: best.checkUrl,
         };
       }
 
+      const withLatency = results.filter((r) => r.latencyMs != null);
+      const worst = results[0]!;
+      const representative =
+        withLatency.length > 0
+          ? withLatency.reduce((a, b) =>
+              (a.latencyMs ?? Infinity) <= (b.latencyMs ?? Infinity) ? a : b,
+            )
+          : worst;
+
       return {
-        healthy: true,
-        latencyMs: Math.min(...healthy.map((r) => r.latencyMs!)),
+        healthy: false,
+        latencyMs: representative.latencyMs,
+        statusCode: representative.statusCode,
+        errorDetail: representative.errorDetail,
+        checkUrl: representative.checkUrl,
       };
     },
 

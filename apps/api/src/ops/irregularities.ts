@@ -1,12 +1,37 @@
 import type { McpToolEvent } from "./mcp-events.js";
 import type {
   OpsPaymentRow,
+  OpsRecentUsage,
   OpsUsageDayBucket,
   OpsUsageSummary,
   StuckPaymentSummary,
 } from "./queries.js";
 
 export type IrregularitySeverity = "info" | "warn" | "critical";
+
+export type OpsIrregularityDiagnostic = {
+  label: string;
+  value: string;
+  tone?: "info" | "warn" | "error";
+};
+
+export type OpsIrregularityHealthRecord = {
+  name: string;
+  healthy: boolean;
+  latencyMs: number | null;
+  lastCheck: number | null;
+  statusCode?: number;
+  errorDetail?: string;
+  checkUrl?: string;
+  lastHealthyAt?: string | null;
+  likelyCause?: string | null;
+};
+
+export type OpsIrregularityRecord =
+  | { kind: "payment"; data: OpsPaymentRow & { ageMinutes?: number } }
+  | { kind: "usage"; data: OpsRecentUsage }
+  | { kind: "health"; data: OpsIrregularityHealthRecord }
+  | { kind: "mcp"; data: McpToolEvent };
 
 export type OpsIrregularity = {
   id: string;
@@ -17,6 +42,8 @@ export type OpsIrregularity = {
   action: string;
   metric?: string;
   relatedIds?: string[];
+  diagnostics?: OpsIrregularityDiagnostic[];
+  records?: OpsIrregularityRecord[];
 };
 
 export type DetectIrregularitiesInput = {

@@ -14,6 +14,12 @@ export interface ProviderResult {
 export interface ProviderHealthResult {
   healthy: boolean;
   latencyMs: number | null;
+  /** HTTP status from the gateway probe, when a response was received. */
+  statusCode?: number;
+  /** Short upstream error snippet (e.g. JSON `detail` field). */
+  errorDetail?: string;
+  /** URL probed for this result (first failing or successful probe). */
+  checkUrl?: string;
 }
 
 export interface ProviderAdapter {

@@ -61,6 +61,9 @@ export class HealthMonitor {
           healthy: result.healthy,
           latencyMs: result.latencyMs,
           lastCheck: checkedAt,
+          statusCode: result.statusCode,
+          errorDetail: result.errorDetail,
+          checkUrl: result.checkUrl,
         });
         this.historyStore?.record({
           provider: provider.name,

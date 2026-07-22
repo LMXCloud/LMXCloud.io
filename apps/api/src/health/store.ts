@@ -2,6 +2,9 @@ export interface ProviderStatus {
   healthy: boolean;
   latencyMs: number | null;
   lastCheck: number;
+  statusCode?: number;
+  errorDetail?: string;
+  checkUrl?: string;
 }
 
 export type ProviderStatusMap = Record<string, ProviderStatus>;

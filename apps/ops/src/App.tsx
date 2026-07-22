@@ -28,7 +28,19 @@ import {
   shortWallet,
 } from "./format";
 import { activityPath, relatedIdPath, recordPath } from "./routes";
-import type { OpsActivityItem, OpsIrregularity, OpsOverview } from "./types";
+import type {
+  OpsActivityItem,
+  OpsIrregularity,
+  OpsIrregularityDiagnostic,
+  OpsIrregularityRecord,
+  OpsOverview,
+} from "./types";
+import {
+  HealthFields,
+  McpFields,
+  PaymentFields,
+  UsageFields,
+} from "./RecordViews";
 
 const POLL_MS = 15_000;
 
@@ -72,7 +84,123 @@ function RelatedIds({ item }: { item: OpsIrregularity }) {
   );
 }
 
+function diagnosticToneClass(tone?: OpsIrregularityDiagnostic["tone"]): string {
+  if (tone === "error") return "text-[var(--color-danger)]";
+  if (tone === "warn") return "text-[var(--color-warn)]";
+  return "text-[var(--color-ink)]";
+}
+
+function IrregularityDiagnostics({
+  diagnostics,
+}: {
+  diagnostics: OpsIrregularityDiagnostic[];
+}) {
+  return (
+    <div className="mt-3 rounded border border-[var(--color-line)]/80 bg-[var(--color-bg)]/60 px-3 py-2.5">
+      <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-faint)]">
+        Diagnostics
+      </p>
+      <dl className="mt-2 space-y-2">
+        {diagnostics.map((row, index) => (
+          <div key={`${row.label}-${index}`} className="grid gap-0.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-3">
+            <dt className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-faint)]">
+              {row.label}
+            </dt>
+            <dd
+              className={`font-mono text-xs break-words ${diagnosticToneClass(row.tone)}`}
+            >
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function IrregularityRecords({ records }: { records: OpsIrregularityRecord[] }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(
+    records.length === 1 ? 0 : null,
+  );
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-faint)]">
+        Full records ({records.length})
+      </p>
+      {records.map((record, index) => {
+        const open = openIndex === index;
+        const title =
+          record.kind === "payment"
+            ? `${record.data.status} · ${record.data.model} · ${record.data.id.slice(0, 8)}…`
+            : record.kind === "health"
+              ? `Provider ${record.data.name}`
+              : record.kind === "usage"
+                ? `${record.data.provider}/${record.data.model}`
+                : `${record.data.tool} · ${record.data.ok ? "ok" : "error"}`;
+
+        return (
+          <div
+            key={`${record.kind}-${index}-${record.kind === "payment" ? record.data.id : record.kind === "usage" ? record.data.id : record.kind === "mcp" ? record.data.id : record.data.name}`}
+            className="overflow-hidden rounded border border-[var(--color-line)]/80 bg-[var(--color-bg)]/60"
+          >
+            <button
+              type="button"
+              onClick={() => setOpenIndex(open ? null : index)}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-accent)]">
+                {record.kind}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs font-medium">{title}</span>
+              <span className="shrink-0 font-mono text-[10px] text-[var(--color-faint)]">
+                {open ? "Hide" : "Show"}
+              </span>
+            </button>
+            {open ? (
+              <div className="border-t border-[var(--color-line)]/80 px-3 py-1">
+                <dl>
+                  {record.kind === "payment" ? (
+                    <PaymentFields
+                      data={record.data}
+                      ageMinutes={record.data.ageMinutes}
+                    />
+                  ) : null}
+                  {record.kind === "health" ? (
+                    <HealthFields data={record.data} />
+                  ) : null}
+                  {record.kind === "usage" ? (
+                    <UsageFields data={record.data} />
+                  ) : null}
+                  {record.kind === "mcp" ? <McpFields data={record.data} /> : null}
+                </dl>
+                {record.kind === "payment" || record.kind === "usage" || record.kind === "mcp" ? (
+                  <div className="border-t border-[var(--color-line)]/70 py-2">
+                    <Link
+                      to={recordPath(
+                        record.kind,
+                        record.kind === "payment" || record.kind === "usage" || record.kind === "mcp"
+                          ? record.data.id
+                          : "",
+                      )}
+                      className="text-xs text-[var(--color-accent)] underline-offset-2 hover:underline"
+                    >
+                      Open full detail page →
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   if (items.length === 0) {
     return (
       <div className="mb-4 rounded-lg border border-[var(--color-accent)]/30 bg-[var(--color-accent-dim)] px-4 py-3">
@@ -93,28 +221,57 @@ function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
         </p>
       </div>
       <ul className="divide-y divide-[var(--color-line)]/80">
-        {items.map((item) => (
-          <li key={item.id} className={`px-4 py-3 ${severityClass(item.severity)}`}>
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className={`font-mono text-[10px] uppercase tracking-wider ${severityLabelClass(item.severity)}`}>
-                {item.severity}
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-faint)]">
-                {item.category}
-              </span>
-              {item.metric ? (
-                <span className="font-mono text-[11px] text-[var(--color-muted)]">{item.metric}</span>
+        {items.map((item) => {
+          const expandable = Boolean(
+            (item.diagnostics && item.diagnostics.length > 0) ||
+              (item.records && item.records.length > 0),
+          );
+          const expanded = expandedId === item.id;
+
+          return (
+            <li key={item.id} className={`px-4 py-3 ${severityClass(item.severity)}`}>
+              <button
+                type="button"
+                disabled={!expandable}
+                onClick={() => {
+                  if (!expandable) return;
+                  setExpandedId(expanded ? null : item.id);
+                }}
+                className={`w-full text-left ${expandable ? "cursor-pointer" : "cursor-default"}`}
+              >
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className={`font-mono text-[10px] uppercase tracking-wider ${severityLabelClass(item.severity)}`}>
+                    {item.severity}
+                  </span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-faint)]">
+                    {item.category}
+                  </span>
+                  {item.metric ? (
+                    <span className="font-mono text-[11px] text-[var(--color-muted)]">{item.metric}</span>
+                  ) : null}
+                  {expandable ? (
+                    <span className="ml-auto font-mono text-[10px] text-[var(--color-accent)]">
+                      {expanded ? "Hide details" : "Show details"}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-sm font-medium">{item.title}</div>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">{item.detail}</p>
+                <p className="mt-1.5 text-xs text-[var(--color-ink)]">
+                  <span className="text-[var(--color-faint)]">Do: </span>
+                  {item.action}
+                </p>
+              </button>
+              {expanded && item.diagnostics ? (
+                <IrregularityDiagnostics diagnostics={item.diagnostics} />
               ) : null}
-            </div>
-            <div className="mt-1 text-sm font-medium">{item.title}</div>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">{item.detail}</p>
-            <p className="mt-1.5 text-xs text-[var(--color-ink)]">
-              <span className="text-[var(--color-faint)]">Do: </span>
-              {item.action}
-            </p>
-            <RelatedIds item={item} />
-          </li>
-        ))}
+              {expanded && item.records && item.records.length > 0 ? (
+                <IrregularityRecords records={item.records} />
+              ) : null}
+              {!item.records || item.records.length === 0 ? <RelatedIds item={item} /> : null}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

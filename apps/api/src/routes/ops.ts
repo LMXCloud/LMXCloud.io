@@ -11,6 +11,7 @@ import {
   type McpToolEventInput,
 } from "../ops/mcp-events.js";
 import { detectIrregularities } from "../ops/irregularities.js";
+import { enrichIrregularities } from "../ops/diagnostics.js";
 import {
   getPaymentById,
   getReliabilityTelemetry,
@@ -165,6 +166,9 @@ export async function registerOpsRoutes(
               tier: provider.tier,
               isDepin: provider.isDepin,
               lastCheck: status?.lastCheck ?? null,
+              statusCode: status?.statusCode,
+              errorDetail: status?.errorDetail,
+              checkUrl: status?.checkUrl,
             },
           ];
         }),
@@ -366,20 +370,27 @@ export async function registerOpsRoutes(
         .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
         .slice(0, limit);
 
-      const irregularities = detectIrregularities({
-        windowDays: days,
-        storage: hasPostgres() ? "postgres" : "file",
-        x402Enabled: deps.x402Enabled,
-        paymentStoreReady: deps.paymentStoreReady,
-        healthyCount,
-        providerCount: deps.providers.length,
+      const irregularities = await enrichIrregularities({
+        irregularities: detectIrregularities({
+          windowDays: days,
+          storage: hasPostgres() ? "postgres" : "file",
+          x402Enabled: deps.x402Enabled,
+          paymentStoreReady: deps.paymentStoreReady,
+          healthyCount,
+          providerCount: deps.providers.length,
+          unhealthyProviders,
+          paymentStatusCounts: paymentCounts,
+          stuckPayments,
+          usageSummary,
+          usageHistory,
+          mcpEvents,
+          recentPayments: payments,
+        }),
+        providers: statuses,
         unhealthyProviders,
-        paymentStatusCounts: paymentCounts,
         stuckPayments,
-        usageSummary,
-        usageHistory,
-        mcpEvents,
         recentPayments: payments,
+        mcpEvents,
       });
 
       if (dbError) {
