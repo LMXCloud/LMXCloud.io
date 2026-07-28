@@ -44,6 +44,9 @@ We enforce rate limits per key, IP, and (for x402) per payer wallet. Excessive a
 
 Agents calling the Service without a human operator must still comply with this AUP. Payment via x402 or USDC does not exempt callers from these rules. We may block wallets, IPs, or payment payloads associated with abuse.
 
+<!-- ATTORNEY REVIEW NEEDED: Cross-reference to Terms Section 7 — confirm agent liability allocation is consistent -->
+Liability for an agent's use, payments, and violations rests with the human or legal entity that deploys or operates the agent, as stated in Section 7 of our [Terms of Service](./terms-of-service.md).
+
 ## 6. Enforcement
 
 We may investigate suspected violations, suspend or terminate access, withhold credits, cancel verified payments where the protocol allows, and cooperate with law enforcement when required. We are not obligated to monitor all content but may use automated and manual review for abuse prevention.

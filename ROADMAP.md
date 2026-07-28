@@ -88,7 +88,7 @@ Positioning: **"AWS for Web3"** — Web3-native infrastructure for autonomous AI
 3. ~~**x402 Sprint 2 close-out**~~ — **done 2026-07-08.** Paid Sepolia E2E + 10-run soak green; `payment_events` persistence confirmed.
 4. **x402 Sprint 3 (current focus)** — **mostly done.** Remaining:
    - ~~**Mainnet paid canary**~~ — **done 2026-07-13.** Swapped to Coinbase CDP Node RPC; `test:x402:mainnet-canary` green, `payment_events` row confirmed on `chain_id: 8453`.
-   - **Abuse/load hardening** — replay protection landed; still need burst/load validation on anonymous x402 path.
+   - ~~**Abuse/load hardening**~~ — **done 2026-07-28.** Burst/load validated on both Sepolia and Base mainnet — see line ~131 and the Phase 1 close-out section for full mainnet results.
    - ~~**Payer visibility decision**~~ — **done 2026-07-16.** Id-based receipt lookup shipped (no auth needed); see Distribution Sprint 3 for detail.
 5. **Phase 1 Goal 1** — Bazaar + Agentic.Market listing (mainnet canary green; still gated on legal review + remaining Cloudflare/abuse-hardening items).
 6. ~~**Phase 1 Goal 2** — MCP server~~ — **done 2026-07-14.** v1 shipped 2026-07-09 (balance-funded, hosted HTTP, 7 tools, E2E agent-tested); x402 pay-per-call added and published to the official MCP Registry (`io.lmxcloud/mcp-server`) 2026-07-14.
@@ -128,7 +128,8 @@ Native token (legal counsel first), Virtuals/ACP + Autonolas + Fetch.ai + Bitten
 
 - [x] **Uptime monitor — done 2026-07-16.** UptimeRobot set up (free tier), three monitors: `LMX.API` (`https://api.lmxcloud.io/health`), `LMX.MCP` (`https://mcp.lmxcloud.io/healthz`), `lmxcloud.io` (dashboard) — all on 5-minute checks with email alerts to John. Open since Distribution Sprint 1; closes the reliability-signal gap flagged for Bazaar's discovery ranking.
 - [x] **Burst/load test — done 2026-07-16, validated on Base Sepolia.** New `apps/api/scripts/test-x402-burst.ts` (`pnpm test:x402:burst`), pointed to from the original sequential script since that one was never concurrent. Three scenarios, all passing locally: **replay** — one signed payload, N concurrent POSTs (`Promise.all`); expected 1×200 + rest rejected, got 1×200 + 7×409. **Rate-limit** — many distinct same-wallet payments fired in a genuine burst (not spaced sequential timing); expected `X402_ANON_RATE_LIMIT_MAX` allowed + rest 429, got 10×200 + 15×429. **Malformed** — garbage `PAYMENT-SIGNATURE` burst; expected all 4xx no 5xx/hangs, got 40×4xx. Replay concurrency deliberately capped at the rate-limit max so its failures are claim races, not 429 noise. `pnpm --filter @lmxcloud/api typecheck` clean.
-- [x] **Live HTTP double-pay validation — closed by the replay scenario above.** The atomic claim fix (`tryClaimForFulfillment`) was previously only proven at the store level (40 parallel claims direct against the store); the burst test's replay scenario now proves the same guarantee end-to-end over real HTTP concurrency with a real signed payload — exactly one claim wins, the rest get rejected. **Not yet done:** the same validation against mainnet — Sepolia only so far, deliberately (this is adversarial/load testing, run against testnet first per plan).
+- [x] **Live HTTP double-pay validation — closed by the replay scenario above.** The atomic claim fix (`tryClaimForFulfillment`) was previously only proven at the store level (40 parallel claims direct against the store); the burst test's replay scenario now proves the same guarantee end-to-end over real HTTP concurrency with a real signed payload — exactly one claim wins, the rest get rejected.
+- [x] **Mainnet burst/load validation — done 2026-07-28.** Same three scenarios re-run against `https://api.lmxcloud.io` on Base mainnet (real settled USDC, not testnet): malformed (40 garbage headers) → 40×402, 0×5xx. Replay (8 concurrent identical payments) → 1×200, 7×409. Rate limit (25 payments, max 10/window) → 10×200, 15×429. `pass: true` overall, ~76s total including the 61s rate-limit window reset. Closes the last open item under this bullet and one of the two remaining Phase 1 hard gates (only attorney review is left — see POM section).
 
 **MCP — near ready.** Server, seven tools, dual-path payments, and the official registry listing are all shipped. Remaining:
 
@@ -637,7 +638,7 @@ Open questions carried forward into scoping: revenue model (take-rate vs. infra 
 
 **Hard gates — block the public-push phase of demand-gen for all three channels:**
 - [ ] Attorney review of legal drafts (longest-deferred, cheapest to clear, highest-leverage — see POM section).
-- [ ] x402 burst/load validation on mainnet (proven on Sepolia only so far).
+- [x] ~~x402 burst/load validation on mainnet~~ — **done 2026-07-28.** `pass: true` against `https://api.lmxcloud.io` on Base mainnet, all three scenarios (malformed/replay/rate-limit). Full detail above under Sprint Web3-2 / x402 Sprint 3.
 - [x] ~~Payment-failure reconciliation~~ — **done 2026-07-28.**
 
 **Third channel, not yet fully live:**
@@ -647,7 +648,7 @@ Open questions carried forward into scoping: revenue model (take-rate vs. infra 
 **Reliability/visibility — so seeded volume is actually measurable, not flying blind:**
 - [ ] Confirm uptime monitor is genuinely live (open since Distribution Sprint 1, still unconfirmed).
 - [ ] Verify Sentry captures a real error in production, not just initialized.
-- [ ] Deploy `apps/ops` dashboard (currently local-only; Vercel config already exists).
+- [x] ~~Deploy `apps/ops` dashboard~~ — **done 2026-07-28.** Live at `ops.lmxcloud.io` (Vercel, custom domain connected). Still gated by pasting `LMX_OPS_API_KEY` into the in-app box — a lighter PIN-gate front door was scoped but deliberately not built yet (not a blocker, just noted here so it doesn't get lost).
 
 **Presentation — so outreach points at something coherent:**
 - [ ] Real logo + brand system (currently one AI-generated image made for a single registry submission).
@@ -690,7 +691,7 @@ Phase 1's three distribution goals are shipped or one step from done (full detai
 - [ ] **Attorney review of legal drafts** — the longest-standing, cheapest-to-clear gate (POM section). In progress as of 2026-07-20 after being deferred three times. Blocks the public-push phase of demand generation for all three channels, not just one — treat as the single highest-leverage open item.
 - [ ] **ElizaOS registry PR** ([elizaOS/eliza#16397](https://github.com/elizaOS/eliza/pull/16397)) — waiting on maintainer re-review + 11 CI approvals, nothing left on LMX's side.
 - [ ] **ElizaOS live-agent end-to-end test** — the one piece of Goal 3 that's still actually unstarted engineering, independent of the PR review above.
-- [ ] **x402 burst/load validation on mainnet** — proven on Sepolia only so far (Distribution Sprint 3); mainnet adversarial validation still open.
+- [x] ~~**x402 burst/load validation on mainnet**~~ — **done 2026-07-28.** All three scenarios green against `https://api.lmxcloud.io` on Base mainnet.
 - [x] ~~**Payment-failure reconciliation**~~ — **done 2026-07-28.** Automatic balance credit-back, automatic on-chain USDC refund under `REFUND_AUTO_MAX_USDC`, manual-approve path in ops hub above that. Full detail in the dedicated section below.
 
 Once these close, Phase 1's own success metric — a real, un-prompted x402 payment from a wallet LMX has never seen before — is the actual gate to call it done, not checklist completion.
