@@ -4,6 +4,7 @@ import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
 import { requireOpsAuth } from "../ops/auth.js";
+import { runSentryTest } from "../ops/sentry-test.js";
 import {
   getMcpToolEventById,
   ingestMcpToolEvent,
@@ -130,6 +131,8 @@ export async function registerOpsRoutes(
         return { object: "ops_usage", ...usage };
       },
     );
+
+    ops.post("/v1/ops/sentry-test", async () => runSentryTest());
 
     ops.get("/v1/ops/reliability", async (request) => {
       const query = request.query as Record<string, unknown>;
