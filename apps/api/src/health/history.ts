@@ -9,6 +9,8 @@ export interface ProviderHealthCheckRecord {
   healthy: boolean;
   latencyMs: number | null;
   checkedAt?: Date;
+  /** Failure reason for unhealthy rows (timeout / http_NNN / network). */
+  errorDetail?: string;
 }
 
 /** Keep raw poll rows this long; older rows are pruned opportunistically. */
@@ -36,14 +38,15 @@ export function createProviderHealthHistoryStore(
       void getPool()
         .query(
           `INSERT INTO provider_health_checks
-             (provider, check_type, healthy, latency_ms, checked_at)
-           VALUES ($1, $2, $3, $4, $5)`,
+             (provider, check_type, healthy, latency_ms, checked_at, error_detail)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             check.provider,
             check.checkType,
             check.healthy,
             check.latencyMs,
             checkedAt,
+            check.errorDetail ?? null,
           ],
         )
         .catch((err) => {

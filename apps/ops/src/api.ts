@@ -110,3 +110,43 @@ export async function fetchOpsMcpEvent(
     `/v1/ops/mcp-events/${encodeURIComponent(id)}`,
   );
 }
+
+export async function executeOpsReconciliation(
+  opsKey: string,
+  id: string,
+): Promise<{ object: string; status: string; refundTxHash: string | null }> {
+  if (!API_BASE) {
+    throw new Error("VITE_API_URL is not set");
+  }
+  if (!opsKey) {
+    throw new Error("Ops API key required");
+  }
+
+  const res = await fetch(
+    `${API_BASE}/v1/ops/reconciliation/${encodeURIComponent(id)}/execute`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${opsKey}`,
+        accept: "application/json",
+      },
+    },
+  );
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      if (body.error?.message) message = body.error.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  return (await res.json()) as {
+    object: string;
+    status: string;
+    refundTxHash: string | null;
+  };
+}

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { getLatestHealthCheckErrors } from "../health/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
@@ -22,6 +23,7 @@ import {
   getUsageById,
   getUsageSummary,
   hasPostgres,
+  listPendingReconciliations,
   listRecentCreditEvents,
   listRecentPayments,
   listRecentSignups,
@@ -30,12 +32,14 @@ import {
   listUsageHistory,
   paymentStatusCounts,
 } from "../ops/queries.js";
+import type { PaymentReconciler } from "../payments/reconciliation/service.js";
 
 interface OpsRouteDeps {
   providers: ProviderAdapter[];
   healthStore: HealthStore;
   x402Enabled: boolean;
   paymentStoreReady: boolean;
+  reconciler: PaymentReconciler | null;
   treasury?: TreasuryOpsConfig;
 }
 
@@ -154,12 +158,62 @@ export async function registerOpsRoutes(
       },
     );
 
+    ops.get<{ Params: { id: string } }>(
+      "/v1/ops/reconciliation/:id",
+      async (request, reply) => {
+        const pending = await listPendingReconciliations(100);
+        const item = pending.find((r) => r.id === request.params.id);
+        if (!item) {
+          return reply.status(404).send({
+            error: {
+              message: "Reconciliation not found or already completed",
+              type: "invalid_request_error",
+            },
+          });
+        }
+        return { object: "ops_reconciliation", ...item };
+      },
+    );
+
+    ops.post<{ Params: { id: string } }>(
+      "/v1/ops/reconciliation/:id/execute",
+      async (request, reply) => {
+        if (!deps.reconciler) {
+          return reply.status(503).send({
+            error: {
+              message: "Payment reconciliation is not configured",
+              type: "service_unavailable",
+            },
+          });
+        }
+
+        const result = await deps.reconciler.executeManualReconciliation(
+          request.params.id,
+        );
+        if (result.status === "failed") {
+          return reply.status(400).send({
+            error: {
+              message: result.error ?? "Reconciliation failed",
+              type: "invalid_request_error",
+            },
+          });
+        }
+
+        return {
+          object: "ops_reconciliation_result",
+          status: result.status,
+          refundTxHash: result.refundTxHash ?? null,
+        };
+      },
+    );
+
     ops.get("/v1/ops/overview", async (request) => {
       const query = request.query as Record<string, unknown>;
       const days = parseDays(query.days, 7);
       const limit = parseLimit(query.limit, 40);
 
       const statuses = deps.healthStore.getAll();
+      const syntheticErrors = await getLatestHealthCheckErrors("synthetic_completion");
       const providers = Object.fromEntries(
         deps.providers.map((provider) => {
           const status = statuses[provider.name];
@@ -174,6 +228,7 @@ export async function registerOpsRoutes(
               statusCode: status?.statusCode,
               errorDetail: status?.errorDetail,
               checkUrl: status?.checkUrl,
+              syntheticErrorDetail: syntheticErrors.get(provider.name) ?? null,
             },
           ];
         }),
@@ -200,6 +255,9 @@ export async function registerOpsRoutes(
       };
       let paymentCounts: Record<string, number> = {};
       let stuckPayments: Awaited<ReturnType<typeof listStuckPayments>> = [];
+      let pendingReconciliations: Awaited<
+        ReturnType<typeof listPendingReconciliations>
+      > = [];
       let signups: Awaited<ReturnType<typeof listRecentSignups>> = [];
       let creditEvents: Awaited<ReturnType<typeof listRecentCreditEvents>> = [];
       let reliability: Awaited<ReturnType<typeof getReliabilityTelemetry>> | null = null;
@@ -213,6 +271,7 @@ export async function registerOpsRoutes(
           usageSummary,
           paymentCounts,
           stuckPayments,
+          pendingReconciliations,
           signups,
           creditEvents,
           reliability,
@@ -223,6 +282,7 @@ export async function registerOpsRoutes(
           getUsageSummary(days),
           paymentStatusCounts(days),
           listStuckPayments(15, 20),
+          listPendingReconciliations(20),
           listRecentSignups(limit),
           listRecentCreditEvents(limit),
           getReliabilityTelemetry(days, null),
@@ -387,6 +447,7 @@ export async function registerOpsRoutes(
           unhealthyProviders,
           paymentStatusCounts: paymentCounts,
           stuckPayments,
+          pendingReconciliations,
           usageSummary,
           usageHistory,
           mcpEvents,
@@ -453,6 +514,7 @@ export async function registerOpsRoutes(
           recent: creditEvents,
         },
         paymentsStuck: stuckPayments,
+        reconciliationsPending: pendingReconciliations,
         attention,
         irregularities,
         activity,

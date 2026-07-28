@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AnchorStore } from "../anchors/store.js";
 import {
+  getLatestHealthCheckErrors,
   getProviderHealthHistory,
   type ProviderHealthSignalStats,
 } from "../health/queries.js";
@@ -33,10 +34,14 @@ function emptySignalJson() {
     avg_latency_ms: null as number | null,
     p50_latency_ms: null as number | null,
     p95_latency_ms: null as number | null,
+    last_error_detail: null as string | null,
   };
 }
 
-function signalJson(stats: ProviderHealthSignalStats) {
+function signalJson(
+  stats: ProviderHealthSignalStats,
+  lastErrorDetail?: string | null,
+) {
   return {
     checks: stats.checks,
     healthy_checks: stats.healthyChecks,
@@ -44,6 +49,7 @@ function signalJson(stats: ProviderHealthSignalStats) {
     avg_latency_ms: stats.avgLatencyMs,
     p50_latency_ms: stats.p50LatencyMs,
     p95_latency_ms: stats.p95LatencyMs,
+    last_error_detail: lastErrorDetail ?? null,
   };
 }
 
@@ -140,7 +146,11 @@ export async function registerStatusRoutes(
    */
   app.get<{ Querystring: { days?: string } }>("/v1/status/history", async (request) => {
     const days = parseDays(request.query.days, 30);
-    const history = await getProviderHealthHistory(days);
+    const [history, gatewayErrors, syntheticErrors] = await Promise.all([
+      getProviderHealthHistory(days),
+      getLatestHealthCheckErrors("gateway"),
+      getLatestHealthCheckErrors("synthetic_completion"),
+    ]);
     const byName = new Map(history.byProvider.map((row) => [row.provider, row]));
 
     return {
@@ -150,9 +160,14 @@ export async function registerStatusRoutes(
         const row = byName.get(provider.name);
         return {
           provider: provider.name,
-          gateway: row ? signalJson(row.gateway) : emptySignalJson(),
+          gateway: row
+            ? signalJson(row.gateway, gatewayErrors.get(provider.name))
+            : emptySignalJson(),
           synthetic_completion: row
-            ? signalJson(row.syntheticCompletion)
+            ? signalJson(
+                row.syntheticCompletion,
+                syntheticErrors.get(provider.name),
+              )
             : emptySignalJson(),
           real_traffic: row ? signalJson(row.realTraffic) : emptySignalJson(),
         };

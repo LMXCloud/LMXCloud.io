@@ -1,5 +1,9 @@
 import { notifyProviderHealthChange } from "../notify/events.js";
 import type { ProviderAdapter } from "../providers/types.js";
+import {
+  formatGatewayHealthErrorDetail,
+  formatSyntheticHealthErrorDetail,
+} from "./error-detail.js";
 import type { ProviderHealthHistoryStore } from "./history.js";
 import type { HealthStore } from "./store.js";
 
@@ -71,6 +75,7 @@ export class HealthMonitor {
           healthy: result.healthy,
           latencyMs: result.latencyMs,
           checkedAt: new Date(checkedAt),
+          errorDetail: formatGatewayHealthErrorDetail(result),
         });
         return { provider: provider.name, result };
       }),
@@ -133,6 +138,7 @@ export class HealthMonitor {
               healthy: false,
               latencyMs: null,
               checkedAt: new Date(started),
+              errorDetail: "config: no aliases configured for synthetic probe",
             });
             return;
           }
@@ -151,13 +157,14 @@ export class HealthMonitor {
               latencyMs: result.latencyMs,
               checkedAt: new Date(),
             });
-          } catch {
+          } catch (err) {
             this.historyStore?.record({
               provider: provider.name,
               checkType: "synthetic_completion",
               healthy: false,
               latencyMs: Math.round(Date.now() - started),
               checkedAt: new Date(),
+              errorDetail: formatSyntheticHealthErrorDetail(err),
             });
           }
         }),

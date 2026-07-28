@@ -450,6 +450,55 @@ export type StuckPaymentDetail = OpsPaymentRow & {
 /** @deprecated alias — stuck rows now include full payment fields */
 export type StuckPaymentSummary = StuckPaymentDetail;
 
+export type PendingReconciliationSummary = {
+  id: string;
+  kind: "x402_refund" | "balance_credit_back";
+  paymentEventId: string | null;
+  apiKeyId: string | null;
+  amount: number;
+  status: string;
+  reason: string;
+  failureDetail: string | null;
+  createdAt: string;
+};
+
+export async function listPendingReconciliations(
+  limit = 20,
+): Promise<PendingReconciliationSummary[]> {
+  if (!hasPostgres()) return [];
+
+  const result = await getPool().query<{
+    id: string;
+    kind: string;
+    payment_event_id: string | null;
+    api_key_id: string | null;
+    amount: string;
+    status: string;
+    reason: string;
+    failure_detail: string | null;
+    created_at: Date;
+  }>(
+    `SELECT id, kind, payment_event_id, api_key_id, amount, status, reason, failure_detail, created_at
+     FROM reconciliation_events
+     WHERE status IN ('pending', 'manual_required', 'failed')
+     ORDER BY created_at ASC
+     LIMIT $1`,
+    [Math.max(1, Math.min(limit, 100))],
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    kind: row.kind as PendingReconciliationSummary["kind"],
+    paymentEventId: row.payment_event_id,
+    apiKeyId: row.api_key_id,
+    amount: Number(row.amount),
+    status: row.status,
+    reason: row.reason,
+    failureDetail: row.failure_detail,
+    createdAt: row.created_at.toISOString(),
+  }));
+}
+
 export async function listStuckPayments(
   olderThanMinutes = 15,
   limit = 20,

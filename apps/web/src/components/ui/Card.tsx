@@ -1,8 +1,8 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
-type CardVariant = "base" | "elevated" | "media";
-type CardAccent = "primary" | "success" | "warning" | "info" | "error";
+export type CardVariant = "base" | "elevated" | "media";
+export type CardAccent = "primary" | "success" | "warning" | "info" | "error";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: CardVariant;

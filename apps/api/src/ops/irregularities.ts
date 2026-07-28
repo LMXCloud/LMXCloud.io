@@ -4,6 +4,7 @@ import type {
   OpsRecentUsage,
   OpsUsageDayBucket,
   OpsUsageSummary,
+  PendingReconciliationSummary,
   StuckPaymentSummary,
 } from "./queries.js";
 
@@ -56,6 +57,7 @@ export type DetectIrregularitiesInput = {
   unhealthyProviders: string[];
   paymentStatusCounts: Record<string, number>;
   stuckPayments: StuckPaymentSummary[];
+  pendingReconciliations: PendingReconciliationSummary[];
   usageSummary: OpsUsageSummary;
   usageHistory: OpsUsageDayBucket[];
   mcpEvents: McpToolEvent[];
@@ -163,6 +165,25 @@ export function detectIrregularities(
       action: "Inspect CDP verify/settle latency and whether the agent abandoned after 402.",
       metric: `${input.stuckPayments.length} stuck`,
       relatedIds: input.stuckPayments.slice(0, 8).map((p) => p.id),
+    });
+  }
+
+  if (input.pendingReconciliations.length > 0) {
+    const manual = input.pendingReconciliations.filter(
+      (r) => r.status === "manual_required",
+    );
+    const failed = input.pendingReconciliations.filter((r) => r.status === "failed");
+    const total = input.pendingReconciliations.length;
+    out.push({
+      id: "payments.needs_refund",
+      severity: manual.length >= 3 ? "critical" : "warn",
+      category: "payments",
+      title: "Payments need reconciliation",
+      detail: `${total} refund/credit-back item(s) pending — ${manual.length} awaiting manual USDC approval, ${failed.length} failed auto-attempt(s).`,
+      action:
+        "Review reconciliation queue in ops; approve large x402 refunds when TREASURY_PRIVATE_KEY is configured.",
+      metric: `${manual.length} manual`,
+      relatedIds: input.pendingReconciliations.slice(0, 8).map((r) => r.id),
     });
   }
 

@@ -6,8 +6,9 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import {
+  executeOpsReconciliation,
   fetchOpsOverview,
   getApiBase,
   getEnvOpsKey,
@@ -35,6 +36,7 @@ import type {
   OpsIrregularityDiagnostic,
   OpsIrregularityRecord,
   OpsOverview,
+  OpsPendingReconciliation,
   OpsTreasury,
 } from "./types";
 import {
@@ -43,6 +45,12 @@ import {
   PaymentFields,
   UsageFields,
 } from "./RecordViews";
+import {
+  ExploreButton,
+  ExploreModal,
+  isExploreView,
+  type ExploreView,
+} from "./ExploreModal";
 
 const POLL_MS = 15_000;
 
@@ -200,38 +208,91 @@ function IrregularityRecords({ records }: { records: OpsIrregularityRecord[] }) 
   );
 }
 
-function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
+function AttentionPanel({
+  items,
+  pendingReconciliations = [],
+  opsKey,
+  onRefresh,
+}: {
+  items: OpsIrregularity[];
+  pendingReconciliations?: OpsPendingReconciliation[];
+  opsKey?: string;
+  onRefresh?: () => void;
+}) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
+
+  const manualRefunds = pendingReconciliations.filter(
+    (r) => r.status === "manual_required" && r.kind === "x402_refund",
+  );
+
+  async function approveRefund(id: string) {
+    if (!opsKey) return;
+    setApprovingId(id);
+    setApproveError(null);
+    try {
+      await executeOpsReconciliation(opsKey, id);
+      onRefresh?.();
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : "Approval failed");
+    } finally {
+      setApprovingId(null);
+    }
+  }
 
   if (items.length === 0) {
     return (
-      <div className="mb-4 rounded-lg border border-[var(--color-accent)]/30 bg-[var(--color-accent-dim)] px-4 py-3">
-        <div className="text-sm font-medium text-[var(--color-accent)]">All clear</div>
-        <p className="mt-0.5 text-xs text-[var(--color-muted)]">
-          No irregularities matched current thresholds for this window.
-        </p>
+      <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--color-accent)]/25 bg-[var(--color-accent-dim)] px-3 py-2">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
+        <span className="text-xs font-medium text-[var(--color-accent)]">All clear</span>
+        <span className="text-xs text-[var(--color-muted)]">— no irregularities in this window</span>
       </div>
     );
   }
 
+  const critical = items.filter((i) => i.severity === "critical").length;
+  const warn = items.filter((i) => i.severity === "warn").length;
+  const visible = showAll ? items : items.slice(0, 3);
+
   return (
-    <section className="mb-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]">
-      <div className="border-b border-[var(--color-line)] px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-tight">Needs attention</h2>
-        <p className="mt-0.5 text-xs text-[var(--color-muted)]">
-          Threshold-based irregularity detection across health, payments, usage, MCP, and config.
-        </p>
+    <section className="mb-3 rounded-md border border-[var(--color-line)] bg-[var(--color-panel)]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-line)] px-3 py-2">
+        <span className="text-xs font-semibold text-[var(--color-ink)]">Alerts</span>
+        {critical > 0 ? (
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-danger)]">
+            {critical} critical
+          </span>
+        ) : null}
+        {warn > 0 ? (
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-warn)]">
+            {warn} warn
+          </span>
+        ) : null}
+        <span className="text-[10px] text-[var(--color-faint)]">{items.length} total</span>
+        {items.length > 3 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="ml-auto text-[10px] text-[var(--color-accent)] underline-offset-2 hover:underline"
+          >
+            {showAll ? "Show less" : `Show all (${items.length})`}
+          </button>
+        ) : null}
       </div>
-      <ul className="divide-y divide-[var(--color-line)]/80">
-        {items.map((item) => {
+      <ul className="divide-y divide-[var(--color-line)]/70">
+        {visible.map((item) => {
           const expandable = Boolean(
             (item.diagnostics && item.diagnostics.length > 0) ||
-              (item.records && item.records.length > 0),
+              (item.records && item.records.length > 0) ||
+              item.detail ||
+              item.action,
           );
           const expanded = expandedId === item.id;
 
           return (
-            <li key={item.id} className={`px-4 py-3 ${severityClass(item.severity)}`}>
+            <li key={item.id} className={`px-3 py-2 ${severityClass(item.severity)}`}>
               <button
                 type="button"
                 disabled={!expandable}
@@ -241,36 +302,73 @@ function AttentionPanel({ items }: { items: OpsIrregularity[] }) {
                 }}
                 className={`w-full text-left ${expandable ? "cursor-pointer" : "cursor-default"}`}
               >
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className={`font-mono text-[10px] uppercase tracking-wider ${severityLabelClass(item.severity)}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`shrink-0 font-mono text-[9px] uppercase tracking-wider ${severityLabelClass(item.severity)}`}>
                     {item.severity}
                   </span>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-faint)]">
-                    {item.category}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{item.title}</span>
                   {item.metric ? (
-                    <span className="font-mono text-[11px] text-[var(--color-muted)]">{item.metric}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-[var(--color-muted)]">
+                      {item.metric}
+                    </span>
                   ) : null}
                   {expandable ? (
-                    <span className="ml-auto font-mono text-[10px] text-[var(--color-accent)]">
-                      {expanded ? "Hide details" : "Show details"}
+                    <span className="shrink-0 font-mono text-[9px] text-[var(--color-faint)]">
+                      {expanded ? "▲" : "▼"}
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-1 text-sm font-medium">{item.title}</div>
-                <p className="mt-1 text-xs text-[var(--color-muted)]">{item.detail}</p>
-                <p className="mt-1.5 text-xs text-[var(--color-ink)]">
-                  <span className="text-[var(--color-faint)]">Do: </span>
-                  {item.action}
-                </p>
+                {expanded ? (
+                  <>
+                    <p className="mt-1 text-[11px] leading-snug text-[var(--color-muted)]">
+                      {item.detail}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[var(--color-ink)]">
+                      <span className="text-[var(--color-faint)]">Do: </span>
+                      {item.action}
+                    </p>
+                  </>
+                ) : null}
               </button>
+              {expanded && item.id === "payments.needs_refund" && manualRefunds.length > 0 ? (
+                <ul className="mt-2 space-y-1.5 border-t border-[var(--color-line)]/60 pt-2">
+                  {manualRefunds.slice(0, 5).map((row) => (
+                    <li
+                      key={row.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--color-line)]/80 bg-[var(--color-panel-raised)]/50 px-2 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono text-[10px] text-[var(--color-ink)]">
+                          {formatUsd(row.amount)} · {row.reason}
+                        </div>
+                        <div className="truncate font-mono text-[9px] text-[var(--color-faint)]">
+                          {row.id}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!opsKey || approvingId === row.id}
+                        onClick={() => void approveRefund(row.id)}
+                        className="shrink-0 rounded border border-[var(--color-accent)]/40 px-2 py-0.5 text-[10px] text-[var(--color-accent)] disabled:opacity-50"
+                      >
+                        {approvingId === row.id ? "Sending…" : "Approve refund"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {approveError && expandedId === "payments.needs_refund" ? (
+                <p className="mt-1 text-[10px] text-[var(--color-danger)]">{approveError}</p>
+              ) : null}
               {expanded && item.diagnostics ? (
                 <IrregularityDiagnostics diagnostics={item.diagnostics} />
               ) : null}
               {expanded && item.records && item.records.length > 0 ? (
                 <IrregularityRecords records={item.records} />
               ) : null}
-              {!item.records || item.records.length === 0 ? <RelatedIds item={item} /> : null}
+              {expanded && (!item.records || item.records.length === 0) ? (
+                <RelatedIds item={item} />
+              ) : null}
             </li>
           );
         })}
@@ -300,104 +398,140 @@ function Stat({
   label,
   value,
   hint,
+  tone,
 }: {
   label: string;
   value: string;
   hint?: string;
+  tone?: "default" | "accent" | "warn" | "danger";
 }) {
+  const valueTone =
+    tone === "accent"
+      ? "text-[var(--color-accent)]"
+      : tone === "warn"
+        ? "text-[var(--color-warn)]"
+        : tone === "danger"
+          ? "text-[var(--color-danger)]"
+          : "text-[var(--color-ink)]";
+
   return (
-    <div className="border-b border-[var(--color-line)] pb-3 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0 sm:border-r sm:pr-5 sm:last:border-r-0 sm:last:pr-0">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
+    <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2.5">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--color-faint)]">
         {label}
       </div>
-      <div className="mt-1 font-mono text-xl font-medium tabular-nums tracking-tight text-[var(--color-ink)]">
+      <div className={`mt-0.5 font-mono text-lg font-medium tabular-nums tracking-tight ${valueTone}`}>
         {value}
       </div>
       {hint ? (
-        <div className="mt-0.5 text-xs text-[var(--color-muted)]">{hint}</div>
+        <div className="mt-0.5 truncate text-[10px] text-[var(--color-muted)]">{hint}</div>
       ) : null}
     </div>
   );
 }
 
-function TreasuryPanel({ treasury }: { treasury: OpsTreasury }) {
+function KpiStrip({ data, days }: { data: OpsOverview; days: number }) {
+  const paymentTotal = Object.values(data.payments.statusCounts).reduce((a, b) => a + b, 0);
+  const paymentHint =
+    Object.entries(data.payments.statusCounts)
+      .map(([k, v]) => `${k} ${v}`)
+      .join(" · ") || "none";
+
+  return (
+    <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <Stat
+        label="Requests"
+        value={formatNum(data.usage.summary.requests)}
+        hint={`${days}d`}
+      />
+      <Stat label="Tokens" value={formatTokens(data.usage.summary.totalTokens)} />
+      <Stat label="Cost" value={formatUsd(data.usage.summary.cost)} tone="accent" />
+      <Stat
+        label="Latency"
+        value={formatLatency(data.usage.summary.avgLatencyMs)}
+      />
+      <Stat
+        label="Providers"
+        value={`${data.health.healthyCount}/${data.health.providerCount}`}
+        hint={data.server.x402Enabled ? "x402 on" : "x402 off"}
+        tone={data.health.healthyCount === data.health.providerCount ? "accent" : "warn"}
+      />
+      <Stat label="Payments" value={formatNum(paymentTotal)} hint={paymentHint} />
+    </div>
+  );
+}
+
+function TreasuryStrip({
+  treasury,
+  onExplore,
+}: {
+  treasury: OpsTreasury;
+  onExplore?: () => void;
+}) {
   if (treasury.status === "unconfigured") {
     return (
-      <Panel title="Treasury wallet" subtitle="On-chain fee receiver">
-        <p className="text-sm text-[var(--color-muted)]">{treasury.reason}</p>
-      </Panel>
+      <div className="mb-3 rounded-md border border-dashed border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2.5 text-xs text-[var(--color-muted)]">
+        Treasury not configured — {treasury.reason}
+      </div>
     );
   }
 
   if (treasury.status === "error") {
     return (
-      <Panel
-        title="Treasury wallet"
-        subtitle={`${treasury.chainLabel} · ${shortWallet(treasury.address)}`}
+      <button
+        type="button"
+        onClick={onExplore}
+        className="mb-3 w-full rounded-md border border-[var(--color-danger)]/30 bg-[rgba(232,93,108,0.08)] px-3 py-2.5 text-left transition hover:border-[var(--color-danger)]/50"
       >
-        <p className="text-sm text-[var(--color-danger)]">{treasury.reason}</p>
-        <p className="mt-2 font-mono text-[11px] text-[var(--color-faint)]">
-          {treasury.address}
-        </p>
-      </Panel>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--color-faint)]">
+              Treasury
+            </span>
+            <span className="text-xs text-[var(--color-danger)]">{treasury.reason}</span>
+          </div>
+          {onExplore ? (
+            <span className="font-mono text-[10px] text-[var(--color-accent)]">Open →</span>
+          ) : null}
+        </div>
+      </button>
     );
   }
 
   return (
-    <Panel
-      title="Treasury wallet"
-      subtitle={`${treasury.chainLabel} · receives x402 fees and USDC deposits`}
-      action={
-        <a
-          href={treasury.explorerUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="font-mono text-[10px] text-[var(--color-accent)] underline-offset-2 hover:underline"
-        >
-          explorer
-        </a>
-      }
+    <button
+      type="button"
+      onClick={onExplore}
+      className="mb-3 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-raised)]/40"
     >
-      <dl className="space-y-3">
-        <div>
-          <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
-            USDC balance
-          </dt>
-          <dd className="mt-1 font-mono text-2xl font-medium tabular-nums text-[var(--color-ink)]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--color-faint)]">
+            Treasury
+          </span>
+          <span className="font-mono text-xl font-semibold tabular-nums text-[var(--color-accent)]">
             {formatUsd(treasury.usdcBalance)}
-          </dd>
+          </span>
+          <span className="text-[10px] text-[var(--color-muted)]">USDC</span>
+          <span className="hidden h-3 w-px bg-[var(--color-line)] sm:inline" aria-hidden />
+          <span className="font-mono text-xs tabular-nums text-[var(--color-muted)]">
+            {formatEth(treasury.ethBalance)}
+          </span>
+          <span className="hidden h-3 w-px bg-[var(--color-line)] sm:inline" aria-hidden />
+          <span className="font-mono text-[10px] text-[var(--color-faint)]">
+            {treasury.chainLabel}
+          </span>
+          <span className="font-mono text-[10px] text-[var(--color-muted)]">
+            {shortWallet(treasury.address)}
+          </span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
-              ETH (gas)
-            </dt>
-            <dd className="mt-1 font-mono text-sm tabular-nums text-[var(--color-ink)]">
-              {formatEth(treasury.ethBalance)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
-              Chain
-            </dt>
-            <dd className="mt-1 font-mono text-sm text-[var(--color-ink)]">
-              {treasury.chainLabel} ({treasury.chainId})
-            </dd>
-          </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="font-mono text-[9px] text-[var(--color-faint)]">
+            {formatTime(treasury.fetchedAt)}
+          </span>
+          <span className="font-mono text-[10px] text-[var(--color-accent)]">Open →</span>
         </div>
-        <div>
-          <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
-            Address
-          </dt>
-          <dd className="mt-1 break-all font-mono text-[11px] text-[var(--color-muted)]">
-            {treasury.address}
-          </dd>
-        </div>
-      </dl>
-      <p className="mt-3 font-mono text-[10px] text-[var(--color-faint)]">
-        fetched {formatTime(treasury.fetchedAt)}
-      </p>
-    </Panel>
+      </div>
+    </button>
   );
 }
 
@@ -406,26 +540,35 @@ function Panel({
   subtitle,
   children,
   action,
+  compact,
+  onExplore,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   action?: ReactNode;
+  compact?: boolean;
+  onExplore?: () => void;
 }) {
   return (
-    <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]">
-      <div className="flex items-start justify-between gap-3 border-b border-[var(--color-line)] px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight text-[var(--color-ink)]">
+    <section className="rounded-md border border-[var(--color-line)] bg-[var(--color-panel)]">
+      <div className="flex items-start justify-between gap-2 border-b border-[var(--color-line)] px-3 py-2">
+        <button
+          type="button"
+          onClick={onExplore}
+          disabled={!onExplore}
+          className={`min-w-0 flex-1 text-left ${onExplore ? "cursor-pointer rounded transition hover:text-[var(--color-accent)]" : "cursor-default"}`}
+        >
+          <h2 className="text-xs font-semibold tracking-tight text-[var(--color-ink)]">
             {title}
           </h2>
           {subtitle ? (
-            <p className="mt-0.5 text-xs text-[var(--color-muted)]">{subtitle}</p>
+            <p className="mt-0.5 truncate text-[10px] text-[var(--color-muted)]">{subtitle}</p>
           ) : null}
-        </div>
-        {action}
+        </button>
+        {onExplore ? <ExploreButton onClick={onExplore} /> : action}
       </div>
-      <div className="p-4">{children}</div>
+      <div className={compact ? "p-2" : "p-3"}>{children}</div>
     </section>
   );
 }
@@ -443,51 +586,27 @@ function UsageSparkline({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex h-28 items-end gap-1.5">
+    <div className="space-y-1">
+      <div className="flex h-16 items-end gap-1">
         {history.map((day) => {
-          const h = Math.max(4, Math.round((day.requests / max) * 100));
+          const h = Math.max(3, Math.round((day.requests / max) * 100));
           return (
             <div
               key={day.date}
               className="group relative flex flex-1 flex-col items-center justify-end"
-              title={`${day.date}: ${day.requests} req`}
+              title={`${day.date}: ${day.requests} req · ${formatTokens(day.totalTokens)} tok`}
             >
               <div
-                className="w-full rounded-sm bg-[var(--color-accent)]/80 transition-opacity group-hover:opacity-100 opacity-80"
+                className="w-full rounded-sm bg-[var(--color-accent)]/70 transition-opacity group-hover:opacity-100 opacity-80"
                 style={{ height: `${h}%` }}
               />
             </div>
           );
         })}
       </div>
-      <div className="flex justify-between font-mono text-[10px] text-[var(--color-faint)]">
+      <div className="flex justify-between font-mono text-[9px] text-[var(--color-faint)]">
         <span>{history[0]?.date}</span>
         <span>{history[history.length - 1]?.date}</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="text-[var(--color-faint)]">
-            <tr>
-              <th className="pb-2 font-medium">Date</th>
-              <th className="pb-2 font-medium">Reqs</th>
-              <th className="pb-2 font-medium">Tokens</th>
-              <th className="pb-2 font-medium">Cost</th>
-              <th className="pb-2 font-medium">Latency</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...history].reverse().map((day) => (
-              <tr key={day.date} className="border-t border-[var(--color-line)]/70">
-                <td className="py-1.5 font-mono text-[var(--color-muted)]">{day.date}</td>
-                <td className="py-1.5 font-mono">{formatNum(day.requests)}</td>
-                <td className="py-1.5 font-mono">{formatTokens(day.totalTokens)}</td>
-                <td className="py-1.5 font-mono">{formatUsd(day.cost)}</td>
-                <td className="py-1.5 font-mono">{formatLatency(day.avgLatencyMs)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -514,50 +633,64 @@ function ActivityRow({ item }: { item: OpsActivityItem }) {
   const href = activityPath(item);
   const inner = (
     <>
-      <div className="mt-0.5 w-14 shrink-0">
+      <div className="mt-0.5 w-12 shrink-0">
         <ChannelChip channel={item.channel} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="truncate text-sm font-medium">{item.label}</span>
-          {item.kind === "payment" ? (
-            <span className="font-mono text-[11px] text-[var(--color-muted)]">
-              {item.status}
-            </span>
-          ) : null}
-          {item.kind === "mcp" ? (
-            <span
-              className={`font-mono text-[11px] ${item.ok ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"}`}
-            >
-              {item.ok ? "ok" : "error"}
-            </span>
-          ) : null}
-        </div>
-        <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--color-muted)]">
+        <div className="truncate text-xs font-medium">{item.label}</div>
+        <div className="truncate font-mono text-[10px] text-[var(--color-muted)]">
           {activityDetail(item)}
         </div>
       </div>
-      <div className="shrink-0 font-mono text-[10px] text-[var(--color-faint)]">
+      <div className="shrink-0 font-mono text-[9px] text-[var(--color-faint)]">
         {formatTime(item.at)}
       </div>
     </>
   );
 
   if (!href) {
-    return (
-      <div className="flex gap-3 py-2.5">
-        {inner}
-      </div>
-    );
+    return <div className="flex gap-2 py-1.5">{inner}</div>;
   }
 
   return (
     <Link
       to={href}
-      className="flex gap-3 py-2.5 transition hover:bg-[var(--color-panel-raised)]/60"
+      className="flex gap-2 py-1.5 transition hover:bg-[var(--color-panel-raised)]/60"
     >
       {inner}
     </Link>
+  );
+}
+
+const ROW_LIMIT = 6;
+
+function CompactTable({
+  rows,
+  total,
+  columns,
+  onViewAll,
+}: {
+  rows: ReactNode[];
+  total: number;
+  columns: ReactNode;
+  onViewAll?: () => void;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-[11px]">
+        <thead className="text-[var(--color-faint)]">{columns}</thead>
+        <tbody>{rows}</tbody>
+      </table>
+      {total > ROW_LIMIT && onViewAll ? (
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="mt-1.5 text-[10px] text-[var(--color-accent)] underline-offset-2 hover:underline"
+        >
+          View all {total} →
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -592,26 +725,29 @@ function OverviewPage({
   clearKey: () => void;
   hasEnvKey: boolean;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const exploreParam = searchParams.get("view");
+  const exploreView = isExploreView(exploreParam) ? exploreParam : null;
+
+  const openExplore = (view: ExploreView) => setSearchParams({ view });
+  const closeExplore = () => setSearchParams({});
+
   const providers = data
     ? Object.entries(data.health.providers).sort(([, a], [, b]) => a.tier - b.tier)
     : [];
 
   return (
     <>
-      <header className="mb-6 flex flex-col gap-4 border-b border-[var(--color-line)] pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <header className="mb-4 flex flex-col gap-3 border-b border-[var(--color-line)] pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
             LMX Cloud
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">
             Operations
           </h1>
-          <p className="mt-1 max-w-xl text-sm text-[var(--color-muted)]">
-            Aggregated visibility across x402, MCP, and balance-funded traffic.
-            Not the customer console.
-          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted)]">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-muted)]">
           <span className="font-mono">{apiBase || "VITE_API_URL unset"}</span>
           {lastUpdated ? (
             <span>Updated {lastUpdated.toLocaleTimeString()}</span>
@@ -620,7 +756,7 @@ function OverviewPage({
             type="button"
             onClick={() => void load(true)}
             disabled={loading || !opsKey}
-            className="rounded border border-[var(--color-line)] bg-[var(--color-panel-raised)] px-3 py-1.5 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-accent)] disabled:opacity-40"
+            className="rounded border border-[var(--color-line)] bg-[var(--color-panel-raised)] px-2.5 py-1 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-accent)] disabled:opacity-40"
           >
             {loading ? "Refreshing…" : "Refresh"}
           </button>
@@ -698,302 +834,262 @@ function OverviewPage({
 
       {data ? (
         <>
-          <AttentionPanel items={data.irregularities ?? []} />
-
-          <div className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4 sm:grid-cols-4 lg:grid-cols-8">
-            <Stat
-              label="Attention"
-              value={String(
-                (data.attention?.critical ?? 0) + (data.attention?.warn ?? 0),
-              )}
-              hint={`crit ${data.attention?.critical ?? 0} · warn ${data.attention?.warn ?? 0}`}
-            />
-            <Stat
-              label="Providers up"
-              value={`${data.health.healthyCount}/${data.health.providerCount}`}
-              hint={data.server.x402Enabled ? "x402 on" : "x402 off"}
-            />
-            <Stat
-              label="Requests"
-              value={formatNum(data.usage.summary.requests)}
-              hint={`${days}d window`}
-            />
-            <Stat
-              label="Tokens"
-              value={formatTokens(data.usage.summary.totalTokens)}
-            />
-            <Stat label="Cost" value={formatUsd(data.usage.summary.cost)} />
-            <Stat
-              label="Avg latency"
-              value={formatLatency(data.usage.summary.avgLatencyMs)}
-            />
-            <Stat
-              label="Signups"
-              value={formatNum(data.signups?.recent.length ?? 0)}
-              hint="recent keys"
-            />
-            <Stat
-              label="Payments"
-              value={formatNum(
-                Object.values(data.payments.statusCounts).reduce((a, b) => a + b, 0),
-              )}
-              hint={Object.entries(data.payments.statusCounts)
-                .map(([k, v]) => `${k}:${v}`)
-                .join(" ") || "none"}
-            />
-            <Stat
-              label="Treasury"
-              value={
-                data.treasury?.status === "ready"
-                  ? formatUsd(data.treasury.usdcBalance)
-                  : "—"
-              }
-              hint={
-                data.treasury?.status === "ready"
-                  ? `${data.treasury.chainLabel} USDC`
-                  : data.treasury?.status === "error"
-                    ? "balance error"
-                    : "not configured"
+          <KpiStrip data={data} days={days} />
+          {data.treasury ? (
+            <TreasuryStrip
+              treasury={data.treasury}
+              onExplore={
+                data.treasury.status !== "unconfigured"
+                  ? () => openExplore("treasury")
+                  : undefined
               }
             />
-          </div>
+          ) : null}
+          <AttentionPanel
+            items={data.irregularities ?? []}
+            pendingReconciliations={data.reconciliationsPending ?? []}
+            opsKey={opsKey}
+            onRefresh={() => void load(true)}
+          />
 
-          <div className="mb-4 grid gap-4 lg:grid-cols-2">
-            {data.treasury ? <TreasuryPanel treasury={data.treasury} /> : null}
+          <div className="mt-3 grid gap-2 lg:grid-cols-3">
             <Panel
-              title="Provider health"
-              subtitle={`Fallback: ${data.server.fallbackChain.join(" → ") || "—"}`}
+              compact
+              title="Providers"
+              subtitle={`${data.health.healthyCount}/${data.health.providerCount} up · ${data.server.fallbackChain.join(" → ") || "—"}`}
+              onExplore={() => openExplore("providers")}
             >
               {providers.length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">No providers configured.</p>
+                <p className="text-[11px] text-[var(--color-muted)]">None configured.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {providers.map(([name, status]) => (
                     <li
                       key={name}
-                      className="flex items-center justify-between gap-3 rounded border border-[var(--color-line)] bg-[var(--color-panel-raised)] px-3 py-2"
+                      className="flex items-center justify-between gap-2 rounded border border-[var(--color-line)]/80 bg-[var(--color-panel-raised)]/50 px-2 py-1.5"
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`h-2 w-2 rounded-full ${status.healthy ? "bg-[var(--color-accent)]" : "bg-[var(--color-danger)]"}`}
-                          />
-                          <span className="truncate font-medium">{name}</span>
-                          {status.isDepin ? (
-                            <span className="font-mono text-[10px] text-[var(--color-faint)]">
-                              DePIN
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-0.5 font-mono text-[11px] text-[var(--color-muted)]">
-                          tier {status.tier}
-                          {status.lastCheck
-                            ? ` · checked ${formatTime(new Date(status.lastCheck).toISOString())}`
-                            : ""}
-                        </div>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.healthy ? "bg-[var(--color-accent)]" : "bg-[var(--color-danger)]"}`}
+                        />
+                        <span className="truncate text-xs font-medium">{name}</span>
                       </div>
-                      <div className="shrink-0 font-mono text-sm tabular-nums text-[var(--color-muted)]">
+                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--color-muted)]">
                         {formatLatency(status.latencyMs)}
-                      </div>
+                      </span>
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mt-3 font-mono text-[11px] text-[var(--color-faint)]">
-                storage={data.storage} · payments={data.server.paymentStore} · mcp
-                buffer={data.mcp.buffered}
+              <p className="mt-2 font-mono text-[9px] text-[var(--color-faint)]">
+                {data.storage} · {data.server.paymentStore} · mcp {data.mcp.buffered}
               </p>
             </Panel>
 
             <Panel
-              title="Usage trend"
-              subtitle={`Daily request volume (${days}d)`}
+              compact
+              title="Usage"
+              subtitle={`${days}d volume`}
+              onExplore={() => openExplore("usage")}
             >
               <UsageSparkline history={data.usage.history} />
             </Panel>
-          </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Panel
-              title="Recent activity"
-              subtitle="Signups, credits, payments, usage, and MCP — click rows with detail pages"
+              compact
+              title="Activity"
+              subtitle="Latest events"
+              onExplore={() => openExplore("activity")}
             >
               {data.activity.length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">No recent activity.</p>
+                <p className="text-[11px] text-[var(--color-muted)]">No recent activity.</p>
               ) : (
-                <ul className="divide-y divide-[var(--color-line)]/80">
-                  {data.activity.map((item) => (
-                    <li key={`${item.kind}-${item.id}`} className="first:pt-0 last:pb-0">
+                <ul className="divide-y divide-[var(--color-line)]/60">
+                  {data.activity.slice(0, ROW_LIMIT).map((item) => (
+                    <li key={`${item.kind}-${item.id}`}>
                       <ActivityRow item={item} />
                     </li>
                   ))}
                 </ul>
               )}
+              {data.activity.length > ROW_LIMIT ? (
+                <button
+                  type="button"
+                  onClick={() => openExplore("activity")}
+                  className="mt-1 text-[10px] text-[var(--color-accent)] underline-offset-2 hover:underline"
+                >
+                  View all {data.activity.length} →
+                </button>
+              ) : null}
+            </Panel>
+          </div>
+
+          <div className="mt-2 grid gap-2 lg:grid-cols-2">
+            <Panel
+              compact
+              title="Stuck payments"
+              subtitle={
+                (data.paymentsStuck ?? []).length > 0
+                  ? `${(data.paymentsStuck ?? []).length} older than 15m`
+                  : "None"
+              }
+              onExplore={
+                (data.paymentsStuck ?? []).length > 0
+                  ? () => openExplore("stuck-payments")
+                  : undefined
+              }
+            >
+              {(data.paymentsStuck ?? []).length === 0 ? (
+                <p className="text-[11px] text-[var(--color-muted)]">None stuck.</p>
+              ) : (
+                <CompactTable
+                  total={(data.paymentsStuck ?? []).length}
+                  onViewAll={() => openExplore("stuck-payments")}
+                  columns={
+                    <tr>
+                      <th className="pb-1 font-medium">Age</th>
+                      <th className="pb-1 font-medium">Status</th>
+                      <th className="pb-1 font-medium">Wallet</th>
+                      <th className="pb-1 font-medium">Model</th>
+                    </tr>
+                  }
+                  rows={(data.paymentsStuck ?? []).slice(0, ROW_LIMIT).map((p) => (
+                    <tr key={p.id} className="border-t border-[var(--color-line)]/60">
+                      <td className="py-1 font-mono">{p.ageMinutes}m</td>
+                      <td className="py-1 font-mono">{p.status}</td>
+                      <td className="py-1 font-mono">{shortWallet(p.payerWallet)}</td>
+                      <td className="max-w-[6rem] truncate py-1 font-mono">{p.model}</td>
+                    </tr>
+                  ))}
+                />
+              )}
             </Panel>
 
             <Panel
-              title="Stuck payments"
-              subtitle="quoted/verified older than 15 minutes"
+              compact
+              title="x402 payments"
+              subtitle="Recent"
+              onExplore={
+                data.payments.recent.length > 0
+                  ? () => openExplore("payments")
+                  : undefined
+              }
             >
-              {(data.paymentsStuck ?? []).length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">None stuck.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="text-[var(--color-faint)]">
-                      <tr>
-                        <th className="pb-2 font-medium">Age</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium">Wallet</th>
-                        <th className="pb-2 font-medium">Model</th>
-                        <th className="pb-2 font-medium">Id</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data.paymentsStuck ?? []).map((p) => (
-                        <tr key={p.id} className="border-t border-[var(--color-line)]/70">
-                          <td className="py-1.5 font-mono">{p.ageMinutes}m</td>
-                          <td className="py-1.5 font-mono">{p.status}</td>
-                          <td className="py-1.5 font-mono">{shortWallet(p.payerWallet)}</td>
-                          <td className="py-1.5 font-mono truncate max-w-[7rem]">{p.model}</td>
-                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
-                            <Link
-                              to={recordPath("payment", p.id)}
-                              className="text-[var(--color-accent)] underline-offset-2 hover:underline"
-                            >
-                              {p.id}
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Panel>
-
-            <Panel title="Recent signups" subtitle="New API keys (all channels)">
-              {(data.signups?.recent ?? []).length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">No signups yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="text-[var(--color-faint)]">
-                      <tr>
-                        <th className="pb-2 font-medium">When</th>
-                        <th className="pb-2 font-medium">Email</th>
-                        <th className="pb-2 font-medium">Wallet</th>
-                        <th className="pb-2 font-medium">Balance</th>
-                        <th className="pb-2 font-medium">Key</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data.signups?.recent ?? []).map((s) => (
-                        <tr key={s.id} className="border-t border-[var(--color-line)]/70">
-                          <td className="py-1.5 font-mono text-[var(--color-muted)] whitespace-nowrap">
-                            {formatTime(s.createdAt)}
-                          </td>
-                          <td className="py-1.5 font-mono truncate max-w-[10rem]">
-                            {s.email ?? "—"}
-                          </td>
-                          <td className="py-1.5 font-mono">
-                            {s.wallet ? shortWallet(s.wallet) : "—"}
-                          </td>
-                          <td className="py-1.5 font-mono">{formatUsd(s.creditBalance)}</td>
-                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
-                            {s.id.slice(0, 8)}…
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Panel>
-
-            <Panel title="Credit events" subtitle="USDC deposits credited on-chain">
-              {(data.credits?.recent ?? []).length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">No credited deposits.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="text-[var(--color-faint)]">
-                      <tr>
-                        <th className="pb-2 font-medium">When</th>
-                        <th className="pb-2 font-medium">Amount</th>
-                        <th className="pb-2 font-medium">Wallet</th>
-                        <th className="pb-2 font-medium">Key</th>
-                        <th className="pb-2 font-medium">Tx</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data.credits?.recent ?? []).map((c) => (
-                        <tr key={c.id} className="border-t border-[var(--color-line)]/70">
-                          <td className="py-1.5 font-mono text-[var(--color-muted)] whitespace-nowrap">
-                            {formatTime(c.creditedAt)}
-                          </td>
-                          <td className="py-1.5 font-mono">{formatUsd(c.amount)}</td>
-                          <td className="py-1.5 font-mono">
-                            {c.wallet ? shortWallet(c.wallet) : "—"}
-                          </td>
-                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
-                            {c.apiKeyId.slice(0, 8)}…
-                          </td>
-                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
-                            {c.txHash ? `${c.txHash.slice(0, 10)}…` : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Panel>
-
-            <Panel title="Recent x402 payments" subtitle="From payment_events">
               {data.payments.recent.length === 0 ? (
-                <p className="text-sm text-[var(--color-muted)]">No payment events.</p>
+                <p className="text-[11px] text-[var(--color-muted)]">No payments.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="text-[var(--color-faint)]">
-                      <tr>
-                        <th className="pb-2 font-medium">When</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium">Wallet</th>
-                        <th className="pb-2 font-medium">Amount</th>
-                        <th className="pb-2 font-medium">Model</th>
-                        <th className="pb-2 font-medium">Id</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.payments.recent.map((p) => (
-                        <tr key={p.id} className="border-t border-[var(--color-line)]/70">
-                          <td className="py-1.5 font-mono text-[var(--color-muted)] whitespace-nowrap">
-                            {formatTime(p.createdAt)}
-                          </td>
-                          <td className="py-1.5 font-mono">{p.status}</td>
-                          <td className="py-1.5 font-mono">{shortWallet(p.payerWallet)}</td>
-                          <td className="py-1.5 font-mono">
-                            {formatUsd(p.settledAmount ?? p.quotedAmount)}
-                          </td>
-                          <td className="py-1.5 font-mono truncate max-w-[8rem]">{p.model}</td>
-                          <td className="py-1.5 font-mono truncate max-w-[8rem]">
-                            <Link
-                              to={recordPath("payment", p.id)}
-                              className="text-[var(--color-accent)] underline-offset-2 hover:underline"
-                            >
-                              {p.id.slice(0, 8)}…
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <CompactTable
+                  total={data.payments.recent.length}
+                  onViewAll={() => openExplore("payments")}
+                  columns={
+                    <tr>
+                      <th className="pb-1 font-medium">When</th>
+                      <th className="pb-1 font-medium">Status</th>
+                      <th className="pb-1 font-medium">Amt</th>
+                      <th className="pb-1 font-medium">Model</th>
+                    </tr>
+                  }
+                  rows={data.payments.recent.slice(0, ROW_LIMIT).map((p) => (
+                    <tr key={p.id} className="border-t border-[var(--color-line)]/60">
+                      <td className="whitespace-nowrap py-1 font-mono text-[var(--color-muted)]">
+                        {formatTime(p.createdAt)}
+                      </td>
+                      <td className="py-1 font-mono">{p.status}</td>
+                      <td className="py-1 font-mono">
+                        {formatUsd(p.settledAmount ?? p.quotedAmount)}
+                      </td>
+                      <td className="max-w-[6rem] truncate py-1 font-mono">{p.model}</td>
+                    </tr>
+                  ))}
+                />
+              )}
+            </Panel>
+
+            <Panel
+              compact
+              title="Signups"
+              subtitle="New keys"
+              onExplore={
+                (data.signups?.recent ?? []).length > 0
+                  ? () => openExplore("signups")
+                  : undefined
+              }
+            >
+              {(data.signups?.recent ?? []).length === 0 ? (
+                <p className="text-[11px] text-[var(--color-muted)]">None yet.</p>
+              ) : (
+                <CompactTable
+                  total={(data.signups?.recent ?? []).length}
+                  onViewAll={() => openExplore("signups")}
+                  columns={
+                    <tr>
+                      <th className="pb-1 font-medium">When</th>
+                      <th className="pb-1 font-medium">Identity</th>
+                      <th className="pb-1 font-medium">Bal</th>
+                    </tr>
+                  }
+                  rows={(data.signups?.recent ?? []).slice(0, ROW_LIMIT).map((s) => (
+                    <tr key={s.id} className="border-t border-[var(--color-line)]/60">
+                      <td className="whitespace-nowrap py-1 font-mono text-[var(--color-muted)]">
+                        {formatTime(s.createdAt)}
+                      </td>
+                      <td className="max-w-[8rem] truncate py-1 font-mono">
+                        {s.email ?? (s.wallet ? shortWallet(s.wallet) : s.id.slice(0, 8))}
+                      </td>
+                      <td className="py-1 font-mono">{formatUsd(s.creditBalance)}</td>
+                    </tr>
+                  ))}
+                />
+              )}
+            </Panel>
+
+            <Panel
+              compact
+              title="Deposits"
+              subtitle="USDC credited"
+              onExplore={
+                (data.credits?.recent ?? []).length > 0
+                  ? () => openExplore("deposits")
+                  : undefined
+              }
+            >
+              {(data.credits?.recent ?? []).length === 0 ? (
+                <p className="text-[11px] text-[var(--color-muted)]">None.</p>
+              ) : (
+                <CompactTable
+                  total={(data.credits?.recent ?? []).length}
+                  onViewAll={() => openExplore("deposits")}
+                  columns={
+                    <tr>
+                      <th className="pb-1 font-medium">When</th>
+                      <th className="pb-1 font-medium">Amt</th>
+                      <th className="pb-1 font-medium">Wallet</th>
+                    </tr>
+                  }
+                  rows={(data.credits?.recent ?? []).slice(0, ROW_LIMIT).map((c) => (
+                    <tr key={c.id} className="border-t border-[var(--color-line)]/60">
+                      <td className="whitespace-nowrap py-1 font-mono text-[var(--color-muted)]">
+                        {formatTime(c.creditedAt)}
+                      </td>
+                      <td className="py-1 font-mono">{formatUsd(c.amount)}</td>
+                      <td className="py-1 font-mono">
+                        {c.wallet ? shortWallet(c.wallet) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                />
               )}
             </Panel>
           </div>
+
+          {exploreView ? (
+            <ExploreModal
+              view={exploreView}
+              data={data}
+              days={days}
+              onClose={closeExplore}
+            />
+          ) : null}
         </>
       ) : null}
     </>

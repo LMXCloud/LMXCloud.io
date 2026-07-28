@@ -206,6 +206,25 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
         if (settled?.usageEventId && settled.status !== "completed") {
           await deps.paymentStore!.markCompleted(settled.id, settled.usageEventId);
         }
+
+        // Settlement without usage linkage — queue reconciliation after grace
+        // (poller confirms usage never arrived before refunding).
+        if (settled && !settled.usageEventId) {
+          const { createReconciliationStore } = await import(
+            "./reconciliation/store.js"
+          );
+          const reconciliationStore = createReconciliationStore();
+          if (reconciliationStore) {
+            await reconciliationStore.create({
+              kind: "x402_refund",
+              paymentEventId: settled.id,
+              amount: settled.settledAmount ?? settled.quotedAmount,
+              reason: "settled_without_usage",
+              idempotencyKey: `x402:${settled.id}`,
+              status: "pending",
+            });
+          }
+        }
       });
     });
 

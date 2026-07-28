@@ -1,5 +1,5 @@
 export type CreditMeta = {
-  source?: "initial" | "dev_topup" | "usdc_deposit";
+  source?: "initial" | "dev_topup" | "usdc_deposit" | "delivery_failure_refund";
   detail?: string;
 };
 

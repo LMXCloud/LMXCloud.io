@@ -9,6 +9,7 @@ export type OpsProviderStatus = {
   statusCode?: number;
   errorDetail?: string;
   checkUrl?: string;
+  syntheticErrorDetail?: string | null;
 };
 
 export type OpsPayment = {
@@ -109,6 +110,18 @@ export type OpsCreditEvent = {
   txHash: string | null;
   wallet: string | null;
   creditedAt: string;
+};
+
+export type OpsPendingReconciliation = {
+  id: string;
+  kind: "x402_refund" | "balance_credit_back";
+  paymentEventId: string | null;
+  apiKeyId: string | null;
+  amount: number;
+  status: string;
+  reason: string;
+  failureDetail: string | null;
+  createdAt: string;
 };
 
 export type OpsRecentSignup = {
@@ -338,6 +351,7 @@ export type OpsOverview = {
     recent: OpsCreditEvent[];
   };
   paymentsStuck: StuckPayment[];
+  reconciliationsPending?: OpsPendingReconciliation[];
   attention: {
     critical: number;
     warn: number;

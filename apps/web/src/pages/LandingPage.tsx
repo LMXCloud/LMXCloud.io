@@ -29,6 +29,7 @@ import { PartnerMarquee } from "../components/PartnerMarquee";
 import { SeoHead } from "../components/SeoHead";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { GlowingCard } from "../components/ui/GlowingCard";
 import { Chip } from "../components/ui/Chip";
 import { cn } from "../lib/cn";
 import { formatHeroSavings, LMX_PROVIDER_RATES } from "../lib/openai-benchmark";
@@ -514,11 +515,11 @@ export function LandingPage() {
             />
             <div className="mt-10 grid gap-4 md:grid-cols-3">
               {MCP_ONBOARDING_STEPS.map((step) => (
-                <Card key={step.step} accent="info">
+                <GlowingCard key={step.step} accent="info">
                   <p className="text-metric text-info/30">{step.step}</p>
                   <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
                   <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
-                </Card>
+                </GlowingCard>
               ))}
             </div>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -543,17 +544,17 @@ export function LandingPage() {
             />
             <div className="mt-12 grid gap-4 md:grid-cols-3">
               {STEPS.map((step, index) => (
-                <Card key={step.step} accent="primary" className="relative">
+                <GlowingCard key={step.step} accent="primary" className="relative">
                   {index < STEPS.length - 1 && (
                     <div
-                      className="pointer-events-none absolute top-1/2 -right-2 hidden h-px w-4 bg-border-strong md:block lg:-right-3 lg:w-6"
+                      className="pointer-events-none absolute top-1/2 -right-2 z-10 hidden h-px w-4 bg-border-strong md:block lg:-right-3 lg:w-6"
                       aria-hidden
                     />
                   )}
                   <p className="text-metric text-primary/30">{step.step}</p>
                   <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
                   <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
-                </Card>
+                </GlowingCard>
               ))}
             </div>
           </div>
@@ -562,7 +563,7 @@ export function LandingPage() {
         {/* CTA band */}
         <section className="py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
-            <Card accent="success" className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <GlowingCard accent="success" className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-label-sm text-success">Ready to route</p>
                 <h2 className="mt-2 text-headline-md text-on-surface">
@@ -581,7 +582,7 @@ export function LandingPage() {
                   x402 for agents
                 </Button>
               </div>
-            </Card>
+            </GlowingCard>
           </div>
         </section>
 
@@ -738,7 +739,7 @@ function AudienceCard({
   cta: { label: string; to: string };
 }) {
   return (
-    <Card accent="primary" className="flex h-full flex-col">
+    <GlowingCard accent="primary" className="flex h-full flex-col">
       <span className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-md border border-primary/30 bg-primary/10">
         <Icon className="h-5 w-5 text-primary" strokeWidth={1.75} />
       </span>
@@ -748,7 +749,7 @@ function AudienceCard({
         {cta.label}
         <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
       </Button>
-    </Card>
+    </GlowingCard>
   );
 }
 
@@ -801,10 +802,7 @@ function FeatureCard({
   }[accent];
 
   return (
-    <Card
-      accent={accent}
-      className="transition-colors duration-base ease-standard hover:bg-elevated"
-    >
+    <GlowingCard accent={accent}>
       <span
         className={cn(
           "mb-4 inline-flex h-10 w-10 items-center justify-center rounded-md border",
@@ -815,6 +813,6 @@ function FeatureCard({
       </span>
       <h3 className="text-title-md text-on-surface">{title}</h3>
       <p className="mt-2 text-body-sm text-on-surface-muted">{description}</p>
-    </Card>
+    </GlowingCard>
   );
 }

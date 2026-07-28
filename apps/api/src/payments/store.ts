@@ -311,7 +311,7 @@ export class PostgresPaymentStore implements PaymentStore {
        SET status = 'refunded',
            refunded_amount = $2,
            tx_hash = COALESCE($3, tx_hash)
-       WHERE id = $1 AND status IN ('settled', 'failed', 'verified', 'fulfilling')
+       WHERE id = $1 AND status IN ('settled', 'completed', 'failed', 'verified', 'fulfilling')
        RETURNING *`,
       [id, roundCredits(refundedAmount), txHash ?? null],
     );

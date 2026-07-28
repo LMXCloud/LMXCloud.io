@@ -10,7 +10,8 @@ export type AccountCreatedSource =
 export type CreditSource =
   | "initial"
   | "dev_topup"
-  | "usdc_deposit";
+  | "usdc_deposit"
+  | "delivery_failure_refund";
 
 const firstRequestNotified = new Set<string>();
 

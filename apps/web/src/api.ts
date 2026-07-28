@@ -409,6 +409,7 @@ export interface StatusHistorySignalStats {
   avg_latency_ms: number | null;
   p50_latency_ms: number | null;
   p95_latency_ms: number | null;
+  last_error_detail?: string | null;
 }
 
 export interface StatusHistoryProviderRow {

@@ -12,12 +12,14 @@ import type { PaymentStore } from "../payments/store.js";
 import { parseChatBody } from "../payments/quote-context.js";
 import { hashPaymentPayload } from "../payments/idempotency.js";
 import { RESOURCE_TYPE_CHAT, recordProviderSuccess } from "../telemetry/index.js";
+import type { PaymentReconciler } from "../payments/reconciliation/service.js";
 
 interface ChatRouteDeps {
   router: InferenceRouter;
   usageStore: UsageStore;
   creditStore: CreditStore;
   paymentStore: PaymentStore | null;
+  reconciler: PaymentReconciler | null;
   chatRateLimit: (key: string) => RateLimitResult;
   x402RateLimit?: (key: string) => RateLimitResult;
   minChatCost: number;
@@ -124,6 +126,23 @@ async function claimX402PaymentOrReject(
     },
   });
   return true;
+}
+
+async function reconcileX402DeliveryFailure(
+  reconciler: PaymentReconciler | null,
+  paymentStore: PaymentStore | null,
+  request: FastifyRequest,
+  reason: string,
+): Promise<void> {
+  if (!reconciler || !paymentStore || !request.x402Context) return;
+
+  const payloadHash = hashPaymentPayload(
+    JSON.stringify(request.x402Context.paymentPayload),
+  );
+  const payment = await paymentStore.findByPayloadHash(payloadHash);
+  if (!payment) return;
+
+  await reconciler.reconcileX402Failure(payment.id, reason);
 }
 
 async function completeX402Usage(
@@ -316,6 +335,7 @@ export async function registerChatRoutes(
         reply.raw.setHeader("x-lmx-latency", String(result.latencyMs));
 
         let usage = result.usage ?? result.response.usage ?? null;
+        let chargedAmount = 0;
         try {
           for await (const chunk of result.stream) {
             const parsedUsage = extractUsageFromSseChunk(chunk);
@@ -331,6 +351,9 @@ export async function registerChatRoutes(
           );
 
           const deducted = await deps.creditStore.deduct(request.apiKey!.id, requestCost);
+          if (deducted && requestCost > 0) {
+            chargedAmount = requestCost;
+          }
           if (!deducted && requestCost > 0) {
             reply.raw.write(
               `event: lmx.error\ndata: ${JSON.stringify({
@@ -371,6 +394,14 @@ export async function registerChatRoutes(
           });
         } catch (streamErr) {
           request.log.error({ err: streamErr }, "Streaming response failed");
+          if (chargedAmount > 0 && deps.reconciler) {
+            void deps.reconciler.reconcileBalanceCreditBack({
+              apiKeyId: request.apiKey!.id,
+              amount: chargedAmount,
+              reason: "stream_error",
+              requestId: request.id,
+            });
+          }
           reply.raw.write(
             `event: lmx.error\ndata: ${JSON.stringify({
               message: "Streaming interrupted",
@@ -449,6 +480,16 @@ export async function registerChatRoutes(
       return reply.send(result.response);
     } catch (err) {
       request.log.error({ err, elapsedMs: Date.now() - startedAt }, "x402 chat handler failed");
+      if (isX402) {
+        const reason =
+          err instanceof Error ? err.message.slice(0, 240) : "inference_failed";
+        void reconcileX402DeliveryFailure(
+          deps.reconciler,
+          deps.paymentStore,
+          request,
+          reason,
+        );
+      }
       await handleProviderErrors(err, request, reply);
     } finally {
       request.log.info({ elapsedMs: Date.now() - startedAt, isX402 }, "x402 chat handler done");

@@ -1,4 +1,5 @@
 import { getPool } from "../db/pool.js";
+import type { HealthCheckType } from "./history.js";
 
 function hasPostgres(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -80,6 +81,34 @@ const SIGNAL_AGG_SQL = `
     PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms)
   )::text AS p95_latency_ms
 `;
+
+/** Latest persisted failure detail per provider for a poll signal type. */
+export async function getLatestHealthCheckErrors(
+  checkType: HealthCheckType,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!hasPostgres()) return out;
+
+  const result = await getPool().query<{
+    provider: string;
+    error_detail: string;
+  }>(
+    `SELECT DISTINCT ON (provider)
+       provider,
+       error_detail
+     FROM provider_health_checks
+     WHERE check_type = $1
+       AND healthy = false
+       AND error_detail IS NOT NULL
+     ORDER BY provider, checked_at DESC`,
+    [checkType],
+  );
+
+  for (const row of result.rows) {
+    out.set(row.provider, row.error_detail);
+  }
+  return out;
+}
 
 /**
  * Three-tier reliability for a day window:

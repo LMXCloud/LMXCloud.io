@@ -313,6 +313,25 @@ export async function enrichIrregularities(
       };
     }
 
+    if (item.id === "payments.needs_refund") {
+      return {
+        ...item,
+        diagnostics: [
+          {
+            label: "Pending reconciliations",
+            value: String(item.relatedIds?.length ?? 0),
+            tone: "warn" as const,
+          },
+          {
+            label: "Action",
+            value:
+              "POST /v1/ops/reconciliation/:id/execute approves manual x402 refunds.",
+            tone: "info" as const,
+          },
+        ],
+      };
+    }
+
     if (item.id === "mcp.high_error_rate") {
       const failed = input.mcpEvents.filter((e) => !e.ok);
       return {

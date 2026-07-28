@@ -151,6 +151,28 @@ const MIGRATIONS = [
     ADD COLUMN IF NOT EXISTS check_type TEXT NOT NULL DEFAULT 'gateway'`,
   `CREATE INDEX IF NOT EXISTS idx_provider_health_checks_provider_type_checked
     ON provider_health_checks (provider, check_type, checked_at DESC)`,
+  `ALTER TABLE provider_health_checks
+    ADD COLUMN IF NOT EXISTS error_detail TEXT`,
+  `CREATE TABLE IF NOT EXISTS reconciliation_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind TEXT NOT NULL,
+    payment_event_id UUID REFERENCES payment_events(id),
+    api_key_id UUID REFERENCES api_keys(id),
+    usage_event_id UUID REFERENCES usage_events(id),
+    amount NUMERIC(18, 8) NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reason TEXT NOT NULL,
+    failure_detail TEXT,
+    refund_tx_hash TEXT,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_reconciliation_events_status_created
+    ON reconciliation_events (status, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_reconciliation_events_payment
+    ON reconciliation_events (payment_event_id)
+    WHERE payment_event_id IS NOT NULL`,
 ];
 
 export async function runMigrations(): Promise<void> {

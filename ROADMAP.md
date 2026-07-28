@@ -24,6 +24,21 @@ Everything below is verified directly against the code and local test runs, not 
 **Security — fix before more money flows:**
 - ~~**Wallet squat on `POST /v1/auth/key` (HIGH).**~~ **Fixed 2026-07-07.** Unauthenticated key mint no longer accepts a `wallet` field; wallet-linked keys require SIWE (`/v1/auth/wallet/verify`) or authenticated `POST /v1/auth/keys`.
 
+### Security review findings (verified against code, 2026-07-23)
+
+Full-repo pass (auth, payments/credits, x402, MCP server, ops routes, secrets hygiene). Auth (session HMAC + timing-safe compare, API key hashing, SIWE nonce single-use, parameterized SQL throughout, `FOR UPDATE` row locking on wallet linking) is solid — no injection or auth-bypass found. Real findings below, roughly ranked:
+
+| # | Finding | Severity | Detail |
+|---|---------|----------|--------|
+| 1 | **Streaming chat completions can be extracted for free / at a loss.** `routes/chat.ts`: `hasMinimumBalance` is checked against a fixed floor (`minChatCost`, default $0.00001), not the actual projected cost of the request. For streaming, tokens are written to the client (`reply.raw.write`) *before* `creditStore.deduct` runs at stream end; if deduct fails (balance already spent, or request cost >> floor), the client has already received the full completion — only a `lmx.error` event is appended after the fact, nothing is clawed back. Same root cause already flagged in this doc (line "Streaming edge case") but it's actively exploitable, not just an edge case: an account can open several concurrent streaming requests on a near-zero balance and get multiple full completions for free, since the balance check happens per-request before any of them deduct. Non-streaming path is safe (withholds the response on failed deduct) but LMX still eats the upstream provider cost before finding out the user can't pay. | High | `apps/api/src/routes/chat.ts` (~L267-406), `apps/api/src/credits/postgres-store.ts` |
+| 2 | **Rate limiting is keyed on `request.ip` with `trustProxy: true`, which trusts the entire `X-Forwarded-For` chain.** A client can set its own `X-Forwarded-For` header; depending on how Cloudflare appends vs. forwards it, Fastify/`proxy-addr` may pick the attacker-supplied leftmost value instead of the real edge-observed IP. This would let someone bypass the 5-keys/hour and 30-chat/min per-IP limits on `/v1/auth/key`, `/v1/auth/wallet/nonce`, `/v1/auth/wallet/verify`, and anonymous x402 chat just by rotating a header value. Fix: key off `CF-Connecting-IP` (Cloudflare sets this itself and it can't be spoofed through the edge) or set `trustProxy` to the exact hop count instead of `true`. | Medium-High | `apps/api/src/server.ts` L46, `apps/api/src/routes/auth.ts`, `apps/api/src/routes/chat.ts` L77 |
+| 3 | **`LMX_OPS_API_KEY` has no strength requirement in production.** `assertProductionSafety` enforces `SESSION_SECRET` ≥ 32 chars in prod but never checks `LMX_OPS_API_KEY`, which gates `/v1/ops/*` (treasury snapshot, payments, signups, credit events — real financial/PII data). No rate limit on failed ops-auth attempts either, so a short key is brute-forceable. | Medium | `apps/api/src/config.ts` (`assertProductionSafety`), `apps/api/src/ops/auth.ts` |
+| 4 | **MCP server's admin-key fallback leaks the operator's own balance/usage to unauthenticated callers.** `get_balance` and `get_usage` tools set `requireApiKey: true` but not `allowAdminFallback: false`, so if `LMX_ADMIN_API_KEY` (or `LMX_API_KEY` on http transport) is configured on the hosted MCP server, any caller who omits `api_key` gets the *operator's* account balance/usage back instead of an auth error. `web_search` and `chat_completion` already correctly set `allowAdminFallback: false` — the fix is the same one-line change on the two read tools. | Low-Medium | `apps/mcp-server/src/index.ts` (`get_balance` ~L248, `get_usage` ~L291), `apps/mcp-server/src/auth.ts` |
+| 5 | **Local secrets hygiene.** Repo root has `key.pem` (a live Ed25519 private key, unused by any code — looks like a leftover test artifact) and `tmp-key-response.json` / `tmp-chat-response.json` / `tmp-proof.json` / `tmp-logs.json` containing a real-shaped API key (`lmx_50e45dd82d9a7d7176352b7c664b9646`, likely a local test key) and internal log/receipt data. None of these are currently tracked in git (`git log` confirms no history for them) and `key.pem` is gitignored — but the `tmp-*.json` files are **not** in `.gitignore`, so a routine `git add .` would commit them. Delete these files and add `tmp-*.json` to `.gitignore`; rotate the `lmx_50e4...` key if it was ever used against a real account. | Low (currently) / High if ever committed | repo root |
+| 6 | **`.git/config` was found truncated/corrupted** (cut off mid-write in a `[branch ...]` stanza), which blocked all `git log`/`git status` until repaired locally this session. Not a remote-facing vulnerability, but worth a `git fsck` / re-clone to rule out disk or process interruption issues on this machine. | Info | local `.git/config` |
+
+Already-known and still open (cross-referenced, not new): no WAF on Cloudflare (Free plan), MCP custom domain / origin-lock not fully verified live, in-memory rate limiter + nonce store don't survive multi-instance scale — see `SECURITY.md` → Known gaps.
+
 **x402 — resolved blockers (Sprint 2 close-out, verified 2026-07-08):**
 
 | Blocker | Status |
@@ -46,7 +61,7 @@ Everything below is verified directly against the code and local test runs, not 
 - **Week 3 legal** — ToS, privacy policy, acceptable use, feedback channel. **Drafts in `legal/` and `/legal/*` (2026-07-08).** Attorney review still required before Bazaar listing. **In progress as of 2026-07-20** — actively being worked, after being deferred three times previously (see POM section).
 - ~~**x402 paid path verified on testnet**~~ — **Done 2026-07-08.** Sprint 2 closed on Base Sepolia.
 - ~~**Mainnet x402 flip not yet verified**~~ — **Done 2026-07-13.** Paid mainnet canary green on Coinbase CDP Node RPC (see table above); mainnet x402 pay-per-call flow fully verified end-to-end.
-- **Payment failure reconciliation** — partial: x402 middleware cancels verified payment on handler 4xx/5xx; no explicit refund tx or user-visible credit-back when provider fails after balance deduct.
+- ~~**Payment failure reconciliation**~~ — **done 2026-07-28.** See "Sprint — Payment-failure reconciliation" below for full detail.
 
 **Ops / scale (fine for single-instance beta, harden before scaling):**
 - Rate limiter and SIWE nonce store are in-memory — reset on deploy, ineffective across multiple Railway instances. **Partial mitigation available:** Cloudflare edge rate limiting (see new section below) adds a layer that survives redeploys/multi-instance regardless of app-level state; app-level Redis-backed limiter is still the real fix, not replaced.
@@ -142,6 +157,27 @@ Built to support the demand-gen push: real-time visibility into signups, credits
 - **Ops hub UI** (`apps/ops`) — standalone Vite app consuming the existing `GET /v1/ops/overview` (was API-only before this, no frontend). Now shows provider health, usage stats/trends, irregularities, recent signups, credit events, payments, stuck payments, and a unified activity feed. Polls every 15s. Auth via `LMX_OPS_API_KEY` (env var or pasted in UI, stored in localStorage).
 
 **Why:** direct outreach (the current demand-gen focus, see [[lmxcloud_phase1_distribution]]) needs a fast feedback loop — knowing within seconds when someone from the outreach list actually signs up, funds, or hits the API, rather than checking manually.
+
+## Sprint — Payment-failure reconciliation — done 2026-07-28
+
+Closes the last Phase 1 hard gate (POM section, Phase 1 close-out rollup): money moving with no result to show for it. `payment_events` already had `failed`/`refunded` statuses and `markFailed()`/`markRefunded()` implemented in `PostgresPaymentStore` — but `markRefunded()` was never called anywhere. Audit before building found four real gaps, not one generic one:
+
+| Path | Money moves | Failure gap (before) |
+|------|-------------|----------------------|
+| x402 non-stream | CDP settle in `onAfterSettle` → `markSettled` | Inference errors in `chat.ts` catch didn't call `markFailed`/`markRefunded` |
+| x402 | `tryClaimForFulfillment` before inference | Stuck in `fulfilling`; only surfaced via `payments.stuck` after 15m, never resolved |
+| Balance non-stream | `deduct` after successful inference | Failures before `deduct` are safe — no debit ever happens |
+| Balance stream | `deduct` after stream ends | Stream error after `deduct` left the customer debited with no credit-back |
+
+**Design decision, automatic vs. manual:** balance credit-backs are always automatic (`CreditStore.credit` with `source: delivery_failure_refund` — reversing a credit deduction carries no external-money risk). x402 pre-settlement failures auto-`markFailed` (funds never left the payer, nothing to refund). x402 post-settlement failures auto-refund on-chain only when the amount is ≤ `REFUND_AUTO_MAX_USDC` (default $5) and a treasury signing key is configured; above that threshold or without a key, it queues `manual_required` in the ops hub rather than moving larger amounts unattended. A payment that settles but never links to a usage row queues a pending reconciliation and waits `RECONCILIATION_GRACE_MINUTES` (default 2m) before refunding — avoids refunding a response that actually succeeded but whose usage-recording just lagged.
+
+**What was built** (`apps/api/src/payments/reconciliation/`): `service.ts` (reconciler — `reconcileX402Failure`, `reconcileBalanceCreditBack`, `executeManualReconciliation`), `logic.ts` (pure decision rules), `treasury-wallet.ts` (viem wallet client reusing the `anchors/poller.ts` signing pattern rather than new key-management), `poller.ts` (retries pending/failed reconciliations and stuck `fulfilling` rows), `store.ts` (new `reconciliation_events` table, migration in `migrate.ts`). Wired into `chat.ts` (x402 catch block + stream-error-after-deduct path), `x402-server.ts` (queues pending reconciliation on settle-without-usage), `server.ts` (poller startup/shutdown), and the ops hub (`payments.needs_refund` irregularity + `POST /v1/ops/reconciliation/:id/execute` + an Approve-refund button in `apps/ops`). `markRefunded` now also accepts the `completed` status. 50 tests added in `service.test.ts` (not independently re-run this session — worth a real `pnpm test` pass before relying on that count). Design doc at `docs/payment-reconciliation.md`.
+
+**Config needed in production** (not yet set on Railway as of this writing): `TREASURY_PRIVATE_KEY` (treasury hot wallet, same address as USDC deposit receiving), `REFUND_AUTO_MAX_USDC` (default 5), `RECONCILIATION_ENABLED` (default true), `RECONCILIATION_GRACE_MINUTES` (default 2). Migration runs automatically on next deploy.
+
+**Found during review, not yet fixed:** `x402-server.ts`'s settle-without-usage path does a one-off dynamic `import("./reconciliation/store.js")` and creates its own `createReconciliationStore()` instance and a hand-rolled `` `x402:${settled.id}` `` idempotency-key string, instead of reusing the single reconciler instance wired everywhere else in `server.ts` and calling the shared `x402RefundIdempotencyKey()` helper from `logic.ts`. Functionally harmless (same DB, same string), but it's an inconsistency worth a quick Cursor cleanup pass so there's one code path for constructing that key.
+
+**Unrelated but urgent, found during this review:** the working tree currently shows ~262 files as git-modified, but `git diff --ignore-all-space` shows only 28 files with real content changes (~1,100 lines) — the rest is a repo-wide CRLF line-ending flip, unrelated to this feature. Committing with a plain `git add -A` right now would bury the real reconciliation diff in tens of thousands of whitespace-only line changes. Fix line endings (`.gitattributes` with `text=lf`, or match `core.autocrlf` to what's actually committed) before the next commit, or stage only the real changed files by hand.
 
 ## Week 1 — Deploy for real, close the security gap (DONE)
 
@@ -535,6 +571,21 @@ Route agent requests for storage/memory (files, logs, embeddings) to decentraliz
 
 Previously "widen job types routed (the Lambda of LMX)." Originally merged into Goal 2 as "just another function in the registry." **Corrected:** LMX-operated job types (embeddings, vision, image generation) are Goal 0b — native MCP tools LMX itself executes, same as `chat_completion` — not third-party marketplace listings. Only genuinely third-party-authored functions belong in Goal 2's registry.
 
+### Phase 2 north star, clarified (decided 2026-07-26)
+
+Sprints 0/0b/1 (resource depth/breadth) are means, not the destination — the actual target is Sprint 2-6's output: a Mesh-scale marketplace (directionally 30+ listed agents, hundreds of callable tools, all x402-payable) plus LMX.Agent as the open framework layer developers build on. This is also explicitly where the demand-gen strategy shifts: once the registry exists, every new agent/tool shipped and listed is its own piece of marketing material (see Demand generation tactics below) — the same shape as Heurist's near-constant "Heurist x [Partner]" content pattern, applied to registry growth instead of partnership announcements.
+
+**Calibration, stated honestly:** Heurist itself took roughly 1.5-2 years post-Mesh-launch, with an 11-13 person team and real capital, to reach ~30 agents / 100+ tools. The 12-month KPI target (double-digit active third-party listings, see KPI section) is a meaningful step toward that north star, not arrival at it — treat "Mesh scale" as a multi-year destination, not a 12-month deliverable, so the roadmap doesn't quietly reset expectations against a timeline nothing here actually supports.
+
+**Access/payment model for every registry-listed function (mirrors what's already built, not new mechanism design):** the same dual/triple path already proven on the compute endpoint extends to third-party listings — (1) API key against a prepaid credit balance, human/dev-friendly; (2) direct x402 pay-per-call, no account or key at all, a wallet signs a payment per request against an HTTP 402 challenge — this is the actual machine-native path Phase 1's plumbing was built for; (3) MCP as a transport wrapping either of the above, so any MCP client (Claude Desktop, Cursor, Windsurf, or an autonomous agent) can call in. Every call, regardless of path, still gets a Merkle-anchored delivery receipt. Sprint 3's registry foundations work is "make every third-party function work this way," not a new payment mechanism.
+
+**Open, unresolved — self-registration curation model:** researched 2026-07-26 how Heurist Mesh actually handles third-party contributions, since it's the closest real precedent for Sprint 3-4. Their model is GitHub pull requests (sometimes against posted bounty/integration-request issues) reviewed and merged by the Heurist team — real third-party revenue share, but human-curated, not permissionless. LMX's current Goal 2 spec (wallet-signed self-registration, mechanical-only anti-abuse via bond/slashing, deliberately no human review) is a harder, more ambitious version of what Heurist actually proved out. Not a reason to abandon the permissionless design, but a reason not to assume it's de-risked by Heurist's example — this piece is more experimental than the rest of the parallel suggests. Revisit explicitly during Sprint 2 scoping rather than assuming the original spec is validated.
+
+**Open, unresolved — flagship demo-agent vertical:** the plan (confirmed 2026-07-26) is to build and list real demo agents on LMX's own stack as both marketing content and the literal proof-of-concept for Sprint 6's "one real agent-authored function" bar. Three candidates discussed, not yet decided:
+- **Agent-to-agent commerce/composability itself** (current lean) — a demo agent that autonomously calls and pays multiple separate x402 endpoints (LMX-run and, once available, third-party Mesh listings) to assemble an answer, producing a verifiable receipt chain. Directly demonstrates LMX's actual differentiator rather than wrapping it. Cheapest to build — leans on Goal 0's reliability index, already shipped internally. Audience: other agent developers, matching Phase 1's existing three channels.
+- **On-chain/DAO monitoring and risk analysis** — protocol health, treasury exposure, liquidation risk. Buyer matches the stated wedge exactly (a DAO structurally can't use hyperscaler billing). Caution: must stay strictly analysis/monitoring, not spend-policy or execution, to avoid re-opening territory already deferred elsewhere in this doc (treasury/spend-policy management — "already being built by others").
+- **Social/content/campaign-analysis for automated marketing** — broadest general-audience appeal (best fit for the X/Discord/LinkedIn growth push specifically), but the buyer (marketing teams with corporate cards) doesn't structurally need LMX's wallet-native rails, so on its own it doesn't prove the thing that's actually differentiated. Would need the payment/composability mechanics built visibly into the demo to still serve the marketplace thesis, not just be "another AI tool that happens to run on LMX."
+
 ### Phase 2 sprint plan (resequenced 2026-07-17 — reliability depth, then resource breadth, then storage/marketplace; not yet scoped for real execution; Phase 1 must close first)
 
 - **Platform Sprint 0 — Compute reliability depth (Goal 0).** Nosana adapter shipped (per-deployment); Aethir Mesh is the next near-zero-cost shared-gateway candidate (self-serve, OpenAI-compat — needs API key + live `/v1/models` confirm); Render/Golem/Spheron/Fluence evaluated and skipped 2026-07-19 (rental, paused Modelserve, or sales-gated — see Goal 0 item 1). Telemetry done; failure-independence + published comparison claim still need another live shared gateway + traffic.
@@ -559,7 +610,7 @@ Previously "widen job types routed (the Lambda of LMX)." Originally merged into 
 
 Open questions carried forward into scoping: revenue model (take-rate vs. infra fee), whether the unresolved receipt-guarantee question blocks webhook-backed listings entirely, whether the mechanical-only review gate holds up at real abuse volume, and the function-marketplace definition questions raised in Goal 2 above.
 
-**Explicitly not Phase 2:** dataset marketplace — deferred per the AWS Data Exchange sequencing note above, no verification/anti-redistribution model exists yet. Reputation/trust-scoring products (e.g. feeding receipts into ERC-8004 or similar emerging standards) — revisit once Phase 2 has real multi-resource transaction volume to make that data meaningful (note: the reliability record in Goal 0 is a narrower, near-term version of this, scoped to routing quality rather than general reputation). Treasury/spend-policy management for agents — adjacent territory already being built by others (PolicyLayer, Eco, AWS Bedrock AgentCore); not a near-term fit unless narrowly scoped to cross-provider compute/storage spend specifically.
+**Explicitly not Phase 2:** dataset marketplace — deferred per the AWS Data Exchange sequencing note above, no verification/anti-redistribution model exists yet. Reputation/trust-scoring products (e.g. feeding receipts into ERC-8004 or similar emerging standards) — revisit once Phase 2 has real multi-resource transaction volume to make that data meaningful (note: the reliability record in Goal 0 is a narrower, near-term version of this, scoped to routing quality rather than general reputation; see "LMX.Agent" below for how this piece got a name and a phased plan). Treasury/spend-policy management for agents — adjacent territory already being built by others (PolicyLayer, Eco, AWS Bedrock AgentCore); not a near-term fit unless narrowly scoped to cross-provider compute/storage spend specifically.
 
 ### Demand generation (parallel track across all of Phase 2, decided 2026-07-17)
 
@@ -576,8 +627,57 @@ Open questions carried forward into scoping: revenue model (take-rate vs. infra 
 2. Rewrite the Bazaar discovery description as real copy, informed by what semantic search actually matches against.
 3. Verify and, if needed, pursue inclusion in Agentic.Market's curated set and MCP's secondary discovery layers (GitHub registry, PulseMCP) rather than assuming the two "official" listings (Bazaar catalog, official MCP registry) are sufficient on their own.
 4. Once Goal 0's reliability record exists, treat it as demand-generation material, not just an internal proof point — a published multi-network reliability comparison is exactly the kind of credibility signal that plays well in both a Bazaar/Agentic.Market description and direct outreach to agent-framework developers.
+5. Once the Phase 2 registry exists (added 2026-07-26): every new agent/tool shipped and listed is its own piece of content — same shape as Heurist's near-constant partnership-announcement pattern, just applied to registry growth instead of external partnerships. Don't let registry growth happen silently; each listing is a post.
 
 **Still open:** what "real demand" means as a measurable target (distinct paying wallets/agents per week, not raw call volume); whether outreach targets human developers who deploy agents, or autonomous-agent operators directly.
+
+### Pre-demand-gen readiness checklist (consolidated 2026-07-27)
+
+**Why this exists:** these items already existed scattered across Phase 1 close-out, Housekeeping, Housekeeping2, and the Demand generation tactics above — this pulls them into one gate so "heavily focus on seeding demand" has one checklist to clear, not six sections to remember to check. Not new work, not new scope — a rollup, same spirit as the Phase 1 close-out rollup above.
+
+**Hard gates — block the public-push phase of demand-gen for all three channels:**
+- [ ] Attorney review of legal drafts (longest-deferred, cheapest to clear, highest-leverage — see POM section).
+- [ ] x402 burst/load validation on mainnet (proven on Sepolia only so far).
+- [x] ~~Payment-failure reconciliation~~ — **done 2026-07-28.**
+
+**Third channel, not yet fully live:**
+- [ ] ElizaOS live-agent end-to-end test (real unstarted engineering, independent of the PR review).
+- [ ] ElizaOS registry PR #16397 (nothing left on our side, waiting on maintainer re-review + CI approvals).
+
+**Reliability/visibility — so seeded volume is actually measurable, not flying blind:**
+- [ ] Confirm uptime monitor is genuinely live (open since Distribution Sprint 1, still unconfirmed).
+- [ ] Verify Sentry captures a real error in production, not just initialized.
+- [ ] Deploy `apps/ops` dashboard (currently local-only; Vercel config already exists).
+
+**Presentation — so outreach points at something coherent:**
+- [ ] Real logo + brand system (currently one AI-generated image made for a single registry submission).
+- [ ] Branded social accounts (X at minimum; Discord/LinkedIn if it fits) as an outreach destination.
+
+**Demand-gen mechanics, pre-staged:**
+- [ ] Rewrite the Bazaar discovery description as real copy (currently Sprint 4 placeholder text — functions as real semantic-search marketing copy, not boilerplate).
+- [ ] Verify inclusion in Agentic.Market's curated ~70 listings and MCP's secondary discovery layers (GitHub registry, PulseMCP) — being in the raw catalogs isn't the same as being findable.
+
+**Sequencing:** hard gates first — nothing below that line should get real outreach energy until attorney review, mainnet burst validation, and payment reconciliation all close. The rest can run in parallel with each other and with the hard gates, but should close before switching fully into outreach mode, not get caught up on after.
+
+### LMX.Agent — open agent framework, phased (decided 2026-07-26)
+
+Originated from an advisor-mode session studying Heurist (Heurist Mesh + Heurist Agent Framework — a crypto-intelligence agent marketplace with x402 per-call micropayments, ~$1.4M 2025 revenue on an 11-13 person team) as a case study. Not a new-idea import for the marketplace piece — Phase 2 Goal 2 above already reasoned to the same function-marketplace thesis independently on 2026-07-11, and Heurist mainly serves as external proof that model is real and revenue-generating elsewhere. The one genuinely new piece is an open framework layer, which didn't exist anywhere in LMX's plan before this session.
+
+**Phase A — lightweight framework, does not wait on the Phase 2 gate.** An open, thin framework (direct analog to Heurist's own open-source Agent Framework) so a developer can spin up an agent that's wallet-identified out of the box and can call LMX's MCP tools / pay via x402 with minimal setup. This is demand-generation, not new product scope — same category as the "seed real usage deliberately" tactics in the Demand generation section above, and can start now, in parallel with Phase 1 close-out, without touching the Platform Sprint 0-6 pause.
+
+**Phase B — onchain identity/reputation layer, stays behind the Phase 2 gate.** Registering agents as onchain entities (ERC-8004-style) with identity/reputation that persists across calls. This is not new scope — it's the same "reputation/trust-scoring products (e.g., feeding receipts into ERC-8004 or similar emerging standards)" line already named and deferred under Phase 2 above, now given a name and a home: revisit once Phase 2 Goal 2's registry has real multi-resource transaction volume to make agent identity/reputation data meaningful.
+
+**Why sequenced this way:** same POM discipline as everything else currently paused. Phase A costs nothing against the gate — it's an adoption tool, not a new resource type or marketplace listing, so it doesn't contradict the 2026-07-20 decision to hold new scope until Phase 1 proves unprompted demand. Phase B is real new scope and inherits the same "prove demand first" logic as the rest of Phase 2 — its unpause trigger should move together with Phase 2 Goal 2's own (attorney review clears + a real unprompted stranger payment), not independently.
+
+### Phase 2 KPI targets — 12-month horizon (decided 2026-07-26)
+
+**Target: $5K-$10K MRR by end of Phase 2 buildout (~12 months from unpause).** Calibrated against Heurist as the closest real comparable (~$1.4M annual revenue, but at 2 years in and an 11-13 person team — bigger team, more time, so LMX's 12-month/small-team target is deliberately a fraction of that, not a parity goal) and against CDP Bazaar's network-wide aggregate (~$50M cumulative volume across 480K+ agents and thousands of listings as of April 2026 — a single new, narrow listing captures a sliver of that long tail, not a proportional share). Treat this as a planning target to falsify quickly against real signal, not a forecast or a promise.
+
+**Derived ranges, same horizon (order-of-magnitude, not independently targeted — back-calculated from the revenue number at typical micropayment price points):** tens of thousands to low hundreds of thousands of paid x402 calls/month; low hundreds of distinct paying wallets/week. **Marketplace-specific signal, more important than the volume numbers above:** a double-digit count of active third-party functions listed and transacting through the Goal 2 registry — this is the real proof the marketplace thesis (not just the compute-router business) is working, separate from and more diagnostic than raw revenue.
+
+**Sequencing decision:** once Phase 2 buildout (Platform Sprints 0-6) ships, the only priority becomes driving traffic and marketing — no new building — until the $5K-$10K MRR target is hit or a clear signal says the product itself needs to change. Same forcing-function shape as the Phase 1 POM discipline already in this document (build, then prove externally, don't keep building instead of testing).
+
+**Named risk, same pattern as elsewhere in this doc:** Phase 2 buildout's own "done" needs to mean the same thing Phase 1's does — real resolution of the open questions already flagged in Goal 2 (revenue model take-rate vs. infra fee, the third-party receipt-guarantee question, whether the mechanical-only review gate holds at real abuse volume), not just checklist completion of the six Platform Sprints. Declaring buildout "done" prematurely to get to the more comfortable marketing phase would repeat the exact mistake the legal-review gate already demonstrated once in this project.
 
 ## Strategic direction — Phase 1 close-out, L4 open protocol, and the long-term stack (decided 2026-07-20)
 
@@ -591,7 +691,7 @@ Phase 1's three distribution goals are shipped or one step from done (full detai
 - [ ] **ElizaOS registry PR** ([elizaOS/eliza#16397](https://github.com/elizaOS/eliza/pull/16397)) — waiting on maintainer re-review + 11 CI approvals, nothing left on LMX's side.
 - [ ] **ElizaOS live-agent end-to-end test** — the one piece of Goal 3 that's still actually unstarted engineering, independent of the PR review above.
 - [ ] **x402 burst/load validation on mainnet** — proven on Sepolia only so far (Distribution Sprint 3); mainnet adversarial validation still open.
-- [ ] **Payment-failure reconciliation** — no explicit refund tx / user-visible credit-back when a provider fails after payment settles.
+- [x] ~~**Payment-failure reconciliation**~~ — **done 2026-07-28.** Automatic balance credit-back, automatic on-chain USDC refund under `REFUND_AUTO_MAX_USDC`, manual-approve path in ops hub above that. Full detail in the dedicated section below.
 
 Once these close, Phase 1's own success metric — a real, un-prompted x402 payment from a wallet LMX has never seen before — is the actual gate to call it done, not checklist completion.
 
@@ -609,6 +709,16 @@ Phase 2 stays paused per the 2026-07-20 decision above (no unprompted external p
 **Dependency worth naming:** the index's credibility compounds with provider count. Connects directly to the already-decided provider-depth priority (line ~100, "a third compute provider is a better use of that energy than starting Phase 2") — Aethir landing (Platform Sprint 0) isn't just a reliability-chain improvement, it's what makes the eventual open index a real claim instead of a two-network anecdote.
 
 **Not new engineering scope.** This reframes Goal 0/Goal 0b/Goal 2 as already sequenced; it does not move up the Phase 2 gate.
+
+### Case study: Ocean Protocol / Ocean Network (added 2026-07-24)
+
+**Why this is the closer comparable than Infura alone:** Ocean Protocol's original datatoken/marketplace contracts are genuinely open — Apache-licensed, forkable — with fee capture enforced at the smart-contract level: every datatoken consume/trade fires a community fee plus an LP/marketplace-operator fee automatically, regardless of which frontend (Ocean Market or a fork of it) mediated the call. That's a stronger form of "open" than LMX's current L4 design above: the reliability/pricing index and proof endpoints are an open *query schema* over internally-computed telemetry (the Infura flavor — open spec, centrally hosted), not a redeployable protocol with fee logic baked into the contract itself (the Ocean flavor). Nothing today stops a third party from scraping the free tier or mirroring the schema once it's documented.
+
+**Ocean Network (oncompute.ai, beta launched March 2026)** is the more direct structural analog to LMX as a whole, not the older data-marketplace story: open P2P compute-coordination concept underneath, but the actual monetized surface is the Orchestrator (a VS Code/Cursor/Windsurf extension) plus rented Aethir GPU supply on a pay-per-use escrow settled on Base — their own router-and-gateway-for-demand layer, same shape as LMX's execution path (routing/scoring + managed billed execution).
+
+**Validates the demand-first L0/L1 sequencing (below):** OCEAN's original curation-staking model was replaced by Data Farming for the same "mercenary capital" reason LMX is deferring L0 — and in October 2025 the Ocean Protocol Foundation withdrew from the Artificial Superintelligence Alliance (the OCEAN/FET/AGIX merger), citing Fetch.ai/SingularityNET violating asset-control commitments amid FET's ~93% price decline; OCEAN has since de-pegged and trades independently again. A live, recent instance of the token-first-liquidity trap this roadmap already names as the reason to hold L0 until L4 demand is proven — not a hypothetical.
+
+**Open question this raises, unresolved as of 2026-07-24:** whether LMX's open layer should capture value the way Ocean's does — a small fee enforced at the protocol level on every consume event, not a bolt-on API access tier. John is leaning toward this. The concrete path that doesn't require a token or a new contract: reuse the already-built x402 rails (same CDP-facilitator/Base settlement already proven on `chat.ts`) on the reliability index and proof endpoints themselves, so programmatic/heavy third-party consumption settles a per-call micropayment enforced by middleware — not just documented as a paid tier. Casual/discovery-level access (StatusPage viewing, occasional proof lookups) would stay free, mirroring how Ocean's mandatory fee is small enough not to deter normal usage. Not yet designed or built — flagged here as the live direction, not a decision.
 
 ### L0/L1 — directional signal only, not an active workstream (decided 2026-07-20)
 

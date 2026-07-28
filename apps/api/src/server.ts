@@ -29,6 +29,18 @@ import { registerPricingRoutes } from "./routes/pricing.js";
 import { registerOpsRoutes } from "./routes/ops.js";
 import { createPaymentStore } from "./payments/store.js";
 import { registerX402ChatPayments } from "./payments/x402-server.js";
+import { createReconciliationStore } from "./payments/reconciliation/store.js";
+import {
+  createPaymentReconciler,
+  type PaymentReconciler,
+} from "./payments/reconciliation/service.js";
+import {
+  createTreasuryWallet,
+} from "./payments/reconciliation/treasury-wallet.js";
+import {
+  loadReconciliationConfig,
+  ReconciliationPoller,
+} from "./payments/reconciliation/poller.js";
 import type { Network } from "@x402/core/types";
 import { createRateLimiter } from "./rate-limit.js";
 import { createUsageStore } from "./usage/index.js";
@@ -138,6 +150,63 @@ export async function buildServer() {
     );
   }
 
+  const reconciliationConfig = loadReconciliationConfig();
+  const reconciliationStore = createReconciliationStore();
+  const treasuryWallet =
+    reconciliationConfig.treasuryPrivateKey &&
+    reconciliationConfig.rpcUrl &&
+    reconciliationConfig.usdcContractAddress &&
+    reconciliationConfig.chainId
+      ? createTreasuryWallet({
+          privateKey: reconciliationConfig.treasuryPrivateKey,
+          rpcUrl: reconciliationConfig.rpcUrl,
+          usdcContractAddress: reconciliationConfig.usdcContractAddress,
+          chainId: reconciliationConfig.chainId,
+        })
+      : null;
+
+  let reconciler: PaymentReconciler | null = null;
+  if (reconciliationStore) {
+    reconciler = createPaymentReconciler({
+      paymentStore,
+      creditStore,
+      reconciliationStore,
+      treasuryWallet,
+      config: reconciliationConfig,
+      log: (message, meta) => app.log.info(meta ?? {}, message),
+    });
+  } else if (process.env.DATABASE_URL) {
+    app.log.warn("Reconciliation store unavailable");
+  }
+
+  let reconciliationPoller: ReconciliationPoller | null = null;
+  if (reconciler && reconciliationStore && reconciliationConfig.enabled) {
+    reconciliationPoller = new ReconciliationPoller(
+      reconciler,
+      reconciliationStore,
+      {
+        pollIntervalMs: reconciliationConfig.pollIntervalMs,
+        graceMinutes: reconciliationConfig.graceMinutes,
+      },
+      (message) => app.log.info(message),
+    );
+    reconciliationPoller.start();
+  } else if (
+    reconciliationConfig.enabled &&
+    process.env.DATABASE_URL &&
+    !reconciliationStore
+  ) {
+    app.log.warn(
+      "Reconciliation poller disabled — reconciliation_events table unavailable",
+    );
+  }
+
+  if (reconciliationConfig.enabled && !treasuryWallet) {
+    app.log.warn(
+      "TREASURY_PRIVATE_KEY not set — x402 refunds above auto threshold require manual ops approval and cannot auto-execute",
+    );
+  }
+
   const walletNonceStore = createWalletNonceStore();
 
   const authenticate = createAuthHook(apiKeyStore, {
@@ -238,6 +307,8 @@ export async function buildServer() {
 
     anchorPoller?.stop();
 
+    reconciliationPoller?.stop();
+
     await closePool();
 
   });
@@ -303,6 +374,7 @@ export async function buildServer() {
     usageStore,
     creditStore,
     paymentStore,
+    reconciler,
     chatRateLimit: createRateLimiter({
       max: config.chatRateLimitMax,
       windowMs: config.chatRateLimitWindowMs,
@@ -388,6 +460,7 @@ export async function buildServer() {
     x402Enabled:
       config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
     paymentStoreReady: Boolean(paymentStore),
+    reconciler,
     treasury: treasuryOpsConfig
       ? {
           rpcUrl: treasuryOpsConfig.rpcUrl,

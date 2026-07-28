@@ -13,9 +13,18 @@ export function getPool(): pg.Pool {
   pool = new pg.Pool({
     connectionString,
     ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
-    connectionTimeoutMillis: 5_000,
-    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+    // Release clients before Neon pooler drops idle sockets.
+    idleTimeoutMillis: 20_000,
     max: 10,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  });
+
+  // Neon closes idle connections; without this handler pg throws an unhandled
+  // 'error' event and can crash the whole Node process.
+  pool.on("error", (err) => {
+    console.error("[db] idle client error (pool will reconnect):", err.message);
   });
 
   return pool;
