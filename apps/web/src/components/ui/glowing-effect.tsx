@@ -3,17 +3,17 @@ import { memo, useCallback, useEffect, useRef, type CSSProperties } from "react"
 import { cn } from "../../lib/cn";
 
 /** Brand-aligned gradient using LMX Cloud theme tokens from index.css */
-const LMX_GLOW_GRADIENT = `radial-gradient(circle, #5b6bff 10%, #5b6bff00 20%),
-  radial-gradient(circle at 40% 40%, #3dd7e5 5%, #3dd7e500 15%),
+const LMX_GLOW_GRADIENT = `radial-gradient(circle, #3dd7e5 10%, #3dd7e500 20%),
+  radial-gradient(circle at 40% 40%, #5b6bff 5%, #5b6bff00 15%),
   radial-gradient(circle at 60% 60%, #2be08c 10%, #2be08c00 20%),
   radial-gradient(circle at 40% 60%, #7886ff 10%, #7886ff00 20%),
   repeating-conic-gradient(
     from 236.84deg at 50% 50%,
-    #5b6bff 0%,
-    #3dd7e5 calc(25% / var(--repeating-conic-gradient-times)),
+    #3dd7e5 0%,
+    #5b6bff calc(25% / var(--repeating-conic-gradient-times)),
     #2be08c calc(50% / var(--repeating-conic-gradient-times)),
     #f5d547 calc(75% / var(--repeating-conic-gradient-times)),
-    #5b6bff calc(100% / var(--repeating-conic-gradient-times))
+    #3dd7e5 calc(100% / var(--repeating-conic-gradient-times))
   )`;
 
 interface GlowingEffectProps {

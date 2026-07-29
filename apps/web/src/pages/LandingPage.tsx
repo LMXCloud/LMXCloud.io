@@ -14,7 +14,6 @@ import {
   Bot,
   Code2,
   FileCheck,
-  Layers,
   Package,
   Plug,
   Route,
@@ -25,6 +24,7 @@ import {
 import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { LandingFaq } from "../components/LandingFaq";
+import { BrandMark } from "../components/BrandMark";
 import { PartnerMarquee } from "../components/PartnerMarquee";
 import { SeoHead } from "../components/SeoHead";
 import { Button } from "../components/ui/Button";
@@ -243,9 +243,7 @@ export function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-[clamp(20px,4vw,48px)]">
           <Link to="/" className="group flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md border border-primary bg-primary/10">
-              <Layers className="h-4 w-4 text-primary" strokeWidth={1.75} />
-            </span>
+            <BrandMark />
             <div>
               <p className="text-title-md text-on-surface leading-tight">LMX Cloud</p>
               <p className="text-body-sm text-on-surface-faint leading-tight">Web3-native inference</p>
@@ -592,9 +590,7 @@ export function LandingPage() {
       <footer className="border-t border-border bg-surface">
         <div className="mx-auto flex max-w-[1200px] flex-col gap-6 px-[clamp(20px,4vw,48px)] py-10 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md border border-border-strong bg-elevated">
-              <Layers className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
-            </span>
+            <BrandMark size="sm" />
             <div>
               <p className="text-body-sm font-medium text-on-surface">LMX Cloud</p>
               <p className="text-body-sm text-on-surface-faint">Web3-native inference infrastructure</p>

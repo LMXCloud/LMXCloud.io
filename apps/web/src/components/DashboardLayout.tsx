@@ -5,7 +5,6 @@ import {
   ExternalLink,
   FlaskConical,
   KeyRound,
-  Layers,
   LayoutDashboard,
   LogOut,
   ScrollText,
@@ -16,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import { useClerkSignOut } from "../context/ClerkBridge";
 import { formatWallet, maskKey } from "../lib/format";
 import { cn } from "../lib/cn";
+import { BrandMark } from "./BrandMark";
 import { Button } from "./ui/Button";
 import { Chip } from "./ui/Chip";
 import { WalletSessionGuard } from "./WalletSessionGuard";
@@ -81,9 +81,7 @@ export function DashboardLayout() {
       <aside className="flex flex-col border-b border-border bg-surface lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r">
         <div className="border-b border-border px-5 py-5">
           <Link to="/console/overview" className="group flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md border border-primary bg-primary/10 transition-colors duration-base ease-standard group-hover:bg-primary/15">
-              <Layers className="h-4 w-4 text-primary" strokeWidth={1.75} />
-            </span>
+            <BrandMark />
             <div className="min-w-0">
               <p className="text-title-md text-on-surface leading-tight">LMX Cloud</p>
               <p className="text-body-sm text-on-surface-faint leading-tight">Developer console</p>

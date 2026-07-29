@@ -33,7 +33,7 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio(
         >
           <span
             className={cn(
-              "h-2 w-2 rounded-full bg-white opacity-0 transition-opacity",
+              "h-2 w-2 rounded-full bg-background opacity-0 transition-opacity",
               checked && "opacity-100",
             )}
           />

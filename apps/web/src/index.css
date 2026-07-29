@@ -14,16 +14,16 @@
   --color-on-surface: #f2f4f8;
   --color-on-surface-muted: #9aa0ae;
   --color-on-surface-faint: #5c6170;
-  --color-primary: #5b6bff;
-  --color-primary-hover: #7886ff;
-  --color-primary-pressed: #4a59e6;
-  --color-secondary: #3dd7e5;
+  --color-primary: #3dd7e5;
+  --color-primary-hover: #62e0ea;
+  --color-primary-pressed: #2ab8c4;
+  --color-secondary: #5b6bff;
   --color-tertiary: #f5d547;
   --color-success: #2be08c;
   --color-warning: #f5d547;
-  --color-info: #3dd7e5;
+  --color-info: #5b6bff;
   --color-error: #ff3a5c;
-  --color-focus: rgba(91, 107, 255, 0.35);
+  --color-focus: rgba(61, 215, 229, 0.35);
 
   /* Radius */
   --radius-sm: 6px;
@@ -36,7 +36,7 @@
   --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-  --shadow-focus: 0 0 0 3px rgba(91, 107, 255, 0.35);
+  --shadow-focus: 0 0 0 3px rgba(61, 215, 229, 0.35);
 
   /* Typography scale */
   --text-display: clamp(2.75rem, 6vw, 4.5rem);

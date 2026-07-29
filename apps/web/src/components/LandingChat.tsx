@@ -295,7 +295,7 @@ export function LandingChat() {
             <div
               className={`max-w-[90%] rounded-lg px-3 py-2 text-body-sm ${
                 entry.role === "user"
-                  ? "bg-primary-pressed text-white"
+                  ? "bg-primary-pressed text-background"
                   : "border border-border bg-background text-on-surface"
               }`}
             >

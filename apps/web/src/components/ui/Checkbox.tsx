@@ -33,7 +33,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           aria-hidden
         >
           <Check
-            className={cn("h-3 w-3 text-white transition-opacity", checked ? "opacity-100" : "opacity-0")}
+            className={cn("h-3 w-3 text-background transition-opacity", checked ? "opacity-100" : "opacity-0")}
             strokeWidth={1.75}
           />
         </span>

@@ -10,7 +10,7 @@ interface ChipProps extends HTMLAttributes<HTMLSpanElement> {
 
 const toneClasses: Record<ChipTone, string> = {
   default: "bg-elevated text-on-surface-muted",
-  primary: "bg-primary/12 text-primary-hover",
+  primary: "bg-primary/12 text-primary",
   success: "bg-success/12 text-success",
   warning: "bg-warning/12 text-warning",
   info: "bg-info/12 text-info",

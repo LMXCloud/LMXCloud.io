@@ -107,7 +107,7 @@ export function HeroNetworkGlobe({
       diffuse={resolvedLayout === "side" ? 1.8 : 1.2}
       baseColor={resolvedLayout === "side" ? [0.18, 0.2, 0.28] : undefined}
       glowColor={resolvedLayout === "side" ? [0.14, 0.16, 0.28] : undefined}
-      markerColor={resolvedLayout === "side" ? [0.45, 0.52, 1] : undefined}
+      markerColor={resolvedLayout === "side" ? [0.239, 0.843, 0.898] : undefined}
       theta={0.15}
       opacity={resolvedLayout === "side" ? 1 : 0.85}
     />
@@ -119,7 +119,7 @@ export function HeroNetworkGlobe({
         className="relative flex h-[calc(100dvh-4rem)] w-full min-w-[min(44vw,520px)] items-center justify-center px-2"
         aria-hidden
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(91,107,255,0.14),transparent_72%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(61,215,229,0.14),transparent_72%)]" />
         <div className="relative aspect-square size-[min(calc(100dvh-6rem),min(44vw,520px))]">
           {globe}
         </div>
