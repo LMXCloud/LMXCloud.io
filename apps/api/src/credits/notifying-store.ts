@@ -17,6 +17,32 @@ export class NotifyingCreditStore implements CreditStore {
     return this.inner.deduct(apiKeyId, amount);
   }
 
+  reserve(apiKeyId: string, amount: number): Promise<boolean> {
+    return this.inner.reserve(apiKeyId, amount);
+  }
+
+  settleReservation(
+    apiKeyId: string,
+    reservedAmount: number,
+    actualAmount: number,
+    meta?: CreditMeta,
+  ): Promise<boolean> {
+    return this.inner.settleReservation(
+      apiKeyId,
+      reservedAmount,
+      actualAmount,
+      meta,
+    );
+  }
+
+  releaseReservation(
+    apiKeyId: string,
+    reservedAmount: number,
+    meta?: CreditMeta,
+  ): Promise<void> {
+    return this.inner.releaseReservation(apiKeyId, reservedAmount, meta);
+  }
+
   async credit(
     apiKeyId: string,
     amount: number,

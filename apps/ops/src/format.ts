@@ -1,6 +1,23 @@
+import type { OpsProviderBalance } from "./types";
+
 export function formatUsd(n: number): string {
   if (n >= 1) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(6)}`;
+}
+
+export function formatProviderBalance(
+  balance: OpsProviderBalance | null | undefined,
+): string {
+  if (!balance) return "—";
+  const obs = balance.observability;
+  if (obs.mode === "api") {
+    const prefix = balance.belowThreshold ? "⚠ " : "";
+    return `${prefix}$${obs.balanceUsd.toFixed(2)}`;
+  }
+  if (obs.mode === "not_api_observable") {
+    return obs.reason;
+  }
+  return `poll error: ${obs.error}`;
 }
 
 export function formatEth(n: number): string {

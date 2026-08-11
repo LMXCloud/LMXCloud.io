@@ -13,6 +13,7 @@ import type { WalletNonceStore } from "../auth/wallet-nonce.js";
 import type { CreditStore } from "../credits/store.js";
 import { roundCredits } from "../credits/pricing.js";
 import { notifyAccountCreated } from "../notify/events.js";
+import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
 
@@ -226,7 +227,7 @@ export async function registerAuthRoutes(
   });
 
   app.post<{ Body: unknown }>("/v1/auth/wallet/nonce", async (request, reply) => {
-    const clientIp = request.ip;
+    const clientIp = getClientIpForRateLimit(request);
     const limit = deps.keyGenRateLimit(clientIp);
 
     if (!limit.allowed) {
@@ -271,7 +272,7 @@ export async function registerAuthRoutes(
   });
 
   app.post<{ Body: unknown }>("/v1/auth/wallet/verify", async (request, reply) => {
-    const clientIp = request.ip;
+    const clientIp = getClientIpForRateLimit(request);
     const limit = deps.keyGenRateLimit(clientIp);
 
     if (!limit.allowed) {
@@ -356,7 +357,7 @@ export async function registerAuthRoutes(
   });
 
   app.post<{ Body: unknown }>("/v1/auth/key", async (request, reply) => {
-    const clientIp = request.ip;
+    const clientIp = getClientIpForRateLimit(request);
     const limit = deps.keyGenRateLimit(clientIp);
 
     if (!limit.allowed) {

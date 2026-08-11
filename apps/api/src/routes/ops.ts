@@ -3,6 +3,7 @@ import { getLatestHealthCheckErrors } from "../health/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
+import type { ProviderBalanceStore } from "../providers/balance/types.js";
 import { requireOpsAuth } from "../ops/auth.js";
 import { runSentryTest } from "../ops/sentry-test.js";
 import {
@@ -12,7 +13,7 @@ import {
   mcpToolEventCount,
   type McpToolEventInput,
 } from "../ops/mcp-events.js";
-import { detectIrregularities } from "../ops/irregularities.js";
+import { collectIrregularities } from "../ops/collect-irregularities.js";
 import { enrichIrregularities } from "../ops/diagnostics.js";
 import {
   getTreasurySnapshot,
@@ -38,6 +39,7 @@ import type { PaymentReconciler } from "../payments/reconciliation/service.js";
 interface OpsRouteDeps {
   providers: ProviderAdapter[];
   healthStore: HealthStore;
+  balanceStore: ProviderBalanceStore;
   x402Enabled: boolean;
   paymentStoreReady: boolean;
   reconciler: PaymentReconciler | null;
@@ -216,10 +218,12 @@ export async function registerOpsRoutes(
       const limit = parseLimit(query.limit, 40);
 
       const statuses = deps.healthStore.getAll();
+      const balanceStatuses = deps.balanceStore.getAll();
       const syntheticErrors = await getLatestHealthCheckErrors("synthetic_completion");
       const providers = Object.fromEntries(
         deps.providers.map((provider) => {
           const status = statuses[provider.name];
+          const balance = balanceStatuses[provider.name];
           return [
             provider.name,
             {
@@ -232,6 +236,15 @@ export async function registerOpsRoutes(
               errorDetail: status?.errorDetail,
               checkUrl: status?.checkUrl,
               syntheticErrorDetail: syntheticErrors.get(provider.name) ?? null,
+              balance: balance
+                ? {
+                    observability: balance.observability,
+                    thresholdUsd: balance.thresholdUsd,
+                    belowThreshold: balance.belowThreshold,
+                    lastCheck: balance.lastCheck,
+                    latencyMs: balance.latencyMs,
+                  }
+                : null,
             },
           ];
         }),
@@ -264,7 +277,6 @@ export async function registerOpsRoutes(
       let signups: Awaited<ReturnType<typeof listRecentSignups>> = [];
       let creditEvents: Awaited<ReturnType<typeof listRecentCreditEvents>> = [];
       let reliability: Awaited<ReturnType<typeof getReliabilityTelemetry>> | null = null;
-      let dbError: string | null = null;
 
       try {
         [
@@ -291,7 +303,6 @@ export async function registerOpsRoutes(
           getReliabilityTelemetry(days, null),
         ]);
       } catch (err) {
-        dbError = err instanceof Error ? err.message : "Database query failed";
         request.log.warn({ err }, "ops overview database queries failed");
       }
 
@@ -440,39 +451,22 @@ export async function registerOpsRoutes(
         .slice(0, limit);
 
       const irregularities = await enrichIrregularities({
-        irregularities: detectIrregularities({
-          windowDays: days,
-          storage: hasPostgres() ? "postgres" : "file",
+        irregularities: await collectIrregularities({
+          providers: deps.providers,
+          healthStore: deps.healthStore,
+          balanceStore: deps.balanceStore,
           x402Enabled: deps.x402Enabled,
           paymentStoreReady: deps.paymentStoreReady,
-          healthyCount,
-          providerCount: deps.providers.length,
-          unhealthyProviders,
-          paymentStatusCounts: paymentCounts,
-          stuckPayments,
-          pendingReconciliations,
-          usageSummary,
-          usageHistory,
-          mcpEvents,
-          recentPayments: payments,
+          windowDays: days,
+          limit,
         }),
         providers: statuses,
         unhealthyProviders,
         stuckPayments,
         recentPayments: payments,
         mcpEvents,
+        recentUsage: usageRecent,
       });
-
-      if (dbError) {
-        irregularities.unshift({
-          id: "config.db_unreachable",
-          severity: "critical",
-          category: "config",
-          title: "Ops database unreachable",
-          detail: dbError,
-          action: "Check DATABASE_URL / Neon project status and local network; payments and usage panels may be empty until reconnect.",
-        });
-      }
 
       const attention = {
         critical: irregularities.filter((i) => i.severity === "critical").length,

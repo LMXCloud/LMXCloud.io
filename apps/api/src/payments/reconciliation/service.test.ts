@@ -169,6 +169,9 @@ describe("PaymentReconciler balance credit-back", () => {
         getBalance: async () => 1,
         hasMinimumBalance: async () => true,
         deduct: async () => true,
+        reserve: async () => true,
+        settleReservation: async () => true,
+        releaseReservation: async () => {},
         credit: async (apiKeyId, amount) => {
           credits.push({ apiKeyId, amount });
           return 1 + amount;
@@ -263,6 +266,9 @@ describe("PaymentReconciler x402 refund", () => {
         getBalance: async () => 0,
         hasMinimumBalance: async () => false,
         deduct: async () => false,
+        reserve: async () => false,
+        settleReservation: async () => false,
+        releaseReservation: async () => {},
         credit: async () => 0,
       },
       reconciliationStore: {
@@ -345,6 +351,9 @@ describe("PaymentReconciler x402 refund", () => {
         getBalance: async () => 0,
         hasMinimumBalance: async () => false,
         deduct: async () => false,
+        reserve: async () => false,
+        settleReservation: async () => false,
+        releaseReservation: async () => {},
         credit: async () => 0,
       },
       reconciliationStore: {

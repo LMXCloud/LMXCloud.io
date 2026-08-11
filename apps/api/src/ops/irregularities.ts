@@ -1,4 +1,9 @@
 import type { McpToolEvent } from "./mcp-events.js";
+import {
+  isProviderBillingTelemetryCode,
+  PROVIDER_BILLING_EXHAUSTED_CODE,
+} from "../providers/billing-errors.js";
+import type { ProviderBalanceStatus } from "../providers/balance/types.js";
 import type {
   OpsPaymentRow,
   OpsRecentUsage,
@@ -62,6 +67,8 @@ export type DetectIrregularitiesInput = {
   usageHistory: OpsUsageDayBucket[];
   mcpEvents: McpToolEvent[];
   recentPayments: OpsPaymentRow[];
+  recentUsage: OpsRecentUsage[];
+  providerBalances?: Record<string, ProviderBalanceStatus>;
 };
 
 const SEVERITY_RANK: Record<IrregularitySeverity, number> = {
@@ -73,6 +80,73 @@ const SEVERITY_RANK: Record<IrregularitySeverity, number> = {
 function pct(part: number, whole: number): number {
   if (whole <= 0) return 0;
   return (part / whole) * 100;
+}
+
+const PROVIDER_BILLING_FAILURE_MIN = 3;
+const PROVIDER_BILLING_DOMINANCE_PCT = 60;
+
+function detectProviderBillingExhaustion(
+  recentUsage: OpsRecentUsage[],
+): OpsIrregularity[] {
+  const failuresByProvider = new Map<string, OpsRecentUsage[]>();
+
+  for (const row of recentUsage) {
+    if (row.success) continue;
+    const bucket = failuresByProvider.get(row.provider);
+    if (bucket) bucket.push(row);
+    else failuresByProvider.set(row.provider, [row]);
+  }
+
+  const out: OpsIrregularity[] = [];
+
+  for (const [provider, failures] of failuresByProvider) {
+    if (failures.length < PROVIDER_BILLING_FAILURE_MIN) continue;
+
+    const billingFailures = failures.filter((row) =>
+      isProviderBillingTelemetryCode(row.errorCode),
+    );
+    const billingRate = pct(billingFailures.length, failures.length);
+    if (billingRate < PROVIDER_BILLING_DOMINANCE_PCT) continue;
+
+    out.push({
+      id: `health.provider_billing_exhausted.${provider}`,
+      severity: "critical",
+      category: "health",
+      title: `Provider billing exhausted (${provider})`,
+      detail: `${billingFailures.length}/${failures.length} recent failures on ${provider} are ${PROVIDER_BILLING_EXHAUSTED_CODE} (${billingRate.toFixed(0)}%) — upstream credits/quota, not a generic outage.`,
+      action: `Top up ${provider} credits in the provider dashboard and confirm the Railway API key still maps to a funded account.`,
+      metric: `${billingRate.toFixed(0)}% billing err`,
+      relatedIds: [provider],
+    });
+  }
+
+  return out;
+}
+
+function detectProviderBalanceLow(
+  balances: Record<string, ProviderBalanceStatus> | undefined,
+): OpsIrregularity[] {
+  if (!balances) return [];
+
+  const out: OpsIrregularity[] = [];
+
+  for (const [provider, status] of Object.entries(balances)) {
+    if (status.observability.mode !== "api" || !status.belowThreshold) continue;
+
+    const balanceUsd = status.observability.balanceUsd;
+    out.push({
+      id: `health.provider_balance_low.${provider}`,
+      severity: balanceUsd <= status.thresholdUsd * 0.25 ? "critical" : "warn",
+      category: "health",
+      title: `Provider balance low (${provider})`,
+      detail: `$${balanceUsd.toFixed(2)} ${status.observability.balanceKind} is below the $${status.thresholdUsd.toFixed(2)} threshold.`,
+      action: `Top up ${provider} credits in the provider dashboard.`,
+      metric: `$${balanceUsd.toFixed(2)}`,
+      relatedIds: [provider],
+    });
+  }
+
+  return out;
 }
 
 export function detectIrregularities(
@@ -111,6 +185,9 @@ export function detectIrregularities(
       metric: `${input.healthyCount}/${input.providerCount} up`,
     });
   }
+
+  out.push(...detectProviderBillingExhaustion(input.recentUsage));
+  out.push(...detectProviderBalanceLow(input.providerBalances));
 
   if (input.x402Enabled && !input.paymentStoreReady) {
     out.push({

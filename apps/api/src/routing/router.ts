@@ -92,9 +92,11 @@ export class InferenceRouter {
             latencyMs,
             fallbackUsed: index > 0,
             unitPrice: provider.costPer1kTokens,
-            errorCode: err.statusCode
-              ? `provider_http_${err.statusCode}`
-              : "provider_error",
+            errorCode:
+              err.telemetryCode ??
+              (err.statusCode
+                ? `provider_http_${err.statusCode}`
+                : "provider_error"),
           });
           continue;
         }

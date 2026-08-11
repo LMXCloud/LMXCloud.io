@@ -1,6 +1,7 @@
 import { getPool } from "../db/pool.js";
 import { roundCredits } from "./pricing.js";
-import type { CreditStore } from "./store.js";
+import { releaseReservation, settleReservation } from "./reservation.js";
+import type { CreditMeta, CreditStore } from "./store.js";
 
 export class PostgresCreditStore implements CreditStore {
   async getBalance(apiKeyId: string): Promise<number> {
@@ -35,6 +36,27 @@ export class PostgresCreditStore implements CreditStore {
     );
 
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async reserve(apiKeyId: string, amount: number): Promise<boolean> {
+    return this.deduct(apiKeyId, amount);
+  }
+
+  async settleReservation(
+    apiKeyId: string,
+    reservedAmount: number,
+    actualAmount: number,
+    meta?: CreditMeta,
+  ): Promise<boolean> {
+    return settleReservation(this, apiKeyId, reservedAmount, actualAmount, meta);
+  }
+
+  async releaseReservation(
+    apiKeyId: string,
+    reservedAmount: number,
+    meta?: CreditMeta,
+  ): Promise<void> {
+    await releaseReservation(this, apiKeyId, reservedAmount, meta);
   }
 
   async credit(apiKeyId: string, amount: number, _meta?: unknown): Promise<number> {

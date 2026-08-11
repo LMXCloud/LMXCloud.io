@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MIN_CALL_USDC } from "./constants.js";
 import {
+  estimateMaxStreamCost,
   estimatePromptTokens,
   quoteCallPrice,
   resolveMaxCompletionTokens,
@@ -39,6 +40,21 @@ describe("resolveMaxCompletionTokens", () => {
     assert.equal(resolveMaxCompletionTokens(undefined, 512), 512);
     assert.equal(resolveMaxCompletionTokens(256, undefined), 256);
     assert.equal(resolveMaxCompletionTokens(undefined, undefined), 1024);
+  });
+});
+
+describe("estimateMaxStreamCost", () => {
+  it("quotes prompt + max completion tokens with an optional floor", () => {
+    const cost = estimateMaxStreamCost(
+      {
+        model: "llama-3-70b",
+        messages: [{ role: "user", content: "abcd" }],
+        max_tokens: 256,
+      },
+      0.001,
+      0.00001,
+    );
+    assert.equal(cost, 0.000257);
   });
 });
 

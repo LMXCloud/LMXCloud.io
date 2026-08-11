@@ -12,3 +12,7 @@ export {
   type AccountCreatedSource,
   type CreditSource,
 } from "./events.js";
+export {
+  notifyCriticalIrregularities,
+  resetCriticalIrregularityNotifyState,
+} from "./irregularities.js";

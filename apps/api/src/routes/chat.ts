@@ -6,10 +6,12 @@ import type { CreditStore } from "../credits/store.js";
 import { requireAuthenticatedKey } from "../auth/optional-auth.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
 import type { InferenceRouter } from "../routing/router.js";
+import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
 import type { PaymentStore } from "../payments/store.js";
 import { parseChatBody } from "../payments/quote-context.js";
+import { estimateMaxStreamCost } from "../pricing/quote.js";
 import { hashPaymentPayload } from "../payments/idempotency.js";
 import { RESOURCE_TYPE_CHAT, recordProviderSuccess } from "../telemetry/index.js";
 import type { PaymentReconciler } from "../payments/reconciliation/service.js";
@@ -76,7 +78,7 @@ function extractX402Payer(request: FastifyRequest): string | undefined {
 function x402RateLimitKey(request: FastifyRequest): string {
   const payer = extractX402Payer(request);
   if (payer) return `x402:payer:${payer}`;
-  return `x402:ip:${request.ip}`;
+  return `x402:ip:${getClientIpForRateLimit(request)}`;
 }
 
 async function claimX402PaymentOrReject(
@@ -325,6 +327,32 @@ export async function registerChatRoutes(
           );
         }
 
+        const reservedAmount = estimateMaxStreamCost(
+          validated,
+          result.costPer1kTokens,
+          deps.minChatCost,
+        );
+        let reservationHeld = false;
+        let settled = false;
+
+        if (reservedAmount > 0) {
+          const reserved = await deps.creditStore.reserve(
+            request.apiKey!.id,
+            reservedAmount,
+          );
+          if (!reserved) {
+            const balance = await deps.creditStore.getBalance(request.apiKey!.id);
+            return reply.status(402).send({
+              error: {
+                message: `Insufficient credits. Balance: $${roundCredits(balance).toFixed(8)}. Top up to continue.`,
+                type: "insufficient_credits",
+                code: "insufficient_credits",
+              },
+            });
+          }
+          reservationHeld = true;
+        }
+
         reply.hijack();
         reply.raw.statusCode = 200;
         reply.raw.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -350,18 +378,43 @@ export async function registerChatRoutes(
             calculateRequestCost(totalTokens, result.costPer1kTokens),
           );
 
-          const deducted = await deps.creditStore.deduct(request.apiKey!.id, requestCost);
-          if (deducted && requestCost > 0) {
-            chargedAmount = requestCost;
-          }
-          if (!deducted && requestCost > 0) {
-            reply.raw.write(
-              `event: lmx.error\ndata: ${JSON.stringify({
-                message: "Insufficient credits to cover streamed request cost",
-                type: "insufficient_credits",
-                code: "insufficient_credits",
-              })}\n\n`,
+          if (reservationHeld) {
+            const settledOk = await deps.creditStore.settleReservation(
+              request.apiKey!.id,
+              reservedAmount,
+              requestCost,
             );
+            settled = true;
+            reservationHeld = false;
+            if (settledOk) {
+              chargedAmount = requestCost;
+            } else if (requestCost > 0) {
+              chargedAmount = reservedAmount;
+              reply.raw.write(
+                `event: lmx.error\ndata: ${JSON.stringify({
+                  message: "Insufficient credits to cover streamed request cost",
+                  type: "insufficient_credits",
+                  code: "insufficient_credits",
+                })}\n\n`,
+              );
+            }
+          } else {
+            const deducted = await deps.creditStore.deduct(
+              request.apiKey!.id,
+              requestCost,
+            );
+            if (deducted && requestCost > 0) {
+              chargedAmount = requestCost;
+            }
+            if (!deducted && requestCost > 0) {
+              reply.raw.write(
+                `event: lmx.error\ndata: ${JSON.stringify({
+                  message: "Insufficient credits to cover streamed request cost",
+                  type: "insufficient_credits",
+                  code: "insufficient_credits",
+                })}\n\n`,
+              );
+            }
           }
 
           const balance = await deps.creditStore.getBalance(request.apiKey!.id);
@@ -409,6 +462,19 @@ export async function registerChatRoutes(
             })}\n\n`,
           );
         } finally {
+          if (reservationHeld && !settled) {
+            try {
+              await deps.creditStore.releaseReservation(
+                request.apiKey!.id,
+                reservedAmount,
+              );
+            } catch (releaseErr) {
+              request.log.error(
+                { err: releaseErr },
+                "Failed to release credit reservation after stream error",
+              );
+            }
+          }
           reply.raw.end();
         }
         return;

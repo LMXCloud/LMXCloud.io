@@ -39,6 +39,8 @@ export class ProviderError extends Error {
     public readonly provider: string,
     public readonly statusCode?: number,
     public readonly cause?: unknown,
+    /** Distinct telemetry code (e.g. provider_billing_exhausted); not the HTTP status. */
+    public readonly telemetryCode?: string,
   ) {
     super(message);
     this.name = "ProviderError";

@@ -10,6 +10,7 @@ import {
   getSupportedModels,
   guardToolAccess,
   normalizeMessageContent,
+  PDF_EXTRACT_URL,
   pricingQuotePath,
   validateApiKey,
   type LmxChatResponse,
@@ -41,6 +42,107 @@ function jsonToolContent(data: unknown) {
 
 function toolError(message: string) {
   return { isError: true as const, content: [{ type: "text" as const, text: message }] };
+}
+
+type PdfExtractResponse = {
+  text: string;
+  pageCount: number;
+  title: string | null;
+  headings: string[];
+};
+
+async function resolvePdfBytes(
+  file_url?: string,
+  file_base64?: string,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  if (!file_url && !file_base64) {
+    return {
+      ok: false,
+      error: "Provide file_url or file_base64 (at least one is required).",
+    };
+  }
+
+  if (file_url) {
+    if (!/^https:\/\//i.test(file_url)) {
+      return { ok: false, error: "file_url must be an https URL." };
+    }
+    try {
+      const response = await fetch(file_url);
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: `Failed to fetch file_url: ${response.status} ${response.statusText}`,
+        };
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength === 0) {
+        return { ok: false, error: "Fetched PDF is empty." };
+      }
+      return { ok: true, bytes };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Failed to fetch file_url",
+      };
+    }
+  }
+
+  try {
+    const raw = file_base64!.includes(",")
+      ? (file_base64!.split(",").pop() ?? "")
+      : file_base64!;
+    const bytes = Uint8Array.from(Buffer.from(raw, "base64"));
+    if (bytes.byteLength === 0) {
+      return { ok: false, error: "Decoded PDF is empty." };
+    }
+    return { ok: true, bytes };
+  } catch {
+    return { ok: false, error: "Invalid file_base64 encoding." };
+  }
+}
+
+/** Multipart POST to pdf-extract `/extract` (not JSON-in, so not via fetchJson). */
+async function fetchPdfExtract(
+  bytes: Uint8Array,
+): Promise<
+  { ok: true; data: PdfExtractResponse } | { ok: false; status: number; error: string }
+> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([Buffer.from(bytes)], { type: "application/pdf" }),
+    "document.pdf",
+  );
+
+  try {
+    const response = await fetch(`${PDF_EXTRACT_URL}/extract`, {
+      method: "POST",
+      body: form,
+      headers: { Accept: "application/json" },
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      let error = text || response.statusText;
+      try {
+        const parsed = JSON.parse(text) as { error?: string };
+        if (typeof parsed?.error === "string" && parsed.error) {
+          error = parsed.error;
+        }
+      } catch {
+        // keep raw body / statusText
+      }
+      return { ok: false, status: response.status, error };
+    }
+
+    return { ok: true, data: JSON.parse(text) as PdfExtractResponse };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      error: error instanceof Error ? error.message : "Unknown fetch error",
+    };
+  }
 }
 
 function requestContextFromHttp(req: IncomingMessage) {
@@ -403,6 +505,82 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
       }
 
       return jsonToolContent(search.data);
+    },
+  );
+
+  server.tool(
+    "extract_pdf",
+    "Extract text and light structure (title, headings, page count) from a PDF via LMX pdf-extract. Provide file_url and/or file_base64. Requires a real LMX API key (same gate as web_search).",
+    {
+      file_url: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Optional https URL to fetch the PDF from. Provide this and/or file_base64."),
+      file_base64: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          "Optional base64-encoded PDF bytes (raw base64 or data:application/pdf;base64,...). Provide this and/or file_url.",
+        ),
+      api_key: optionalApiKeySchema,
+    },
+    async ({ file_url, file_base64, api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "extract_pdf",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: true,
+        allowAdminFallback: false,
+      });
+      if (!access.ok) {
+        return { isError: true, content: [{ type: "text", text: access.message }] };
+      }
+
+      const authError = await validateApiKey(access.auth.apiKey);
+      if (authError) {
+        logToolEvent({
+          tool: "extract_pdf",
+          callerId: access.auth.callerId,
+          source: access.auth.source,
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail: authError,
+        });
+        return { isError: true, content: [{ type: "text", text: authError }] };
+      }
+
+      const resolved = await resolvePdfBytes(file_url, file_base64);
+      if (!resolved.ok) {
+        logToolEvent({
+          tool: "extract_pdf",
+          callerId: access.auth.callerId,
+          source: access.auth.source,
+          ok: false,
+          latencyMs: Date.now() - started,
+          detail: resolved.error,
+        });
+        return toolError(resolved.error);
+      }
+
+      const extract = await fetchPdfExtract(resolved.bytes);
+
+      logToolEvent({
+        tool: "extract_pdf",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok: extract.ok,
+        latencyMs: Date.now() - started,
+        detail: extract.ok ? undefined : extract.error,
+      });
+
+      if (!extract.ok) {
+        return toolError(extract.error);
+      }
+
+      return jsonToolContent(extract.data);
     },
   );
 

@@ -4,6 +4,7 @@ import {
   formatEth,
   formatLatency,
   formatNum,
+  formatProviderBalance,
   formatTime,
   formatTokens,
   formatUsd,
@@ -118,6 +119,26 @@ function ProviderRow({ name, status }: { name: string; status: OpsProviderStatus
             <dt className="text-[var(--color-faint)]">Synthetic probe error</dt>
             <dd className="text-[var(--color-danger)]">
               {status.syntheticErrorDetail}
+            </dd>
+          </div>
+        ) : null}
+        {status.balance ? (
+          <div className="font-mono text-[11px] sm:col-span-2">
+            <dt className="text-[var(--color-faint)]">Upstream credits</dt>
+            <dd
+              className={
+                status.balance.belowThreshold
+                  ? "text-[var(--color-danger)]"
+                  : "text-[var(--color-muted)]"
+              }
+            >
+              {formatProviderBalance(status.balance)}
+              {status.balance.observability.mode === "api" ? (
+                <span className="text-[var(--color-faint)]">
+                  {" "}
+                  · threshold ${status.balance.thresholdUsd.toFixed(2)}
+                </span>
+              ) : null}
             </dd>
           </div>
         ) : null}

@@ -22,6 +22,7 @@ import {
 } from "./DetailPages";
 import {
   formatLatency,
+  formatProviderBalance,
   formatEth,
   formatNum,
   formatTime,
@@ -866,17 +867,31 @@ function OverviewPage({
                   {providers.map(([name, status]) => (
                     <li
                       key={name}
-                      className="flex items-center justify-between gap-2 rounded border border-[var(--color-line)]/80 bg-[var(--color-panel-raised)]/50 px-2 py-1.5"
+                      className="rounded border border-[var(--color-line)]/80 bg-[var(--color-panel-raised)]/50 px-2 py-1.5"
                     >
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.healthy ? "bg-[var(--color-accent)]" : "bg-[var(--color-danger)]"}`}
-                        />
-                        <span className="truncate text-xs font-medium">{name}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.healthy ? "bg-[var(--color-accent)]" : "bg-[var(--color-danger)]"}`}
+                          />
+                          <span className="truncate text-xs font-medium">{name}</span>
+                        </div>
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--color-muted)]">
+                          {formatLatency(status.latencyMs)}
+                        </span>
                       </div>
-                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--color-muted)]">
-                        {formatLatency(status.latencyMs)}
-                      </span>
+                      {status.balance ? (
+                        <p
+                          className={`mt-0.5 truncate pl-3 font-mono text-[9px] ${
+                            status.balance.belowThreshold
+                              ? "text-[var(--color-danger)]"
+                              : "text-[var(--color-faint)]"
+                          }`}
+                          title={formatProviderBalance(status.balance)}
+                        >
+                          {formatProviderBalance(status.balance)}
+                        </p>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

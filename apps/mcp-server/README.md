@@ -14,8 +14,9 @@ Lightweight MCP server for LMX Cloud.
 | `get_usage` | `GET /v1/usage` | API key required |
 | `chat_completion` | `POST /v1/chat/completions` | API key **or** x402 pay-per-call |
 | `web_search` | `POST /v1/web/search` | API key required |
+| `extract_pdf` | `POST /extract` (`apps/tools/pdf-extract`) | API key required |
 
-Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_balance` → `chat_completion` / `web_search` → `get_usage`.
+Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_balance` → `chat_completion` / `web_search` / `extract_pdf` → `get_usage`.
 
 ### `chat_completion`
 
@@ -29,6 +30,12 @@ Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_
 - Fixed per-call price from `GET /v1/pricing` → `tools.web_search` (default `$0.01`)
 - Requires `BRAVE_SEARCH_API_KEY` on the API service; see [docs/web-search.md](../../docs/web-search.md)
 
+### `extract_pdf`
+
+- Provide at least one of `file_url` (https URL) or `file_base64` (raw base64 or `data:application/pdf;base64,...`), optional `api_key`
+- Proxies multipart `file` to pdf-extract `POST /extract`; returns `{ text, pageCount, title, headings }`
+- Requires a real LMX API key (same MCP-layer gate as `web_search`); set `PDF_EXTRACT_URL` to the pdf-extract service
+
 ## Per-user API key passthrough
 
 Each caller can bring their own `lmx_...` key. Resolution order:
@@ -37,21 +44,22 @@ Each caller can bring their own `lmx_...` key. Resolution order:
 2. `Authorization: Bearer lmx_...` header (hosted MCP / Cursor)
 3. `LMX_API_KEY` in MCP client env (local stdio only)
 
-`chat_completion` and `web_search` validate the key against `GET /v1/usage` before calling the API and return clear errors for missing/invalid keys.
+`chat_completion`, `web_search`, and `extract_pdf` validate the key against `GET /v1/usage` before calling the API and return clear errors for missing/invalid keys.
 
-Server-side `LMX_ADMIN_API_KEY` / `LMX_X402_FULFILLMENT_API_KEY` are **not** treated as the caller's balance key for `chat_completion` or `web_search` (they are used only to fulfill x402-paid chat calls against the API).
+Server-side `LMX_ADMIN_API_KEY` / `LMX_X402_FULFILLMENT_API_KEY` are **not** treated as the caller's balance key for `chat_completion`, `web_search`, or `extract_pdf` (they are used only to fulfill x402-paid chat calls against the API).
 
 ## x402 pay-per-call (when API key omitted)
 
 When `X402_ENABLED=true` and CDP/treasury env are set, `chat_completion` without an API key uses seller-side `@x402/mcp` `createPaymentWrapper` (same CDP facilitator + `upto` scheme as the HTTP route). Agents pay USDC per call; the MCP server then fulfills via `LMX_X402_FULFILLMENT_API_KEY` (or `LMX_ADMIN_API_KEY`).
 
-`web_search` is balance-path only in v1 (no x402 wrapper yet).
+`web_search` and `extract_pdf` are balance-path only in v1 (no x402 wrapper yet).
 
 ## Environment variables
 
 Server:
 
 - `LMX_API_BASE_URL` (default: `http://127.0.0.1:3000`)
+- `PDF_EXTRACT_URL` (default: `http://127.0.0.1:8787`)
 - `LMX_ADMIN_API_KEY` (optional; smoke tests + x402 fulfillment fallback)
 - `LMX_OPS_API_KEY` (optional; forwards tool events to API `/v1/ops/mcp-events` for the ops dashboard)
 - `LMX_X402_FULFILLMENT_API_KEY` (preferred funded key for fulfilling x402 MCP calls)
@@ -107,3 +115,4 @@ pnpm --filter @lmxcloud/mcp-server dev:http
 3. For balance path: users authenticate with their own key via MCP client `Authorization` header
 4. For x402 path: set the x402 env vars listed above (same CDP/treasury values as the API service), plus a funded fulfillment key
 5. For `web_search`: set `BRAVE_SEARCH_API_KEY` on the **API** service (not the MCP service)
+6. For `extract_pdf`: set `PDF_EXTRACT_URL` to the pdf-extract service base URL (default `http://127.0.0.1:8787`)

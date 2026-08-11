@@ -1,4 +1,5 @@
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
+import { classifyProviderTelemetryErrorCode } from "./billing-errors.js";
 import { ProviderError, type ProviderAdapter, type ProviderHealthResult } from "./types.js";
 
 export interface OpenAiCompatibleConfig {
@@ -211,6 +212,12 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
           `${config.name} returned ${response.status}: ${errorText}`,
           config.name,
           response.status,
+          undefined,
+          classifyProviderTelemetryErrorCode(
+            config.name,
+            response.status,
+            errorText,
+          ),
         );
       }
 

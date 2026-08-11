@@ -1,9 +1,11 @@
 import { getPool } from "../db/pool.js";
 import type { ProviderStatus } from "../health/store.js";
+import { PROVIDER_BILLING_EXHAUSTED_CODE } from "../providers/billing-errors.js";
 import type { OpsIrregularity, OpsIrregularityRecord } from "./irregularities.js";
 import type { McpToolEvent } from "./mcp-events.js";
 import type {
   OpsPaymentRow,
+  OpsRecentUsage,
   StuckPaymentSummary,
 } from "./queries.js";
 
@@ -43,6 +45,7 @@ export type EnrichIrregularitiesInput = {
   unhealthyProviders: string[];
   stuckPayments: StuckPaymentSummary[];
   recentPayments: OpsPaymentRow[];
+  recentUsage: OpsRecentUsage[];
   mcpEvents: McpToolEvent[];
 };
 
@@ -227,6 +230,45 @@ function mcpErrorDiagnostics(events: McpToolEvent[]): OpsIrregularityDiagnostic[
   return out;
 }
 
+function providerBillingFailureDiagnostics(
+  provider: string,
+  failures: OpsRecentUsage[],
+): OpsIrregularityDiagnostic[] {
+  const billing = failures.filter(
+    (row) => row.errorCode === PROVIDER_BILLING_EXHAUSTED_CODE,
+  );
+  const out: OpsIrregularityDiagnostic[] = [
+    { label: "Provider", value: provider },
+    {
+      label: "Recent failures (sample)",
+      value: String(failures.length),
+      tone: "error",
+    },
+    {
+      label: "Billing-shaped",
+      value: `${billing.length}/${failures.length}`,
+      tone: "error",
+    },
+  ];
+
+  for (const row of billing.slice(0, 3)) {
+    out.push({
+      label: `${row.model} · ${row.id.slice(0, 8)}…`,
+      value: row.errorCode ?? "unknown",
+      tone: "warn",
+    });
+  }
+
+  out.push({
+    label: "Likely cause",
+    value:
+      "Upstream provider account credits or quota are exhausted — gateway /models probes may still pass while chat completions fail with payment/quota errors.",
+    tone: "warn",
+  });
+
+  return out;
+}
+
 async function loadLastHealthyAt(
   providers: string[],
 ): Promise<Map<string, string>> {
@@ -286,6 +328,25 @@ export async function enrichIrregularities(
       }
 
       return diagnostics.length > 0 ? { ...item, diagnostics, records } : item;
+    }
+
+    if (item.id.startsWith("health.provider_billing_exhausted.")) {
+      const provider = item.relatedIds?.[0] ?? item.id.split(".").pop() ?? "unknown";
+      const failures = input.recentUsage.filter(
+        (row) => !row.success && row.provider === provider,
+      );
+      const billingFailures = failures.filter(
+        (row) => row.errorCode === PROVIDER_BILLING_EXHAUSTED_CODE,
+      );
+
+      return {
+        ...item,
+        diagnostics: providerBillingFailureDiagnostics(provider, failures),
+        records: billingFailures.slice(0, 10).map((usage) => ({
+          kind: "usage" as const,
+          data: usage,
+        })),
+      };
     }
 
     if (item.id === "payments.stuck") {

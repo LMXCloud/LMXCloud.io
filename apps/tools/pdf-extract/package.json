@@ -1,0 +1,23 @@
+{
+  "name": "@lmxcloud/pdf-extract",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PDF text extract tool — standalone HTTP service (also mountable as a Hono app)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -b --force",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.3",
+    "hono": "^4.7.10",
+    "unpdf": "^1.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

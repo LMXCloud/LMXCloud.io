@@ -5,6 +5,9 @@ import { createRateLimiter } from "./rate-limit.js";
 const API_BASE_URL =
   process.env.LMX_API_BASE_URL?.replace(/\/+$/, "") ?? "http://127.0.0.1:3000";
 
+export const PDF_EXTRACT_URL =
+  process.env.PDF_EXTRACT_URL?.replace(/\/+$/, "") ?? "http://127.0.0.1:8787";
+
 const toolRateLimit = createRateLimiter({
   max: Number(process.env.MCP_RATE_LIMIT_MAX ?? 60),
   windowMs: Number(process.env.MCP_RATE_LIMIT_WINDOW_MS ?? 60_000),

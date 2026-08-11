@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { roundCredits } from "./pricing.js";
-import type { CreditStore } from "./store.js";
+import { releaseReservation, settleReservation } from "./reservation.js";
+import type { CreditMeta, CreditStore } from "./store.js";
 
 export class FileCreditStore implements CreditStore {
   private balances = new Map<string, number>();
@@ -56,6 +57,27 @@ export class FileCreditStore implements CreditStore {
     this.balances.set(apiKeyId, roundCredits(current - cost));
     await this.persist();
     return true;
+  }
+
+  async reserve(apiKeyId: string, amount: number): Promise<boolean> {
+    return this.deduct(apiKeyId, amount);
+  }
+
+  async settleReservation(
+    apiKeyId: string,
+    reservedAmount: number,
+    actualAmount: number,
+    meta?: CreditMeta,
+  ): Promise<boolean> {
+    return settleReservation(this, apiKeyId, reservedAmount, actualAmount, meta);
+  }
+
+  async releaseReservation(
+    apiKeyId: string,
+    reservedAmount: number,
+    meta?: CreditMeta,
+  ): Promise<void> {
+    await releaseReservation(this, apiKeyId, reservedAmount, meta);
   }
 
   async credit(apiKeyId: string, amount: number, _meta?: unknown): Promise<number> {

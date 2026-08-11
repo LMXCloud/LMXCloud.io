@@ -15,6 +15,9 @@ import { createAnchorStore } from "./anchors/store.js";
 import { createProviderHealthHistoryStore } from "./health/history.js";
 import { HealthMonitor } from "./health/monitor.js";
 import { InMemoryHealthStore } from "./health/store.js";
+import { ProviderBalanceMonitor } from "./providers/balance/monitor.js";
+import { createProviderBalancePollers } from "./providers/balance/registry.js";
+import { InMemoryProviderBalanceStore } from "./providers/balance/store.js";
 import { createProviderRegistry, getFallbackChain } from "./providers/registry.js";
 import { InferenceRouter } from "./routing/router.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -26,6 +29,7 @@ import { registerUsageRoutes } from "./routes/usage.js";
 import { registerBalanceRoutes } from "./routes/balance.js";
 import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerPricingRoutes } from "./routes/pricing.js";
+import { IrregularityMonitor } from "./ops/irregularity-monitor.js";
 import { registerOpsRoutes } from "./routes/ops.js";
 import { createPaymentStore } from "./payments/store.js";
 import { registerX402ChatPayments } from "./payments/x402-server.js";
@@ -134,6 +138,18 @@ export async function buildServer() {
     healthHistoryStore,
     config.healthSyntheticIntervalMs,
   );
+
+  const balanceStore = new InMemoryProviderBalanceStore();
+  const balancePollers = createProviderBalancePollers(config);
+  const balanceIntervalMs = config.healthSyntheticIntervalMs ?? 180_000;
+  const balanceMonitor =
+    balancePollers.length > 0
+      ? new ProviderBalanceMonitor(
+          balancePollers,
+          balanceStore,
+          balanceIntervalMs,
+        )
+      : null;
 
   const apiKeyStore = await createApiKeyStore();
 
@@ -297,11 +313,24 @@ export async function buildServer() {
 
 
 
+  const irregularityMonitor = new IrregularityMonitor({
+    providers,
+    healthStore,
+    balanceStore,
+    x402Enabled:
+      config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
+    paymentStoreReady: Boolean(paymentStore),
+  });
+
   healthMonitor.start();
+  balanceMonitor?.start();
+  irregularityMonitor.start();
 
   app.addHook("onClose", async () => {
 
     healthMonitor.stop();
+    balanceMonitor?.stop();
+    irregularityMonitor.stop();
 
     depositPoller?.stop();
 
@@ -457,6 +486,7 @@ export async function buildServer() {
   await registerOpsRoutes(app, {
     providers,
     healthStore,
+    balanceStore,
     x402Enabled:
       config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
     paymentStoreReady: Boolean(paymentStore),

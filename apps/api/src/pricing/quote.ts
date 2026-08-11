@@ -1,5 +1,5 @@
-import type { ChatMessageContent } from "@lmxcloud/shared";
-import { roundCredits } from "../credits/pricing.js";
+import type { ChatCompletionRequest, ChatMessageContent } from "@lmxcloud/shared";
+import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS,
   MIN_CALL_USDC,
@@ -61,6 +61,22 @@ export function resolveMaxCompletionTokens(
     return maxTokens;
   }
   return DEFAULT_MAX_COMPLETION_TOKENS;
+}
+
+/** Upper-bound stream cost from prompt estimate + max completion tokens. */
+export function estimateMaxStreamCost(
+  request: ChatCompletionRequest,
+  costPer1kTokens: number,
+  minFloor = 0,
+): number {
+  const promptTokens = estimatePromptTokens(request.messages);
+  const maxCompletion = resolveMaxCompletionTokens(
+    request.max_tokens,
+    request.max_completion_tokens,
+  );
+  const estimatedTokens = promptTokens + maxCompletion;
+  const raw = calculateRequestCost(estimatedTokens, costPer1kTokens);
+  return roundCredits(Math.max(minFloor, raw));
 }
 
 /** Ceiling quote for an x402 call before inference runs. */

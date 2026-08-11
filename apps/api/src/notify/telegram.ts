@@ -22,6 +22,11 @@ export function isTelegramEnabled(): boolean {
   return getTelegramConfig() !== null;
 }
 
+/** Test-only: clear cached env lookup after TELEGRAM_* changes. */
+export function resetTelegramConfigCache(): void {
+  cachedConfig = undefined;
+}
+
 /** Escape Telegram MarkdownV2 special characters in user-controlled text. */
 function escapeMarkdown(text: string): string {
   return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");

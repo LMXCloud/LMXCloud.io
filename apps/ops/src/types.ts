@@ -1,5 +1,30 @@
 export type OpsChannel = "x402" | "balance" | "mcp";
 
+export type OpsProviderBalanceObservability =
+  | {
+      mode: "api";
+      balanceUsd: number;
+      balanceKind: string;
+      checkUrl: string;
+    }
+  | {
+      mode: "not_api_observable";
+      reason: string;
+    }
+  | {
+      mode: "error";
+      error: string;
+      checkUrl?: string;
+    };
+
+export type OpsProviderBalance = {
+  observability: OpsProviderBalanceObservability;
+  thresholdUsd: number;
+  belowThreshold: boolean;
+  lastCheck: number | null;
+  latencyMs: number | null;
+};
+
 export type OpsProviderStatus = {
   healthy: boolean;
   latencyMs: number | null;
@@ -10,6 +35,7 @@ export type OpsProviderStatus = {
   errorDetail?: string;
   checkUrl?: string;
   syntheticErrorDetail?: string | null;
+  balance?: OpsProviderBalance | null;
 };
 
 export type OpsPayment = {

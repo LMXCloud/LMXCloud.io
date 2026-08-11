@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LMX Cloud — Primer</title>
+<style>
+  :root{
+    --navy:#12102b;
+    --navy2:#1e1b4b;
+    --indigo:#4338ca;
+    --indigo2:#6366f1;
+    --cyan:#22d3ee;
+    --ink:#1b1a2e;
+    --sub:#5b5a78;
+    --line:#e6e4f2;
+    --bg:#f7f7fc;
+    --card:#ffffff;
+    --green:#0f9d68;
+    --greenbg:#e6f7ef;
+    --amber:#b7791f;
+    --amberbg:#fdf3dc;
+    --red:#c0392b;
+    --redbg:#fbe9e7;
+    --slate:#64748b;
+    --slatebg:#eef1f5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    background:var(--bg);
+    line-height:1.6;
+  }
+  .wrap{max-width:900px;margin:0 auto;padding:0 32px;}
+  /* HERO */
+  .hero{
+    background:radial-gradient(1200px 500px at 15% -10%, #3730a3 0%, transparent 60%),
+               linear-gradient(135deg,var(--navy) 0%, var(--navy2) 55%, #2b2470 100%);
+    color:#fff;
+    padding:72px 0 56px;
+  }
+  .kicker{
+    display:inline-block;
+    font-size:12.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--cyan);
+    font-weight:700;
+    border:1px solid rgba(34,211,238,.35);
+    padding:5px 12px;
+    border-radius:20px;
+    margin-bottom:22px;
+  }
+  .hero h1{
+    font-size:44px;
+    line-height:1.12;
+    margin:0 0 16px;
+    font-weight:800;
+    letter-spacing:-0.02em;
+  }
+  .hero h1 span{color:var(--cyan);}
+  .hero p.lead{
+    font-size:18px;
+    color:#c7c6ee;
+    max-width:640px;
+    margin:0 0 28px;
+  }
+  .hero .meta{
+    font-size:13px;
+    color:#8f8dc4;
+    border-top:1px solid rgba(255,255,255,.14);
+    padding-top:18px;
+    margin-top:8px;
+  }
+  .stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
+  .stat-pill{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;
+    padding:12px 16px;
+    min-width:150px;
+  }
+  .stat-pill .n{font-size:20px;font-weight:800;color:#fff;}
+  .stat-pill .l{font-size:11.5px;color:#a5a3d6;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+
+  /* SECTIONS */
+  section{padding:52px 0;}
+  section.alt{background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  h2{
+    font-size:26px;
+    letter-spacing:-0.01em;
+    margin:0 0 6px;
+    font-weight:800;
+    color:var(--ink);
+  }
+  h2 .num{color:var(--indigo2);margin-right:10px;font-variant-numeric:tabular-nums;}
+  .section-sub{color:var(--sub);font-size:15px;margin:0 0 28px;max-width:680px;}
+  p{margin:0 0 16px;font-size:15.5px;color:#2c2b45;}
+  strong{color:var(--ink);}
+  a{color:var(--indigo2);}
+
+  /* CARDS / GRID */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+  }
+  .card h3{margin:0 0 10px;font-size:16px;font-weight:750;color:var(--ink);}
+  .card p{font-size:14.5px;margin-bottom:0;color:#454363;}
+  .card .tag{
+    display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--indigo2);margin-bottom:8px;
+  }
+
+  /* BADGES */
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;
+    white-space:nowrap;
+  }
+  .b-done{background:var(--greenbg);color:var(--green);}
+  .b-progress{background:var(--amberbg);color:var(--amber);}
+  .b-blocked{background:var(--redbg);color:var(--red);}
+  .b-next{background:var(--slatebg);color:var(--slate);}
+  .badge:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  /* CALLOUTS */
+  .callout{
+    border-radius:12px;
+    padding:18px 20px;
+    margin:20px 0;
+    font-size:14.5px;
+    border-left:4px solid var(--indigo2);
+    background:#f1f0ff;
+  }
+  .callout.risk{border-left-color:var(--red);background:var(--redbg);}
+  .callout.risk strong{color:var(--red);}
+  .callout strong{color:var(--indigo);}
+
+  /* TIMELINE */
+  .timeline{border-left:2px solid var(--line);margin-left:8px;padding-left:26px;}
+  .t-item{position:relative;padding-bottom:28px;}
+  .t-item:last-child{padding-bottom:0;}
+  .t-item:before{
+    content:"";position:absolute;left:-33px;top:3px;
+    width:14px;height:14px;border-radius:50%;
+    background:#fff;border:3px solid var(--indigo2);
+  }
+  .t-item.done:before{border-color:var(--green);background:var(--green);}
+  .t-item.active:before{border-color:var(--cyan);background:var(--cyan);}
+  .t-item .t-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
+  .t-item .t-title{font-weight:750;font-size:15.5px;}
+  .t-item p{font-size:14px;color:#4b4a68;margin:4px 0 0;}
+
+  /* TABLE */
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:14px 0;}
+  th{
+    text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--sub);padding:10px 12px;border-bottom:2px solid var(--line);
+  }
+  td{padding:11px 12px;border-bottom:1px solid var(--line);color:#2c2b45;}
+  tr:last-child td{border-bottom:none;}
+
+  /* ARCH DIAGRAM */
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:22px 0;font-size:13.5px;}
+  .flow-box{
+    background:#fff;border:1.5px solid var(--indigo2);color:var(--indigo);
+    padding:12px 16px;border-radius:10px;font-weight:700;text-align:center;flex:1;min-width:120px;
+  }
+  .flow-box.alt2{border-color:var(--cyan);color:#0891b2;}
+  .flow-arrow{color:var(--sub);font-size:18px;}
+  .flow-stack{display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px;}
+  .flow-stack .flow-box{font-size:12.5px;padding:8px 12px;}
+
+  /* MOAT GRID */
+  .moat-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px;}
+  .moat-col h4{
+    font-size:13px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 12px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .moat-col.yes h4{color:var(--green);}
+  .moat-col.no h4{color:var(--red);}
+  .moat-item{
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;margin-bottom:10px;font-size:14px;
+  }
+  .moat-item strong{display:block;font-size:14.5px;margin-bottom:3px;}
+
+  footer{
+    padding:36px 0 60px;text-align:center;color:var(--sub);font-size:13px;
+  }
+
+  @media (max-width:720px){
+    .grid2,.grid3,.moat-grid{grid-template-columns:1fr;}
+    .hero h1{font-size:32px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="kicker">Internal Primer · Updated July 20, 2026</span>
+    <h1>LMX Cloud — <span>AWS for Web3</span></h1>
+    <p class="lead">Web3-native infrastructure for autonomous AI agents: pay-per-call stablecoin settlement, paired with routing into decentralized compute supply that hyperscalers have no margin incentive to ever offer.</p>
+    <div class="stat-row">
+      <div class="stat-pill"><div class="n">2</div><div class="l">DePIN providers live</div></div>
+      <div class="stat-pill"><div class="n">30</div><div class="l">Model aliases routed</div></div>
+      <div class="stat-pill"><div class="n">3</div><div class="l">Agent distribution channels</div></div>
+      <div class="stat-pill"><div class="n">Base</div><div class="l">Settlement chain (x402 / USDC)</div></div>
+    </div>
+    <div class="meta">For the live, code-verified execution plan and blow-by-blow status, see <strong>ROADMAP.md</strong>. This document is the "what and why."</div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">01</span>What We're Building</h2>
+    <p class="section-sub">The direction has sharpened twice — worth being explicit about both moves.</p>
+    <p>LMX Cloud started as a <strong>DePIN inference router</strong>: an OpenAI-compatible API that routes AI inference requests across decentralized GPU networks (io.net, Akash) instead of a single centralized provider, with automatic failover if one network degrades.</p>
+    <p>The positioning has since sharpened into something narrower and more defensible: LMX Cloud is <strong>Web3-native infrastructure built specifically for autonomous AI agents</strong> — software that holds its own crypto wallet and pays for its own compute with no human in the loop. The pitch is two things bolted together, not one: <strong>x402-native agent payments</strong>, paired with <strong>routing to decentralized compute supply a centralized neocloud has no reason to ever build toward.</strong></p>
+    <div class="callout">
+      <strong>End state (Phase 1):</strong> an agent with zero prior relationship to LMX discovers it via x402 Bazaar, MCP, or the ElizaOS plugin, pays per call in stablecoin, and gets routed DePIN compute back — no signup, no credit card, no human in the loop.
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="num">02</span>The Thesis — Why This, Not Something More Obvious</h2>
+    <p class="section-sub">Two roads that look easier both dead-end. The actual wedge is between them.</p>
+    <div class="grid2">
+      <div class="card">
+        <span class="tag" style="color:#c0392b;">Road not taken — cheap GPU for everyone</span>
+        <h3>Already a red ocean</h3>
+        <p>CoreWeave alone: $23B IPO valuation, $5B 2025 revenue, $99.4B order backlog by March 2026 — competing purely on price and capacity. 300+ new GPU cloud entrants launched in 2025; H100 rental prices fell 64–75% in eighteen months. Capital-intensive, already owned by well-funded centralized players.</p>
+      </div>
+      <div class="card">
+        <span class="tag" style="color:#c0392b;">Road not taken — decentralized compute for "web3 devs"</span>
+        <h3>Smaller and more stagnant than it looks</h3>
+        <p>Akash, the closest comparable, sells to a handful of crypto-native projects who mostly sell to each other — and its active provider count recently hit the lowest point in the network's history.</p>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:18px;">
+      <strong>The actual wedge:</strong> autonomous agents and DAOs that <em>structurally cannot use hyperscaler billing</em>. A DAO's treasury is a multisig, not a corporate entity — it can't open an AWS enterprise account. An agent can't sign an enterprise services agreement. Both can hold and spend a crypto wallet. x402 (backed by Coinbase, Cloudflare, Stripe, Google, Microsoft, AWS, Circle, Visa, Mastercard) is becoming the way software pays software — and pairing that rail with decentralized compute is something a centralized neocloud would have to give up margin and control to build.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">03</span>Who The Customer Actually Is</h2>
+    <p class="section-sub">Ranked by how acutely each segment feels the problem.</p>
+    <div class="grid3">
+      <div class="card">
+        <span class="tag">Most acute</span>
+        <h3>DAOs &amp; crypto-native treasuries</h3>
+        <p>No path into enterprise cloud billing. Gnosis, Mantle, and Tron DAO are already funding "AI agents as economic actors" off billion-dollar-plus treasuries.</p>
+      </div>
+      <div class="card">
+        <span class="tag">High volume</span>
+        <h3>Agent-launchpad ecosystems</h3>
+        <p>Virtuals Protocol hosts 15,800+ agent projects; ElizaOS is the de facto framework for on-chain agents. Operators want each agent self-sovereign, not manually funded.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Fastest to convert</span>
+        <h3>Existing crypto-native AI teams</h3>
+        <p>Already hold stablecoin treasuries, want multi-provider resilience without building and operating the routing logic themselves.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="num">04</span>How We Make Money</h2>
+    <p>Not like CoreWeave, which owns hardware and carries capex. <strong>LMX Cloud owns no compute</strong> — it buys wholesale from io.net and Akash and charges a spread per request. That's closer to <strong>Stripe/Plaid economics</strong> than a cloud provider's: thin margin per unit, no capex, and margin that holds or improves as the underlying DePIN market keeps getting cheaper.</p>
+    <div class="callout"><strong>Revenue scales by routing more traffic through the toll booth</strong> — not by building more capacity.</div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">05</span>How It Works</h2>
+    <p class="section-sub">Three systems stitched together: inference routing, identity/payments, and agent-facing distribution.</p>
+
+    <h3 style="margin-top:0;">Inference routing</h3>
+    <p>Requests hit an OpenAI-compatible endpoint and are routed across a health-checked fallback chain — no silent centralization; response headers (<code>x-lmx-provider</code>, <code>x-lmx-fallback</code>) always disclose which network actually served the request.</p>
+    <div class="flow">
+      <div class="flow-box">Agent / Developer<br><span style="font-weight:400;">OpenAI-compatible call</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box alt2">LMX Router<br><span style="font-weight:400;">health-aware fallback</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-stack">
+        <div class="flow-box">Tier 1 · io.net</div>
+        <div class="flow-box">Tier 2 · AkashML</div>
+        <div class="flow-box">Tier 3 · Nosana</div>
+        <div class="flow-box">Tier 4 · Together (centralized fallback)</div>
+      </div>
+    </div>
+
+    <h3>Identity &amp; payments — two paths, same balance system</h3>
+    <p><strong>Funded path:</strong> sign in by email (Clerk) or wallet (SIWE / EIP-4361) — including a raw keypair with no browser, which is what makes an <em>agent</em> able to mint its own key. Deposit USDC on Base to a treasury address; an on-chain listener confirms and auto-credits balance. Every call draws down that balance.</p>
+    <p><strong>Pay-per-call path (x402):</strong> no key at all. An agent calls the endpoint, gets <code>402 Payment Required</code>, signs a payment payload, retries. Coinbase's CDP Facilitator verifies and settles the USDC payment on Base, LMX routes the request, and the whole thing is logged as a <code>payment_event</code>.</p>
+    <div class="flow">
+      <div class="flow-box">Agent wallet</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">402 challenge</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box alt2">CDP Facilitator<br><span style="font-weight:400;">verify + settle</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Inference routed</div>
+    </div>
+
+    <h3>Trust layer</h3>
+    <p>Every request produces a receipt; receipts are batched and Merkle-anchored on-chain (<code>LmxLogAnchor</code> on Base), with a public proof endpoint. The idea: routing, latency, and cost claims stay cryptographically checkable after the fact — this matters once the buyer is an anonymous agent with no relationship to fall back on.</p>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="num">06</span>Distribution — How an Agent Actually Finds Us</h2>
+    <p class="section-sub">Three channels, deliberately sequenced by integration effort and reach.</p>
+    <table>
+      <tr><th>Channel</th><th>What it is</th><th>Status</th></tr>
+      <tr>
+        <td><strong>x402 Bazaar + Agentic.Market</strong></td>
+        <td>Coinbase's protocol-level discovery layer for x402-paid services — any x402 agent finds LMX here regardless of framework. Widest reach, least integration.</td>
+        <td><span class="badge b-done">Live — mainnet verified</span></td>
+      </tr>
+      <tr>
+        <td><strong>MCP server</strong></td>
+        <td>Hosted at <code>mcp.lmxcloud.io</code>, listed on the official MCP Registry. 8 tools: status, models, pricing, balance, usage, chat completion (key or x402), web search.</td>
+        <td><span class="badge b-done">Shipped &amp; registry-listed</span></td>
+      </tr>
+      <tr>
+        <td><strong>ElizaOS plugin</strong></td>
+        <td>Wraps the OpenAI-compatible endpoint with x402-only, wallet-native payment — no API key. Published to npm; registry PR open. Deliberately sequenced last as a reference case study.</td>
+        <td><span class="badge b-progress">PR open — awaiting maintainer review</span></td>
+      </tr>
+    </table>
+    <p style="font-size:13.5px;color:var(--sub);">Explicitly out of scope for now: Virtuals Protocol's Agent Commerce Protocol (bespoke escrow system, not confirmed to run over x402), Autonolas, Fetch.ai, Bittensor — longer-tail, revisit once the three committed channels show real traffic.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">07</span>Status Snapshot</h2>
+    <p class="section-sub">As of July 20, 2026 — verified against code, not memory.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="badge b-done" style="margin-bottom:8px;">Shipped</span></h3>
+        <p>Multi-provider inference router · streaming completions · 30 model aliases · full dashboard (keys, usage, logs, status, billing) · SIWE wallet sign-in + agent-mintable keys · USDC deposits on Base · verifiable on-chain receipts &amp; Merkle anchoring · x402 pay-per-call verified end-to-end on mainnet · MCP server live on the official registry · security/ops hardening (account-takeover route closed, rate limits, Sentry) · persisted three-tier provider health history.</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge b-blocked" style="margin-bottom:8px;">Open / blocking</span></h3>
+        <p>Attorney review of legal drafts (ToS, privacy, acceptable use) — deferred three times, now the longest-standing gate before marketing any channel wide. Payment-failure reconciliation (no refund tx when provider fails post-payment). ElizaOS live-agent end-to-end test not yet started. Cloudflare edge hardening deliberately paused (cost, no traffic signal yet).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="num">08</span>Roadmap</h2>
+    <p class="section-sub">Phase 1 is agent-distribution readiness. Phase 2 is deliberately held.</p>
+    <div class="timeline">
+      <div class="t-item done">
+        <div class="t-head"><span class="t-title">Free-beta hardening</span><span class="badge b-done">Done</span></div>
+        <p>Security gap closed, dashboard shipped, streaming + model coverage expanded — the base layer strangers could safely try for free.</p>
+      </div>
+      <div class="t-item done">
+        <div class="t-head"><span class="t-title">Web3-1 · Wallet identity + stablecoin rails</span><span class="badge b-done">Done</span></div>
+        <p>SIWE sign-in, agent-mintable keys with no browser, USDC deposits auto-crediting on Base.</p>
+      </div>
+      <div class="t-item done">
+        <div class="t-head"><span class="t-title">Web3-2 · Verifiable on-chain logs</span><span class="badge b-done">Done</span></div>
+        <p>Per-request receipts, Merkle batch anchoring, public proof endpoint — verified end-to-end.</p>
+      </div>
+      <div class="t-item done">
+        <div class="t-head"><span class="t-title">x402 pay-per-call</span><span class="badge b-done">Done</span></div>
+        <p>Dual-path payments, CDP Facilitator verify/settle, replay protection, burst/load-tested on testnet, mainnet canary green.</p>
+      </div>
+      <div class="t-item active">
+        <div class="t-head"><span class="t-title">Phase 1 · Agent distribution</span><span class="badge b-progress">In progress</span></div>
+        <p>Bazaar/Agentic.Market listing live; MCP registry live; ElizaOS registry PR open, security hardening pushed same-day per reviewer feedback. Gated wide-marketing push on attorney review.</p>
+      </div>
+      <div class="t-item">
+        <div class="t-head"><span class="t-title">Phase 2 · Marketplace / MCP function registry</span><span class="badge b-next">Deliberately held</span></div>
+        <p>Held until legal clears <em>and</em> at least one Phase 1 channel produces a real, unprompted external payment — the explicit success signal, not yet observed. Provider-depth (a third DePIN provider) is prioritized over resource-breadth in the meantime.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">09</span>Moats &amp; Risks</h2>
+    <p class="section-sub">Honest accounting — what's actually defensible versus what looks like a moat but isn't.</p>
+    <div class="moat-grid">
+      <div class="moat-col yes">
+        <h4>● What's defensible</h4>
+        <div class="moat-item"><strong>Verifiable trust layer</strong>On-chain receipt anchoring is live and working today — matters specifically once the buyer is an anonymous agent with no relationship to fall back on.</div>
+        <div class="moat-item"><strong>Measured reliability data</strong>Persisted provider-health history across independent DePIN networks becomes a genuine, hard-to-fake content asset once it has weeks of depth — no competitor currently publishes this.</div>
+        <div class="moat-item"><strong>Distribution head start</strong>Live on the official MCP registry and x402 Bazaar with a real mainnet-settled transaction history and an honest public case study (the MCP "stranger walkthrough" bug story).</div>
+        <div class="moat-item"><strong>The wedge itself</strong>Hyperscalers have no margin incentive to route to decentralized supply; DAOs/agents structurally can't use hyperscaler billing. That combination, not "decentralization," is the actual defensible position.</div>
+      </div>
+      <div class="moat-col no">
+        <h4>● What isn't a moat</h4>
+        <div class="moat-item"><strong>The payment rail itself</strong>x402 is an open standard — nothing stops io.net or Akash from adding direct support and disintermediating an aggregator layer like LMX.</div>
+        <div class="moat-item"><strong>Thin, lumpy demand</strong>A meaningful share of early x402 activity industry-wide has come from one viral memecoin experiment, not organic diverse demand.</div>
+        <div class="moat-item"><strong>Underlying DePIN health</strong>The resilience pitch depends on DePIN supply staying healthy — Akash's active provider count is at its lowest point on record.</div>
+        <div class="moat-item"><strong>Provider concentration</strong>Only two DePIN providers live in production today; "resource-agnostic routing" isn't a real claim yet without more provider depth.</div>
+      </div>
+    </div>
+    <div class="callout risk">
+      <strong>Why this matters:</strong> none of the above are reasons to not pursue the bet — they're the specific signals that would tell us early if it isn't working. That's why Phase 2 is explicitly gated on a real unprompted external payment, not a feature checklist.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    LMX Cloud — internal primer, sourced from PRIMER.md / README.md / ROADMAP.md / marketing.md. Live for the current execution detail: ROADMAP.md.
+  </div>
+</footer>
+
+</body>
+</html>

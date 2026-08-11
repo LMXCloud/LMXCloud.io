@@ -98,6 +98,24 @@ export function notifyProviderHealthChange(input: {
   notifyTelegram(lines.join("\n"));
 }
 
+/** Fires when an API-observable upstream provider balance drops below threshold. */
+export function notifyProviderBalanceLow(input: {
+  provider: string;
+  balanceUsd: number;
+  thresholdUsd: number;
+  balanceKind: string;
+}): void {
+  notifyTelegram(
+    [
+      "⚠️ Provider balance low",
+      `Provider: ${input.provider}`,
+      `Balance: $${input.balanceUsd.toFixed(2)} (${input.balanceKind})`,
+      `Threshold: $${input.thresholdUsd.toFixed(2)}`,
+      "Action: top up in the provider dashboard before routing fails",
+    ].join("\n"),
+  );
+}
+
 export function notifyFirstApiUsage(
   usageStore: UsageStore,
   input: {

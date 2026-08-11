@@ -30,15 +30,15 @@ Pick one:
 ## Pinned post draft
 Post this first, then pin it — it's the "what is this" anchor everything else links back to:
 
-> LMX Cloud is live: an OpenAI-compatible inference API routed across decentralized compute (DePIN), built for autonomous agents.
+> LMX Cloud is live: an OpenAI-compatible inference API routed across decentralized compute, built for autonomous agents.
 >
 > — Wallet-native auth, fund with USDC
-> — Pay per call in USDC via x402, no account needed
-> — Verifiable on-chain receipts for every request
+> — Pay per call via x402, no signup required
+> — Verifiable on-chain receipt for every call
 >
 > https://www.lmxcloud.io
 
-(279 chars — fits with room to spare. Swap the last line for a docs/quickstart link if you'd rather send traffic there first.)
+(271 chars — the original draft here was actually 290 chars, over the limit, once the link is counted at X's fixed 23-char weight; the "279 chars" note was a miscount. Trimmed "(DePIN)" and tightened wording to fit. Swap the last line for a docs/quickstart link if you'd rather send traffic there first.)
 
 ## First few post ideas (once the account's live)
 - A short thread walking through the x402 pay-per-call flow — no API key, no signup, just a wallet and a request. This is the most differentiated thing you have; lead with it.
