@@ -1,8 +1,8 @@
 {
-  "name": "@lmxcloud/pdf-extract",
+  "name": "@lmxcloud/tool-template",
   "private": true,
   "version": "0.1.0",
-  "description": "PDF text extract tool — standalone HTTP service (also mountable as a Hono app)",
+  "description": "Copy this folder to create a new tool package",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,8 +24,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.3",
-    "hono": "^4.7.10",
-    "unpdf": "^1.0.6"
+    "hono": "^4.7.10"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

@@ -1,0 +1,23 @@
+{
+  "name": "@lmxcloud/tools-host",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared deployable host that mounts tool Hono apps under path prefixes",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -b --force",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.3",
+    "@lmxcloud/pdf-extract": "workspace:*",
+    "hono": "^4.7.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

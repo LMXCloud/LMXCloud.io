@@ -221,6 +221,47 @@ importers:
         specifier: ^8.0.12
         version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)
 
+  apps/tools/_template:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.3
+        version: 1.19.14(hono@4.12.28)
+      hono:
+        specifier: ^4.7.10
+        version: 4.12.28
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.20.0
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.4
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  apps/tools/host:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.3
+        version: 1.19.14(hono@4.12.28)
+      '@lmxcloud/pdf-extract':
+        specifier: workspace:*
+        version: link:../pdf-extract
+      hono:
+        specifier: ^4.7.10
+        version: 4.12.28
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.20.0
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.4
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/tools/pdf-extract:
     dependencies:
       '@hono/node-server':
