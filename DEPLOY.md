@@ -6,6 +6,7 @@ Ship the **API on Railway** and the **dashboard + demo on Vercel**.
 |-----|------|----------------|
 | API | Railway | repo root (`Dockerfile`) |
 | MCP Server | Railway | repo root + `apps/mcp-server/railway.toml` |
+| Tools host | Railway | repo root + `apps/tools/host/railway.toml` |
 | Dashboard | Vercel | `apps/web` |
 | Demo (optional) | Vercel | `apps/demo` |
 | Ops dashboard | Vercel | `apps/ops` |
@@ -120,6 +121,7 @@ Deploy MCP as a separate service so agent traffic does not couple to API contain
    | `LMX_MCP_HOST` | Yes | `0.0.0.0` |
    | `LMX_MCP_PORT` | Yes | `3334` |
    | `LMX_API_BASE_URL` | Yes | Public API base URL (e.g. `https://lmxcloudapi-production.up.railway.app`) |
+   | `PDF_EXTRACT_URL` | Yes (for `extract_pdf`) | Tools-host tool base, no trailing slash (e.g. `https://<tools-host>/pdf-extract`) |
    | `LMX_ADMIN_API_KEY` | No | Optional smoke-test fallback only — users should pass their own key |
    | `LMX_DEFAULT_MODEL` | No | `llama-3-70b` |
    | `LMX_ORIGIN_SECRET` | No* | Same secret as the API. When set, MCP HTTP rejects requests missing matching `X-Origin-Secret` header (403). Leave unset for local/dev. *Required once Cloudflare Transform Rule is live. `/healthz` is exempt for Railway probes. |
@@ -127,7 +129,19 @@ Deploy MCP as a separate service so agent traffic does not couple to API contain
 4. Generate a Railway domain (example: `https://lmxcloud-mcp-production.up.railway.app`).
 5. Optional custom domain: `mcp.lmxcloud.io`.
 
-**Exposed tools:** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (optional vision images), `web_search`. Users authenticate with `Authorization: Bearer lmx_...` in their MCP client config — do not rely on a shared server API key for production traffic. `web_search` requires `BRAVE_SEARCH_API_KEY` on the API service.
+**Exposed tools:** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (optional vision images), `web_search`, `extract_pdf`. Users authenticate with `Authorization: Bearer lmx_...` in their MCP client config — do not rely on a shared server API key for production traffic. `web_search` requires `BRAVE_SEARCH_API_KEY` on the API service. `extract_pdf` requires the tools-host service below and `PDF_EXTRACT_URL` pointing at its `/pdf-extract` mount.
+
+## Railway: tools host (`apps/tools/host`)
+
+One Railway service mounts every HTTP tool package (today: pdf-extract). Do not deploy each tool as its own service unless you intentionally want standalone isolation.
+
+1. In Railway, create **New Service** from the same GitHub repo.
+2. Configure service to use `apps/tools/host/railway.toml` (Dockerfile builds `@lmxcloud/pdf-extract` + `@lmxcloud/tools-host`).
+3. Railway injects `PORT`; optional `HOST=0.0.0.0`. No settlement/auth env yet (gates deferred).
+4. Generate a domain, then set MCP `PDF_EXTRACT_URL` to `https://<that-domain>/pdf-extract`.
+5. Verify: `GET /health` → `{ ok: true, tools: ["pdf-extract"] }`, and `GET /pdf-extract/health`.
+
+See [`apps/tools/README.md`](./apps/tools/README.md) for adding tool #2 (copy `_template`, one host `.route()` line).
 
 ### Cloudflare origin lock
 

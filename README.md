@@ -27,7 +27,8 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 
 ### Agent distribution
 - **MCP server** (`apps/mcp-server`) — hosted at `https://mcp.lmxcloud.io/mcp`, published to the official MCP Registry as [`io.lmxcloud/mcp-server`](https://registry.modelcontextprotocol.io)
-- Eight tools: `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (balance key **or** x402; optional vision images), `web_search` (balance key)
+- Nine tools: `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (balance key **or** x402; optional vision images), `web_search` (balance key), `extract_pdf` (balance key; proxies to tools-host)
+- **Tools host** (`apps/tools/host`) — shared Railway-deployable Hono process that mounts tool packages (currently `pdf-extract` at `/pdf-extract`); see [`apps/tools/README.md`](./apps/tools/README.md)
 - **ElizaOS plugin** — [`@lmxcloud/plugin-lmxcloud`](https://www.npmjs.com/package/@lmxcloud/plugin-lmxcloud) (separate repo: [LMXCloud/plugin-lmxcloud](https://github.com/LMXCloud/plugin-lmxcloud)); x402-only, no API key — wallet pays USDC per call on Base
 
 ### Trust
@@ -157,11 +158,13 @@ LMX ships a hosted MCP server so agents can discover pricing, check balance, and
 
 **Registry:** [`io.lmxcloud/mcp-server`](https://registry.modelcontextprotocol.io) (streamable HTTP remote)
 
-**Tools (8):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`, `web_search`
+**Tools (9):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`, `web_search`, `extract_pdf`
 
 `chat_completion` accepts an API key **or** x402 pay-per-call when no key is provided. Optional `image_url` / `images` enable vision on models such as `qwen-3.6-35b`, `qwen-3.5-35b`, and `llama-3.2-90b-vision`.
 
 `web_search` requires a balance-funded API key (Brave passthrough; fixed per-call price from `GET /v1/pricing` → `tools.web_search`).
+
+`extract_pdf` requires a balance-funded API key and a reachable PDF tool. Prefer the shared tools host (`pnpm dev:tools-host`) and set `PDF_EXTRACT_URL=http://127.0.0.1:8080/pdf-extract`. Standalone `pnpm dev:pdf-extract` still works with the default `http://127.0.0.1:8787`.
 
 **Client config** (`.cursor/mcp.json` in any repo):
 
@@ -194,6 +197,19 @@ HTTP mode endpoints (local):
 - `http://127.0.0.1:3334/healthz`
 
 Production deploy instructions are in [DEPLOY.md](./DEPLOY.md) under the Railway MCP section.
+
+## Tools host (`apps/tools`)
+
+HTTP tool packages live under `apps/tools/*` and export mountable Hono apps. `@lmxcloud/tools-host` mounts them (today: `/pdf-extract`) and is the Railway unit of deploy.
+
+```bash
+pnpm dev:tools-host
+```
+
+- Host health: `http://127.0.0.1:8080/health`
+- PDF extract: `http://127.0.0.1:8080/pdf-extract/extract`
+
+How to add another tool: [`apps/tools/README.md`](./apps/tools/README.md). Settlement gates are deferred.
 
 ## ElizaOS plugin
 
@@ -276,7 +292,8 @@ Providers without API keys are skipped. When Together serves a request, `x-lmx-f
 
 ```
 apps/api/         Inference API (Fastify)
-apps/mcp-server/  Hosted MCP + x402 tools
+apps/mcp-server/  Hosted MCP tools (chat, web search, pdf extract, …)
+apps/tools/       Tool packages + shared tools-host (deployable)
 apps/web/         Dashboard (Vite + React)
 apps/demo/        Demo UI
 apps/ops/         Internal ops dashboard

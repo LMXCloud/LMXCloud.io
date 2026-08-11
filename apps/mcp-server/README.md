@@ -14,7 +14,7 @@ Lightweight MCP server for LMX Cloud.
 | `get_usage` | `GET /v1/usage` | API key required |
 | `chat_completion` | `POST /v1/chat/completions` | API key **or** x402 pay-per-call |
 | `web_search` | `POST /v1/web/search` | API key required |
-| `extract_pdf` | `POST /extract` (`apps/tools/pdf-extract`) | API key required |
+| `extract_pdf` | `POST …/extract` via tools-host (`/pdf-extract`) or standalone pdf-extract | API key required |
 
 Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_balance` → `chat_completion` / `web_search` / `extract_pdf` → `get_usage`.
 
@@ -33,8 +33,9 @@ Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_
 ### `extract_pdf`
 
 - Provide at least one of `file_url` (https URL) or `file_base64` (raw base64 or `data:application/pdf;base64,...`), optional `api_key`
-- Proxies multipart `file` to pdf-extract `POST /extract`; returns `{ text, pageCount, title, headings }`
-- Requires a real LMX API key (same MCP-layer gate as `web_search`); set `PDF_EXTRACT_URL` to the pdf-extract service
+- Proxies multipart `file` to `${PDF_EXTRACT_URL}/extract`; returns `{ text, pageCount, title, headings }`
+- Requires a real LMX API key (same MCP-layer gate as `web_search`)
+- Set `PDF_EXTRACT_URL` to the tool base URL (no trailing slash): tools-host mount `…/pdf-extract`, or standalone pdf-extract root
 
 ## Per-user API key passthrough
 
@@ -59,7 +60,7 @@ When `X402_ENABLED=true` and CDP/treasury env are set, `chat_completion` without
 Server:
 
 - `LMX_API_BASE_URL` (default: `http://127.0.0.1:3000`)
-- `PDF_EXTRACT_URL` (default: `http://127.0.0.1:8787`)
+- `PDF_EXTRACT_URL` (default: `http://127.0.0.1:8787` standalone; use `http://127.0.0.1:8080/pdf-extract` when running `pnpm dev:tools-host`)
 - `LMX_ADMIN_API_KEY` (optional; smoke tests + x402 fulfillment fallback)
 - `LMX_OPS_API_KEY` (optional; forwards tool events to API `/v1/ops/mcp-events` for the ops dashboard)
 - `LMX_X402_FULFILLMENT_API_KEY` (preferred funded key for fulfilling x402 MCP calls)
@@ -115,4 +116,4 @@ pnpm --filter @lmxcloud/mcp-server dev:http
 3. For balance path: users authenticate with their own key via MCP client `Authorization` header
 4. For x402 path: set the x402 env vars listed above (same CDP/treasury values as the API service), plus a funded fulfillment key
 5. For `web_search`: set `BRAVE_SEARCH_API_KEY` on the **API** service (not the MCP service)
-6. For `extract_pdf`: set `PDF_EXTRACT_URL` to the pdf-extract service base URL (default `http://127.0.0.1:8787`)
+6. For `extract_pdf`: set `PDF_EXTRACT_URL` to the tools-host tool base (e.g. `https://<tools-host>/pdf-extract`). Local default without host: `http://127.0.0.1:8787`
