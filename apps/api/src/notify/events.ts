@@ -11,7 +11,8 @@ export type CreditSource =
   | "initial"
   | "dev_topup"
   | "usdc_deposit"
-  | "delivery_failure_refund";
+  | "delivery_failure_refund"
+  | "ops_grant";
 
 const firstRequestNotified = new Set<string>();
 

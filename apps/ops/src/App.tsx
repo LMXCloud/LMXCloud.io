@@ -12,6 +12,7 @@ import {
   fetchOpsOverview,
   getApiBase,
   getEnvOpsKey,
+  grantOpsCredits,
   resolveOpsKey,
   setStoredOpsKey,
 } from "./api";
@@ -751,6 +752,93 @@ function CompactTable({
   );
 }
 
+function GrantCreditsForm({
+  opsKey,
+  prefill,
+  onGranted,
+}: {
+  opsKey: string;
+  prefill: string;
+  onGranted: () => void;
+}) {
+  const [identifier, setIdentifier] = useState(prefill);
+  const [amount, setAmount] = useState("10");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (prefill) setIdentifier(prefill);
+  }, [prefill]);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const granted = await grantOpsCredits(opsKey, {
+        identifier: identifier.trim(),
+        amount: Number(amount),
+      });
+      const who = granted.email ?? granted.wallet ?? granted.api_key_id;
+      setResult(
+        `Credited ${formatUsd(granted.credited)} → balance ${formatUsd(granted.balance)} (${who})`,
+      );
+      onGranted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Grant failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel compact title="Grant credits" subtitle="Starter balance for demo / beta testers">
+      <form
+        onSubmit={(e) => void onSubmit(e)}
+        className="flex flex-col gap-2 sm:flex-row sm:items-end"
+      >
+        <label className="min-w-0 flex-1 text-[10px] uppercase tracking-wider text-[var(--color-faint)]">
+          API key id, email, or wallet
+          <input
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            required
+            placeholder="you@example.com"
+            className="mt-1 w-full rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-xs text-[var(--color-ink)]"
+          />
+        </label>
+        <label className="w-full text-[10px] uppercase tracking-wider text-[var(--color-faint)] sm:w-28">
+          Amount USD
+          <input
+            type="number"
+            min="0.00000001"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+            className="mt-1 w-full rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-xs text-[var(--color-ink)]"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy || !identifier.trim()}
+          className="rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[#06110c] disabled:opacity-40"
+        >
+          {busy ? "Granting…" : "Grant"}
+        </button>
+      </form>
+      {error ? (
+        <p className="mt-2 text-[11px] text-[var(--color-danger)]">{error}</p>
+      ) : null}
+      {result ? (
+        <p className="mt-2 text-[11px] text-[var(--color-accent)]">{result}</p>
+      ) : null}
+    </Panel>
+  );
+}
+
 function OverviewPage({
   opsKey,
   keyDraft,
@@ -786,6 +874,7 @@ function OverviewPage({
   const exploreParam = searchParams.get("view");
   const exploreView = isExploreView(exploreParam) ? exploreParam : null;
   const { data: spend, error: spendError } = useInfraSpend(opsKey, 12);
+  const [grantPrefill, setGrantPrefill] = useState("");
 
   const openExplore = (view: ExploreView) => setSearchParams({ view });
   const closeExplore = () => setSearchParams({});
@@ -916,6 +1005,16 @@ function OverviewPage({
             opsKey={opsKey}
             onRefresh={() => void load(true)}
           />
+
+          {opsKey ? (
+            <div className="mt-3">
+              <GrantCreditsForm
+                opsKey={opsKey}
+                prefill={grantPrefill}
+                onGranted={() => void load(true)}
+              />
+            </div>
+          ) : null}
 
           <div className="mt-3 grid gap-2 lg:grid-cols-4">
             <Panel
@@ -1146,7 +1245,16 @@ function OverviewPage({
                         {formatTime(s.createdAt)}
                       </td>
                       <td className="max-w-[8rem] truncate py-1 font-mono">
-                        {s.email ?? (s.wallet ? shortWallet(s.wallet) : s.id.slice(0, 8))}
+                        <button
+                          type="button"
+                          className="max-w-full truncate text-left text-[var(--color-accent)] hover:underline"
+                          title="Grant credits to this account"
+                          onClick={() =>
+                            setGrantPrefill(s.email ?? s.wallet ?? s.id)
+                          }
+                        >
+                          {s.email ?? (s.wallet ? shortWallet(s.wallet) : s.id.slice(0, 8))}
+                        </button>
                       </td>
                       <td className="py-1 font-mono">{formatUsd(s.creditBalance)}</td>
                     </tr>

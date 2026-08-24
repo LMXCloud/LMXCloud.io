@@ -518,6 +518,8 @@ export async function buildServer() {
     providers,
     healthStore,
     balanceStore,
+    apiKeyStore,
+    creditStore,
     x402Enabled:
       config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
     paymentStoreReady: Boolean(paymentStore),

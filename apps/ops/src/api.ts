@@ -131,6 +131,57 @@ export async function fetchOpsMcpEvent(
   );
 }
 
+export async function grantOpsCredits(
+  opsKey: string,
+  body: { identifier: string; amount: number },
+): Promise<{
+  object: string;
+  api_key_id: string;
+  email: string | null;
+  wallet: string | null;
+  identifier_kind: string;
+  credited: number;
+  balance: number;
+  currency: string;
+}> {
+  requireApiBase();
+  if (!opsKey) {
+    throw new Error("Ops API key required");
+  }
+
+  const res = await fetch(`${API_BASE}/v1/ops/credits`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${opsKey}`,
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const json = (await res.json()) as { error?: { message?: string } };
+      if (json.error?.message) message = json.error.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  return (await res.json()) as {
+    object: string;
+    api_key_id: string;
+    email: string | null;
+    wallet: string | null;
+    identifier_kind: string;
+    credited: number;
+    balance: number;
+    currency: string;
+  };
+}
+
 export async function executeOpsReconciliation(
   opsKey: string,
   id: string,

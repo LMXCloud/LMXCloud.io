@@ -4,7 +4,10 @@ import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import { providerUpForStatus, type HealthStore } from "../health/store.js";
 import type { ProviderBalanceStore } from "../providers/balance/types.js";
+import type { ApiKeyStore } from "../auth/store.js";
+import type { CreditStore } from "../credits/store.js";
 import { requireOpsAuth } from "../ops/auth.js";
+import { grantOpsCredits, parseGrantCreditsBody } from "../ops/grant-credits.js";
 import { runSentryTest } from "../ops/sentry-test.js";
 import {
   getMcpToolEventById,
@@ -45,6 +48,8 @@ interface OpsRouteDeps {
   providers: ProviderAdapter[];
   healthStore: HealthStore;
   balanceStore: ProviderBalanceStore;
+  apiKeyStore: ApiKeyStore;
+  creditStore: CreditStore;
   x402Enabled: boolean;
   paymentStoreReady: boolean;
   reconciler: PaymentReconciler | null;
@@ -146,6 +151,45 @@ export async function registerOpsRoutes(
     );
 
     ops.post("/v1/ops/sentry-test", async () => runSentryTest());
+
+    ops.post("/v1/ops/credits", async (request, reply) => {
+      const parsed = parseGrantCreditsBody(request.body);
+      if (!parsed.ok) {
+        return reply.status(400).send({
+          error: {
+            message: parsed.message,
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      const result = await grantOpsCredits({
+        apiKeyStore: deps.apiKeyStore,
+        creditStore: deps.creditStore,
+        identifier: parsed.value.identifier,
+        amount: parsed.value.amount,
+      });
+
+      if (!result.ok) {
+        return reply.status(result.status).send({
+          error: {
+            message: result.message,
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      return {
+        object: "ops_credit_grant",
+        api_key_id: result.record.id,
+        email: result.record.email ?? null,
+        wallet: result.record.wallet ?? null,
+        identifier_kind: result.kind,
+        credited: result.credited,
+        balance: result.balance,
+        currency: "USD",
+      };
+    });
 
     ops.get("/v1/ops/infra-spend", async (request) => {
       const query = request.query as Record<string, unknown>;
