@@ -8,13 +8,11 @@ import {
 } from "./api";
 import { formatUsd } from "./format";
 import {
-  Field,
-  HealthFields,
   McpFields,
   PaymentFields,
   UsageFields,
 } from "./RecordViews";
-import { recordPath, type RecordKind } from "./routes";
+import { type RecordKind } from "./routes";
 import type {
   OpsMcpEventDetail,
   OpsPaymentDetail,
