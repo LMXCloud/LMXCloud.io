@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LMX Cloud — 2-Month Target Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #f4f5fa;
+    --surface: #ffffff;
+    --surface-2: #eef0f8;
+    --border: #dde1ee;
+    --text-primary: #14162a;
+    --text-secondary: #4b4f68;
+    --text-muted: #7a7f97;
+    --accent: #4650e0;
+    --accent-soft: #eceeff;
+    --accent-cyan: #0d94a2;
+    --accent-cyan-soft: #e3f7f9;
+    --good: #148a5e;
+    --good-soft: #e3f6ee;
+    --warning: #9c6a05;
+    --warning-soft: #fbf0da;
+    --critical: #c22f42;
+    --critical-soft: #fbe6e9;
+    --neutral-status: #5c6280;
+    --neutral-soft: #eceef5;
+    --shadow: 0 1px 2px rgba(20,22,42,0.04), 0 8px 24px rgba(20,22,42,0.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg: #0a0b13;
+      --surface: #12141f;
+      --surface-2: #171a29;
+      --border: #262a3d;
+      --text-primary: #eef0f8;
+      --text-secondary: #a7acc4;
+      --text-muted: #71769050;
+      --text-muted: #7a7f9c;
+      --accent: #6d7bff;
+      --accent-soft: #1b1f42;
+      --accent-cyan: #3dd7e5;
+      --accent-cyan-soft: #0f2a30;
+      --good: #3ddb96;
+      --good-soft: #10281f;
+      --warning: #f0b429;
+      --warning-soft: #2c220c;
+      --critical: #ff5c72;
+      --critical-soft: #331419;
+      --neutral-status: #9096b4;
+      --neutral-soft: #1b1e2e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg: #0a0b13;
+    --surface: #12141f;
+    --surface-2: #171a29;
+    --border: #262a3d;
+    --text-primary: #eef0f8;
+    --text-secondary: #a7acc4;
+    --text-muted: #7a7f9c;
+    --accent: #6d7bff;
+    --accent-soft: #1b1f42;
+    --accent-cyan: #3dd7e5;
+    --accent-cyan-soft: #0f2a30;
+    --good: #3ddb96;
+    --good-soft: #10281f;
+    --warning: #f0b429;
+    --warning-soft: #2c220c;
+    --critical: #ff5c72;
+    --critical-soft: #331419;
+    --neutral-status: #9096b4;
+    --neutral-soft: #1b1e2e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono{ font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  .num{ font-variant-numeric: tabular-nums; }
+
+  .wrap{ max-width: 1240px; margin: 0 auto; padding: 44px 28px 72px; }
+
+  /* ---------- header ---------- */
+  header{ margin-bottom: 34px; }
+  .eyebrow{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent-cyan);
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .eyebrow::before{ content:""; width: 6px; height: 6px; border-radius: 1px; background: var(--accent-cyan); transform: rotate(45deg); }
+  h1{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: clamp(26px, 3.4vw, 36px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  header p.lede{
+    max-width: 66ch;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin: 0 0 6px;
+  }
+  header p.lede strong{ color: var(--text-primary); font-weight: 600; }
+  .pacing-note{
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pacing-note svg{ flex: none; }
+
+  /* ---------- headline strip ---------- */
+  .headline-strip{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 30px 0 40px;
+    box-shadow: var(--shadow);
+  }
+  .headline-tile{
+    background: var(--surface);
+    padding: 18px 18px 16px;
+  }
+  .headline-tile .hval{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+  .headline-tile .hval .unit{ font-size: 14px; color: var(--text-muted); font-weight: 500; margin-left: 2px; }
+  .headline-tile .hlabel{
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  /* ---------- section titles ---------- */
+  .section-head{ display:flex; align-items:baseline; gap:12px; margin: 48px 0 18px; }
+  .section-head h2{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .section-head .rule{ flex: 1; height: 1px; background: var(--border); }
+  .section-sub{ font-size: 13px; color: var(--text-muted); margin: -10px 0 20px; max-width: 70ch; line-height: 1.55; }
+
+  /* ---------- timeline ---------- */
+  .timeline-scroll{ overflow-x: auto; padding-bottom: 6px; margin: 0 -4px; }
+  .timeline{
+    display: flex;
+    gap: 0;
+  }
+  .tl-step{
+    flex: 1;
+    min-width: 122px;
+    position: relative;
+    padding: 0 9px 0 0;
+  }
+  .tl-step .tl-track{
+    display: flex; align-items: center; margin-bottom: 12px;
+  }
+  .tl-dot{
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface-2);
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px; font-weight: 700;
+    color: var(--text-secondary);
+    flex: none;
+    z-index: 1;
+  }
+  .tl-step.is-milestone .tl-dot{ background: var(--accent); border-color: var(--accent); color: white; }
+  .tl-line{ flex: 1; height: 2px; background: var(--border); }
+  .tl-step:last-child .tl-line{ display:none; }
+  .tl-body{ padding-right: 8px; }
+  .tl-when{ font-family:"IBM Plex Mono", monospace; font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .tl-title{ font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.35; margin-bottom: 4px; }
+  .tl-detail{ font-size: 11.5px; color: var(--text-secondary); line-height: 1.45; }
+
+  /* ---------- domain grid ---------- */
+  .domain-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .domain-card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px 22px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .domain-head{ display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; margin-bottom: 10px; }
+  .domain-title{ font-size: 15.5px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
+  .domain-goalref{ font-family:"IBM Plex Mono", monospace; font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+
+  .status-chip{
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 4px 9px 4px 7px;
+    border-radius: 100px;
+    white-space: nowrap;
+    flex: none;
+  }
+  .status-chip::before{ content:""; width:6px; height:6px; border-radius:50%; flex:none; }
+  .status-recovering{ background: var(--warning-soft); color: var(--warning); }
+  .status-recovering::before{ background: var(--warning); }
+  .status-building{ background: var(--accent-soft); color: var(--accent); }
+  .status-building::before{ background: var(--accent); }
+  .status-ongoing{ background: var(--good-soft); color: var(--good); }
+  .status-ongoing::before{ background: var(--good); }
+  .status-gated{ background: var(--neutral-soft); color: var(--neutral-status); }
+  .status-gated::before{ background: var(--neutral-status); }
+  .status-notstarted{ background: var(--critical-soft); color: var(--critical); }
+  .status-notstarted::before{ background: var(--critical); }
+
+  .domain-target{ font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 16px; }
+  .domain-target strong{ color: var(--text-primary); font-weight: 600; }
+
+  .kpi-list{ margin-top: auto; display: flex; flex-direction: column; gap: 9px; }
+  .kpi-row{
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 9px 10px;
+    background: var(--surface-2);
+    border-radius: 8px;
+  }
+  .kpi-row .kpi-val{
+    font-family:"IBM Plex Mono", monospace; font-weight: 700; font-size: 13px;
+    color: var(--accent-cyan);
+    flex: none;
+    min-width: 78px;
+  }
+  .kpi-row .kpi-desc{ font-size: 11.8px; color: var(--text-secondary); line-height: 1.4; }
+  .kpi-row .kpi-tag{
+    font-family:"IBM Plex Mono", monospace; font-size: 9px; font-weight: 700; letter-spacing:.04em; text-transform:uppercase;
+    padding: 2px 6px; border-radius: 4px; flex: none; align-self: center; margin-left: auto;
+  }
+  .tag-baseline{ background: var(--accent-soft); color: var(--accent); }
+  .tag-stretch{ background: var(--accent-cyan-soft); color: var(--accent-cyan); }
+  .tag-binary{ background: var(--neutral-soft); color: var(--neutral-status); }
+
+  /* ---------- not-expected callout ---------- */
+  .callout{
+    margin-top: 44px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--neutral-status);
+    border-radius: 10px;
+    padding: 20px 24px;
+  }
+  .callout h3{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 12.5px; font-weight: 700; letter-spacing:.05em; text-transform: uppercase;
+    color: var(--text-primary);
+    margin: 0 0 10px;
+  }
+  .callout ul{ margin: 0; padding-left: 18px; }
+  .callout li{ font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+  .callout li strong{ color: var(--text-primary); font-weight: 600; }
+
+  footer{
+    margin-top: 40px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+  }
+
+  @media (max-width: 640px){
+    .wrap{ padding: 28px 16px 56px; }
+    .headline-strip{ grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Target model &middot; modeled 2026-08-20 &middot; horizon 2026-10-20</div>
+    <h1>LMX Cloud — where the build should be in two months</h1>
+    <p class="lede">Domain-by-domain target state and KPIs for the next eight to nine weeks, built on top of the six-week storage/vault/agent sequence already in <span class="mono">ROADMAP.md</span>. Not a forecast — a bar to check real progress against on 2026-10-20.</p>
+    <div class="pacing-note">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      Calibrated for one person, part-time, around a school schedule — targets below are deliberately modest where the alternative was to assume unearned velocity.
+    </div>
+  </header>
+
+  <div class="headline-strip">
+    <div class="headline-tile">
+      <div class="hval num">20<span class="unit">+ /day</span></div>
+      <div class="hlabel">Active builders/agents on the inference router — the existing demand-gen bar, restated as the 2-month test of it</div>
+    </div>
+    <div class="headline-tile">
+      <div class="hval num">1<span class="unit">+</span></div>
+      <div class="hlabel">Real unprompted stranger x402 payment — Phase 1/2's own success metric, still unconfirmed as of 2026-08-20</div>
+    </div>
+    <div class="headline-tile">
+      <div class="hval num">97<span class="unit">% 7-day</span></div>
+      <div class="hlabel">Sustained real chat success rate across active providers, recovering from 17.44% on 2026-08-11</div>
+    </div>
+    <div class="headline-tile">
+      <div class="hval num">2</div>
+      <div class="hlabel">Repos public and self-hostable — lmx-agent-template and the marketing agent built on it</div>
+    </div>
+    <div class="headline-tile">
+      <div class="hval num">15–30</div>
+      <div class="hlabel">Combined GitHub stars/forks across both repos — modest, calibrated to a brand-new solo-promoted project</div>
+    </div>
+  </div>
+
+  <div class="section-head"><h2>Nine-week sequence</h2><div class="rule"></div></div>
+  <p class="section-sub">Weeks 1–6 are the build sequence already decided in ROADMAP.md's realignment section; weeks 7–9 extend it to the full two-month horizon.</p>
+
+  <div class="timeline-scroll">
+    <div class="timeline">
+      <div class="tl-step is-milestone">
+        <div class="tl-track"><div class="tl-dot">1</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 1</div>
+          <div class="tl-title">lmx-tool-storage v0</div>
+          <div class="tl-detail">Own-namespace CRUD live. Check provider balances/Aethir before ramping outreach.</div>
+        </div>
+      </div>
+      <div class="tl-step is-milestone">
+        <div class="tl-track"><div class="tl-dot">2</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 2</div>
+          <div class="tl-title">lmx-agent-template v0</div>
+          <div class="tl-detail">Wallet-identified, wired to real storage from the start. Zero-setup demo run works.</div>
+        </div>
+      </div>
+      <div class="tl-step is-milestone">
+        <div class="tl-track"><div class="tl-dot">3</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 3</div>
+          <div class="tl-title">Vault Phase A + marketing agent v0</div>
+          <div class="tl-detail">First real agent-authored post goes out on @LMXCloudio.</div>
+        </div>
+      </div>
+      <div class="tl-step is-milestone">
+        <div class="tl-track"><div class="tl-dot">4</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 4</div>
+          <div class="tl-title">Reflection loop + open-source ship</div>
+          <div class="tl-detail">Both repos public with real READMEs; one week of agent posts with reflection notes.</div>
+        </div>
+      </div>
+      <div class="tl-step is-milestone">
+        <div class="tl-track"><div class="tl-dot">5</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 5</div>
+          <div class="tl-title">Vault Phase B + fork tracking</div>
+          <div class="tl-detail">First paid cross-vault read settles and receipts. Star/fork count enters the weekly log.</div>
+        </div>
+      </div>
+      <div class="tl-step is-milestone">
+        <div class="tl-track"><div class="tl-dot">6</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 6</div>
+          <div class="tl-title">Review + pick agent #2</div>
+          <div class="tl-detail">Check every checkpoint above honestly. Choose the next LMX_AGENTS.md candidate from real traction.</div>
+        </div>
+      </div>
+      <div class="tl-step">
+        <div class="tl-track"><div class="tl-dot">7</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 7</div>
+          <div class="tl-title">Agent #2 prototype</div>
+          <div class="tl-detail">Built on the now-proven template. GitHub MCP registry + PulseMCP submissions done.</div>
+        </div>
+      </div>
+      <div class="tl-step">
+        <div class="tl-track"><div class="tl-dot">8</div><div class="tl-line"></div></div>
+        <div class="tl-body">
+          <div class="tl-when">Week 8</div>
+          <div class="tl-title">Reliability confirmed stable</div>
+          <div class="tl-detail">30 real days of healthy success rate. Reliability comparison claim published.</div>
+        </div>
+      </div>
+      <div class="tl-step">
+        <div class="tl-track"><div class="tl-dot">9</div></div>
+        <div class="tl-body">
+          <div class="tl-when">~Oct 20</div>
+          <div class="tl-title">Two-month checkpoint</div>
+          <div class="tl-detail">Score every KPI below against reality. Re-plan the next cycle.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-head"><h2>Target state by domain</h2><div class="rule"></div></div>
+  <p class="section-sub">Baseline = should be true by 2026-10-20 for this window to count as on track. Stretch = would be great, don't force it at the cost of the baseline items elsewhere.</p>
+
+  <div class="domain-grid">
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">Grid — compute reliability</div><div class="domain-goalref">Phase 2 &middot; Goal 0</div></div>
+        <span class="status-chip status-recovering">Recovering</span>
+      </div>
+      <div class="domain-target">Fully recovered from the 2026-08-11 collapse (17.44% real success) and <strong>stable for weeks</strong>, not just fixed once. Aethir contributing real traffic data; a published reliability comparison live as both a trust signal and demand-gen material.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val num">≥97%</span><span class="kpi-desc">7-day real chat success rate, sustained</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">0</span><span class="kpi-desc">provider_billing_exhausted incidents in trailing 30 days</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">Live</span><span class="kpi-desc">public multi-network reliability claim on StatusPage</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">4th</span><span class="kpi-desc">compute network added, if capacity allows</span><span class="kpi-tag tag-stretch">Stretch</span></div>
+      </div>
+    </div>
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">Storage &amp; Vault</div><div class="domain-goalref">Goal 1a &middot; Vault Phase A/B</div></div>
+        <span class="status-chip status-building">Building</span>
+      </div>
+      <div class="domain-target">lmx-tool-storage live in production since week 1. Vault's own-namespace memory and paid cross-namespace reads both shipped and exercised by a real agent — not just built, <strong>used</strong>.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val">Live</span><span class="kpi-desc">lmx-tool-storage in production, tracked in reliability telemetry</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">20+ / 4+</span><span class="kpi-desc">data notes / reflection notes in the marketing agent's own vault</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">1+</span><span class="kpi-desc">real paid cross-vault read, settled and receipted end to end</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">Not started</span><span class="kpi-desc">Goal 1b (Filecoin/Arweave) — intentionally out of this window</span><span class="kpi-tag tag-binary">By design</span></div>
+      </div>
+    </div>
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">LMX.Agent framework</div><div class="domain-goalref">Track A &middot; open source</div></div>
+        <span class="status-chip status-building">Building</span>
+      </div>
+      <div class="domain-target">Template and first flagship agent both public, self-hostable, and running continuously — not a one-time demo. A second agent selected from real signal, prototype underway.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val">Public</span><span class="kpi-desc">lmx-agent-template repo, real README, ≥1 external fork</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">5+ wks</span><span class="kpi-desc">marketing agent posting on a real, sustained cadence</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">15–30</span><span class="kpi-desc">combined stars/forks across both repos</span><span class="kpi-tag tag-stretch">Stretch</span></div>
+        <div class="kpi-row"><span class="kpi-val">Prototype</span><span class="kpi-desc">agent #2, chosen at week 6, in progress by week 8</span><span class="kpi-tag tag-stretch">Stretch</span></div>
+      </div>
+    </div>
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">Marketplace</div><div class="domain-goalref">Phase 2 &middot; Goal 2</div></div>
+        <span class="status-chip status-gated">Gated</span>
+      </div>
+      <div class="domain-target">Stays exactly where it is unless the Phase 2 unpause trigger fires on its own — a real unprompted stranger payment. This is the one domain this model doesn't try to push; forcing it would repeat the "declared done prematurely" mistake already named in ROADMAP.md.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val">If fired</span><span class="kpi-desc">Platform Sprint 2 scoping begins — a spec, not code</span><span class="kpi-tag tag-binary">Conditional</span></div>
+        <div class="kpi-row"><span class="kpi-val">If not</span><span class="kpi-desc">no new scope here — unchanged from today</span><span class="kpi-tag tag-binary">Conditional</span></div>
+      </div>
+    </div>
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">Demand-gen &amp; distribution</div><div class="domain-goalref">Daily checklist &middot; Phase 1 channels</div></div>
+        <span class="status-chip status-ongoing">Ongoing</span>
+      </div>
+      <div class="domain-target">The daily checklist run for roughly 60 real days straight, not in bursts. Secondary discovery layers closed out. This is the domain most likely to quietly slip if the build weeks get all the attention — worth protecting deliberately.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val num">20+/day</span><span class="kpi-desc">active builders/agents on the router</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val num">1+</span><span class="kpi-desc">real unprompted stranger x402 payment logged</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">Live</span><span class="kpi-desc">GitHub MCP registry + PulseMCP listings</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">~60d</span><span class="kpi-desc">consecutive daily log entries, no unexplained gaps</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+      </div>
+    </div>
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">Brand &amp; community</div><div class="domain-goalref">Housekeeping &middot; presentation</div></div>
+        <span class="status-chip status-recovering">Partial</span>
+      </div>
+      <div class="domain-target">Brand system finally applied everywhere it's referenced but not yet live. A real home base on Discord, not just outreach into other people's servers.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val">Applied</span><span class="kpi-desc">brand mark/colors across dashboard, docs, GitHub org, status page</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">Live</span><span class="kpi-desc">LMX Discord server, real activity beyond setup</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">Growing</span><span class="kpi-desc">@LMXCloudio engagement rate, driven partly by the agent's own posting cadence</span><span class="kpi-tag tag-stretch">Stretch</span></div>
+      </div>
+    </div>
+
+    <div class="domain-card">
+      <div class="domain-head">
+        <div><div class="domain-title">Revenue &amp; proof-of-life</div><div class="domain-goalref">12-month target: $5K–$10K MRR</div></div>
+        <span class="status-chip status-notstarted">Not started</span>
+      </div>
+      <div class="domain-target">Two months in is early against a twelve-month revenue horizon — the honest bar here is a <strong>first real dollar</strong>, not a run rate. Naming this explicitly so the 12-month number doesn't quietly get expected early.</div>
+      <div class="kpi-list">
+        <div class="kpi-row"><span class="kpi-val num">$1+</span><span class="kpi-desc">real, non-test, non-internal settled revenue on record</span><span class="kpi-tag tag-baseline">Baseline</span></div>
+        <div class="kpi-row"><span class="kpi-val">Not yet</span><span class="kpi-desc">$5K–$10K MRR — explicitly a 12-month target, not a 2-month one</span><span class="kpi-tag tag-binary">By design</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="callout">
+    <h3>Explicitly not expected by 2026-10-20</h3>
+    <ul>
+      <li><strong>Goal 1b</strong> — Filecoin/Arweave archival storage routing. Deferred by design once storage split into 1a/1b; not slippage if it hasn't started.</li>
+      <li><strong>Goal 2</strong> — the callable-function marketplace, unless the unprompted-payment trigger fires on its own. Not something to force.</li>
+      <li><strong>Track B</strong> — onchain identity/reputation (ERC-8004-style). Stays behind the same gate as Goal 2.</li>
+      <li><strong>L0/L1</strong> — native DePIN compute supply / value-accrual layer. Directional signal only; not a workstream at any point in this window.</li>
+      <li><strong>$5K–$10K MRR</strong> — the real 12-month revenue target. Two months in, "first real dollar" is the honest bar, not a run rate.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Modeled 2026-08-20 against ROADMAP.md as it stood after the "Storage, Vault, and LMX.Agent realignment" section was added the same day. Baseline/Stretch framing and the "explicitly not expected" list exist so this doesn't quietly compress into expecting Phase-2-scale outcomes from a one-person, part-time build. Re-score at the Week 9 checkpoint (~2026-10-20) against ROADMAP.md as it stands then, not against this snapshot's assumptions.
+  </footer>
+
+</div>
+</body>
+</html>

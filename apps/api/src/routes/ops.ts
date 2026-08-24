@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { getLatestHealthCheckErrors } from "../health/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
-import type { HealthStore } from "../health/store.js";
+import { providerUpForStatus, type HealthStore } from "../health/store.js";
 import type { ProviderBalanceStore } from "../providers/balance/types.js";
 import { requireOpsAuth } from "../ops/auth.js";
 import { runSentryTest } from "../ops/sentry-test.js";
@@ -35,6 +35,11 @@ import {
   paymentStatusCounts,
 } from "../ops/queries.js";
 import type { PaymentReconciler } from "../payments/reconciliation/service.js";
+import { assembleInfraSpend } from "../ops/infra-spend-snapshot.js";
+import {
+  insertInfraSpendEntry,
+  parseInfraSpendInsert,
+} from "../ops/infra-spend-store.js";
 
 interface OpsRouteDeps {
   providers: ProviderAdapter[];
@@ -56,6 +61,12 @@ function parseDays(raw: unknown, fallback: number): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(Math.floor(n), 90));
+}
+
+function parseMonths(raw: unknown, fallback: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(Math.floor(n), 24));
 }
 
 export async function registerOpsRoutes(
@@ -135,6 +146,37 @@ export async function registerOpsRoutes(
     );
 
     ops.post("/v1/ops/sentry-test", async () => runSentryTest());
+
+    ops.get("/v1/ops/infra-spend", async (request) => {
+      const query = request.query as Record<string, unknown>;
+      const months = parseMonths(query.months, 12);
+      return assembleInfraSpend({
+        months,
+        balances: deps.balanceStore.getAll(),
+      });
+    });
+
+    ops.post("/v1/ops/infra-spend", async (request, reply) => {
+      if (!hasPostgres()) {
+        return reply.status(503).send({
+          error: {
+            message: "DATABASE_URL is required to log vendor spend",
+            type: "service_unavailable",
+          },
+        });
+      }
+      const parsed = parseInfraSpendInsert(request.body);
+      if (!parsed.ok) {
+        return reply.status(400).send({
+          error: {
+            message: parsed.message,
+            type: "invalid_request_error",
+          },
+        });
+      }
+      const entry = await insertInfraSpendEntry(parsed.value);
+      return { object: "ops_infra_spend_entry", ...entry };
+    });
 
     ops.get("/v1/ops/reliability", async (request) => {
       const query = request.query as Record<string, unknown>;
@@ -227,7 +269,7 @@ export async function registerOpsRoutes(
           return [
             provider.name,
             {
-              healthy: status?.healthy ?? false,
+              healthy: providerUpForStatus(status),
               latencyMs: status?.latencyMs ?? null,
               tier: provider.tier,
               isDepin: provider.isDepin,

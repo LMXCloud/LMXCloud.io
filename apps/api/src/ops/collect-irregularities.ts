@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "../providers/types.js";
-import type { HealthStore } from "../health/store.js";
+import { providerUpForStatus, type HealthStore } from "../health/store.js";
 import type { ProviderBalanceStore } from "../providers/balance/types.js";
 import { listRecentMcpToolEvents } from "./mcp-events.js";
 import {
@@ -7,6 +7,7 @@ import {
   type OpsIrregularity,
 } from "./irregularities.js";
 import {
+  getReliabilityTelemetry,
   getUsageSummary,
   hasPostgres,
   listPendingReconciliations,
@@ -41,10 +42,10 @@ export async function collectIrregularities(
   const balanceStatuses = deps.balanceStore.getAll();
 
   const unhealthyProviders = deps.providers
-    .filter((provider) => !statuses[provider.name]?.healthy)
+    .filter((provider) => !providerUpForStatus(statuses[provider.name]))
     .map((provider) => provider.name);
-  const healthyCount = deps.providers.filter(
-    (provider) => statuses[provider.name]?.healthy,
+  const healthyCount = deps.providers.filter((provider) =>
+    providerUpForStatus(statuses[provider.name]),
   ).length;
 
   let payments: Awaited<ReturnType<typeof listRecentPayments>> = [];
@@ -66,6 +67,8 @@ export async function collectIrregularities(
   let pendingReconciliations: Awaited<
     ReturnType<typeof listPendingReconciliations>
   > = [];
+  let chatReliability: Awaited<ReturnType<typeof getReliabilityTelemetry>> | null =
+    null;
   let dbError: string | null = null;
 
   try {
@@ -77,6 +80,7 @@ export async function collectIrregularities(
       paymentCounts,
       stuckPayments,
       pendingReconciliations,
+      chatReliability,
     ] = await Promise.all([
       listRecentPayments(limit),
       listRecentUsage(limit),
@@ -85,6 +89,7 @@ export async function collectIrregularities(
       paymentStatusCounts(days),
       listStuckPayments(15, 20),
       listPendingReconciliations(20),
+      getReliabilityTelemetry(days, "chat"),
     ]);
   } catch (err) {
     dbError = err instanceof Error ? err.message : "Database query failed";
@@ -109,6 +114,7 @@ export async function collectIrregularities(
     recentPayments: payments,
     recentUsage: usageRecent,
     providerBalances: balanceStatuses,
+    chatReliability,
   });
 
   if (dbError) {

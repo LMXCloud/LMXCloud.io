@@ -387,3 +387,67 @@ export type OpsOverview = {
   activity: OpsActivityItem[];
   treasury: OpsTreasury;
 };
+
+export type InfraSpendKind = "spend" | "balance" | "note";
+
+export type InfraObservability =
+  | {
+      mode: "api";
+      metric: "spend" | "balance";
+      amountUsd: number;
+      amountKind: string;
+      checkUrl: string;
+      asOf: string;
+    }
+  | {
+      mode: "not_api_observable";
+      reason: string;
+    }
+  | {
+      mode: "error";
+      error: string;
+      checkUrl?: string;
+    };
+
+export type InfraSpendEntry = {
+  id: string;
+  service: string;
+  amount: number;
+  date: string;
+  note: string | null;
+  kind: InfraSpendKind;
+  createdAt: string;
+};
+
+export type InfraSpendMonth = {
+  date: string;
+  amount: number;
+  liveUsd: number;
+  manualUsd: number;
+};
+
+export type InfraServiceSnapshot = {
+  id: string;
+  name: string;
+  category: string;
+  purpose: string;
+  consoleUrl: string;
+  configured: boolean;
+  inDocumentedStack: boolean;
+  observability: InfraObservability;
+  latestManual: InfraSpendEntry | null;
+  needsFunding: boolean;
+};
+
+export type InfraSpendSnapshot = {
+  object: "ops_infra_spend";
+  generatedAt: string;
+  storage: "postgres" | "unavailable";
+  months: number;
+  monthToDateUsd: number;
+  monthToDate: { liveUsd: number; manualUsd: number };
+  series: InfraSpendMonth[];
+  services: InfraServiceSnapshot[];
+  entries: InfraSpendEntry[];
+};
+

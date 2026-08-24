@@ -25,7 +25,9 @@ export type ExploreView =
   | "stuck-payments"
   | "payments"
   | "signups"
-  | "deposits";
+  | "deposits"
+  | "reliability"
+  | "mcp";
 
 const VIEW_LABELS: Record<ExploreView, string> = {
   treasury: "Treasury wallet",
@@ -36,6 +38,8 @@ const VIEW_LABELS: Record<ExploreView, string> = {
   payments: "x402 payments",
   signups: "Signups",
   deposits: "USDC deposits",
+  reliability: "Reliability by provider",
+  mcp: "MCP tool events",
 };
 
 export function isExploreView(value: string | null): value is ExploreView {
@@ -491,6 +495,95 @@ function ExploreBody({
           }
         />
       );
+
+    case "reliability": {
+      const rel = data.reliability;
+      if (!rel) {
+        return <p className="text-sm text-[var(--color-muted)]">No reliability telemetry yet.</p>;
+      }
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--color-muted)]">
+            {rel.windowDays}d · {formatNum(rel.overall.successes)}/{formatNum(rel.overall.attempts)}{" "}
+            ok · {formatLatency(rel.overall.avgLatencyMs)} avg
+          </p>
+          <ModalTable
+            empty="No per-provider rows."
+            columns={
+              <tr>
+                <th className="pb-2 pr-3 font-medium">Provider</th>
+                <th className="pb-2 pr-3 font-medium">Type</th>
+                <th className="pb-2 pr-3 font-medium">Success</th>
+                <th className="pb-2 pr-3 font-medium">Attempts</th>
+                <th className="pb-2 pr-3 font-medium">Fails</th>
+                <th className="pb-2 font-medium">Latency</th>
+              </tr>
+            }
+            rows={
+              rel.byProvider.length > 0
+                ? rel.byProvider.map((row) => (
+                    <tr
+                      key={`${row.resourceType}-${row.provider}`}
+                      className="border-t border-[var(--color-line)]/70"
+                    >
+                      <td className="py-2 pr-3 font-mono">{row.provider}</td>
+                      <td className="py-2 pr-3 font-mono text-[var(--color-muted)]">
+                        {row.resourceType}
+                      </td>
+                      <td className="py-2 pr-3 font-mono">
+                        {(row.successRate * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-2 pr-3 font-mono">{formatNum(row.attempts)}</td>
+                      <td className="py-2 pr-3 font-mono">{formatNum(row.failures)}</td>
+                      <td className="py-2 font-mono">{formatLatency(row.avgLatencyMs)}</td>
+                    </tr>
+                  ))
+                : null
+            }
+          />
+        </div>
+      );
+    }
+
+    case "mcp":
+      return (
+        <ModalTable
+          empty="No MCP events in the buffer."
+          columns={
+            <tr>
+              <th className="pb-2 pr-3 font-medium">When</th>
+              <th className="pb-2 pr-3 font-medium">Tool</th>
+              <th className="pb-2 pr-3 font-medium">Ok</th>
+              <th className="pb-2 pr-3 font-medium">Caller</th>
+              <th className="pb-2 font-medium">Detail</th>
+            </tr>
+          }
+          rows={
+            data.mcp.recent.length > 0
+              ? data.mcp.recent.map((e) => (
+                  <tr key={e.id} className="border-t border-[var(--color-line)]/70">
+                    <td className="whitespace-nowrap py-2 pr-3 font-mono text-[var(--color-muted)]">
+                      {formatTime(e.ts)}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Link
+                        to={recordPath("mcp", e.id)}
+                        className="font-mono text-[var(--color-accent)] underline-offset-2 hover:underline"
+                      >
+                        {e.tool}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-3 font-mono">{e.ok ? "ok" : "err"}</td>
+                    <td className="py-2 pr-3 font-mono">{e.callerId}</td>
+                    <td className="max-w-[14rem] truncate py-2 text-[var(--color-muted)]">
+                      {e.detail ?? "—"}
+                    </td>
+                  </tr>
+                ))
+              : null
+          }
+        />
+      );
   }
 }
 
@@ -601,6 +694,10 @@ function exploreCount(view: ExploreView, data: OpsOverview): number | null {
       return (data.signups?.recent ?? []).length;
     case "deposits":
       return (data.credits?.recent ?? []).length;
+    case "reliability":
+      return data.reliability?.byProvider.length ?? 0;
+    case "mcp":
+      return data.mcp.recent.length;
   }
 }
 

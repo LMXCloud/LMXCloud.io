@@ -21,7 +21,20 @@ import {
   UsageDetailPage,
 } from "./DetailPages";
 import {
+  InfraSpendOverviewPanel,
+  InfraSpendPage,
+  OpsNav,
+  useInfraSpend,
+} from "./InfraSpendPage";
+import {
+  DecisionBar,
+  QuickLinks,
+  ReliabilityPanel,
+  StatusPills,
+} from "./DashboardWidgets";
+import {
   formatLatency,
+  formatPct,
   formatProviderBalance,
   formatEth,
   formatNum,
@@ -31,6 +44,7 @@ import {
   shortWallet,
 } from "./format";
 import { activityPath, relatedIdPath, recordPath } from "./routes";
+import { OPS_LINKS } from "./links";
 import type {
   OpsActivityItem,
   OpsIrregularity,
@@ -436,16 +450,42 @@ function KpiStrip({ data, days }: { data: OpsOverview; days: number }) {
     Object.entries(data.payments.statusCounts)
       .map(([k, v]) => `${k} ${v}`)
       .join(" · ") || "none";
+  const success = data.reliability?.overall.successRate;
+  const signups = data.signups?.recent.length ?? 0;
+  const deposits = data.credits?.recent.length ?? 0;
 
   return (
-    <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       <Stat
         label="Requests"
         value={formatNum(data.usage.summary.requests)}
         hint={`${days}d`}
       />
+      <Stat
+        label="Success"
+        value={formatPct(success)}
+        hint={
+          data.reliability
+            ? `${formatNum(data.reliability.overall.failures)} fail`
+            : `${days}d`
+        }
+        tone={
+          success == null
+            ? "default"
+            : success < 0.9
+              ? "danger"
+              : success < 0.99
+                ? "warn"
+                : "accent"
+        }
+      />
       <Stat label="Tokens" value={formatTokens(data.usage.summary.totalTokens)} />
-      <Stat label="Cost" value={formatUsd(data.usage.summary.cost)} tone="accent" />
+      <Stat
+        label="Charged"
+        value={formatUsd(data.usage.summary.cost)}
+        hint="customer usage, not vendor spend"
+        tone="accent"
+      />
       <Stat
         label="Latency"
         value={formatLatency(data.usage.summary.avgLatencyMs)}
@@ -453,10 +493,26 @@ function KpiStrip({ data, days }: { data: OpsOverview; days: number }) {
       <Stat
         label="Providers"
         value={`${data.health.healthyCount}/${data.health.providerCount}`}
-        hint={data.server.x402Enabled ? "x402 on" : "x402 off"}
-        tone={data.health.healthyCount === data.health.providerCount ? "accent" : "warn"}
+        hint={data.server.fallbackChain.join(" → ") || "—"}
+        tone={data.health.healthyCount === data.health.providerCount ? "accent" : "danger"}
       />
       <Stat label="Payments" value={formatNum(paymentTotal)} hint={paymentHint} />
+      <Stat
+        label="Fallbacks"
+        value={formatNum(data.usage.summary.fallbackCount)}
+        hint="router used a backup"
+        tone={data.usage.summary.fallbackCount > 0 ? "warn" : "default"}
+      />
+      <Stat
+        label="Payers"
+        value={formatNum(data.usage.summary.uniquePayers)}
+        hint={`${formatNum(data.usage.summary.uniqueApiKeys)} keys`}
+      />
+      <Stat
+        label="Signups"
+        value={formatNum(signups)}
+        hint={`${formatNum(deposits)} deposits`}
+      />
     </div>
   );
 }
@@ -729,6 +785,7 @@ function OverviewPage({
   const [searchParams, setSearchParams] = useSearchParams();
   const exploreParam = searchParams.get("view");
   const exploreView = isExploreView(exploreParam) ? exploreParam : null;
+  const { data: spend, error: spendError } = useInfraSpend(opsKey, 12);
 
   const openExplore = (view: ExploreView) => setSearchParams({ view });
   const closeExplore = () => setSearchParams({});
@@ -747,6 +804,7 @@ function OverviewPage({
           <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">
             Operations
           </h1>
+          <OpsNav current="overview" />
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-muted)]">
           <span className="font-mono">{apiBase || "VITE_API_URL unset"}</span>
@@ -835,7 +893,10 @@ function OverviewPage({
 
       {data ? (
         <>
+          <StatusPills data={data} />
+          <DecisionBar data={data} spend={spend} />
           <KpiStrip data={data} days={days} />
+          <QuickLinks spend={spend} />
           {data.treasury ? (
             <TreasuryStrip
               treasury={data.treasury}
@@ -846,6 +907,9 @@ function OverviewPage({
               }
             />
           ) : null}
+          {opsKey ? (
+            <InfraSpendOverviewPanel snapshot={spend} error={spendError} />
+          ) : null}
           <AttentionPanel
             items={data.irregularities ?? []}
             pendingReconciliations={data.reconciliationsPending ?? []}
@@ -853,7 +917,7 @@ function OverviewPage({
             onRefresh={() => void load(true)}
           />
 
-          <div className="mt-3 grid gap-2 lg:grid-cols-3">
+          <div className="mt-3 grid gap-2 lg:grid-cols-4">
             <Panel
               compact
               title="Providers"
@@ -864,7 +928,9 @@ function OverviewPage({
                 <p className="text-[11px] text-[var(--color-muted)]">None configured.</p>
               ) : (
                 <ul className="space-y-1">
-                  {providers.map(([name, status]) => (
+                  {providers.map(([name, status]) => {
+                    const consoleHref = OPS_LINKS.find((l) => l.id === name)?.href;
+                    return (
                     <li
                       key={name}
                       className="rounded border border-[var(--color-line)]/80 bg-[var(--color-panel-raised)]/50 px-2 py-1.5"
@@ -874,13 +940,31 @@ function OverviewPage({
                           <span
                             className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.healthy ? "bg-[var(--color-accent)]" : "bg-[var(--color-danger)]"}`}
                           />
-                          <span className="truncate text-xs font-medium">{name}</span>
+                          {consoleHref ? (
+                            <a
+                              href={consoleHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="truncate text-xs font-medium hover:text-[var(--color-accent)]"
+                            >
+                              {name}
+                            </a>
+                          ) : (
+                            <span className="truncate text-xs font-medium">{name}</span>
+                          )}
                         </div>
                         <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--color-muted)]">
                           {formatLatency(status.latencyMs)}
                         </span>
                       </div>
-                      {status.balance ? (
+                      {!status.healthy && status.errorDetail ? (
+                        <p
+                          className="mt-0.5 truncate pl-3 font-mono text-[9px] text-[var(--color-danger)]"
+                          title={status.errorDetail}
+                        >
+                          {status.errorDetail}
+                        </p>
+                      ) : status.balance ? (
                         <p
                           className={`mt-0.5 truncate pl-3 font-mono text-[9px] ${
                             status.balance.belowThreshold
@@ -893,7 +977,8 @@ function OverviewPage({
                         </p>
                       ) : null}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
               <p className="mt-2 font-mono text-[9px] text-[var(--color-faint)]">
@@ -908,6 +993,18 @@ function OverviewPage({
               onExplore={() => openExplore("usage")}
             >
               <UsageSparkline history={data.usage.history} />
+            </Panel>
+
+            <Panel
+              compact
+              title="Reliability"
+              subtitle={`${days}d success by provider`}
+              onExplore={() => openExplore("reliability")}
+            >
+              <ReliabilityPanel
+                data={data}
+                onExplore={() => openExplore("reliability")}
+              />
             </Panel>
 
             <Panel
@@ -1095,6 +1192,48 @@ function OverviewPage({
                 />
               )}
             </Panel>
+
+            <Panel
+              compact
+              title="MCP"
+              subtitle={`${data.mcp.buffered} buffered`}
+              onExplore={
+                data.mcp.recent.length > 0 ? () => openExplore("mcp") : undefined
+              }
+            >
+              {data.mcp.recent.length === 0 ? (
+                <p className="text-[11px] text-[var(--color-muted)]">No tool events.</p>
+              ) : (
+                <CompactTable
+                  total={data.mcp.recent.length}
+                  onViewAll={() => openExplore("mcp")}
+                  columns={
+                    <tr>
+                      <th className="pb-1 font-medium">When</th>
+                      <th className="pb-1 font-medium">Tool</th>
+                      <th className="pb-1 font-medium">Ok</th>
+                      <th className="pb-1 font-medium">Caller</th>
+                    </tr>
+                  }
+                  rows={data.mcp.recent.slice(0, ROW_LIMIT).map((e) => (
+                    <tr key={e.id} className="border-t border-[var(--color-line)]/60">
+                      <td className="whitespace-nowrap py-1 font-mono text-[var(--color-muted)]">
+                        {formatTime(e.ts)}
+                      </td>
+                      <td className="max-w-[8rem] truncate py-1 font-mono">{e.tool}</td>
+                      <td
+                        className={`py-1 font-mono ${
+                          e.ok ? "text-[var(--color-accent)]" : "text-[var(--color-danger)]"
+                        }`}
+                      >
+                        {e.ok ? "ok" : "err"}
+                      </td>
+                      <td className="max-w-[6rem] truncate py-1 font-mono">{e.callerId}</td>
+                    </tr>
+                  ))}
+                />
+              )}
+            </Panel>
           </div>
 
           {exploreView ? (
@@ -1166,7 +1305,7 @@ function OpsShell() {
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto min-h-screen max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
       <Routes>
         <Route
           path="/"
@@ -1189,6 +1328,7 @@ function OpsShell() {
             />
           }
         />
+        <Route path="/infra" element={<InfraSpendPage opsKey={opsKey} />} />
         <Route
           path="/payments/:id"
           element={

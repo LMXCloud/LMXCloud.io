@@ -10,7 +10,10 @@ import {
   modelSupportsImageInput,
 } from "@lmxcloud/shared";
 import type { HTTPRequestContext } from "@x402/core/server";
-import type { ProviderAdapter } from "../providers/types.js";
+import {
+  ModelNotSupportedError,
+  type ProviderAdapter,
+} from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
 import { buildPricingCatalog, getModelPrice } from "../pricing/catalog.js";
 import {
@@ -18,6 +21,12 @@ import {
   quoteCallPrice,
   resolveMaxCompletionTokens,
 } from "../pricing/quote.js";
+import {
+  InvalidChatRequestError,
+  ModelUnavailableError,
+  isChatQuoteFailure,
+  type ChatQuoteFailure,
+} from "./quote-errors.js";
 
 export interface ChatQuoteContext {
   model: string;
@@ -98,32 +107,49 @@ function parseMessageContent(
   return parts;
 }
 
-export function parseChatBody(body: unknown): ChatCompletionRequest | string {
+export function parseChatBody(
+  body: unknown,
+): ChatCompletionRequest | InvalidChatRequestError {
   if (typeof body !== "object" || body === null) {
-    return "Request body must be a JSON object";
+    return new InvalidChatRequestError(
+      "Request body must be a JSON object",
+      "invalid_body",
+    );
   }
 
   const b = body as Record<string, unknown>;
 
   if (typeof b.model !== "string" || b.model.trim() === "") {
-    return "Field 'model' is required and must be a non-empty string";
+    return new InvalidChatRequestError(
+      "Field 'model' is required and must be a non-empty string",
+      "missing_model",
+    );
   }
 
   if (!Array.isArray(b.messages) || b.messages.length === 0) {
-    return "Field 'messages' is required and must be a non-empty array";
+    return new InvalidChatRequestError(
+      "Field 'messages' is required and must be a non-empty array",
+      "missing_messages",
+    );
   }
 
   const messages: ChatMessage[] = [];
   for (const msg of b.messages) {
     if (typeof msg !== "object" || msg === null) {
-      return "Each message must be a valid object";
+      return new InvalidChatRequestError(
+        "Each message must be a valid object",
+        "invalid_message",
+      );
     }
     const m = msg as Record<string, unknown>;
     if (
       typeof m.role !== "string" ||
       !["system", "user", "assistant", "tool"].includes(m.role)
     ) {
-      return "Each message must have a valid 'role' and 'content'";
+      return new InvalidChatRequestError(
+        "Each message must have a valid 'role' and 'content'",
+        "invalid_message",
+      );
     }
 
     if (typeof m.content === "string") {
@@ -133,7 +159,7 @@ export function parseChatBody(body: unknown): ChatCompletionRequest | string {
 
     const content = parseMessageContent(m.content, m.role);
     if (typeof content === "string") {
-      return content;
+      return new InvalidChatRequestError(content, "invalid_message");
     }
 
     messages.push({ role: m.role as ChatMessage["role"], content });
@@ -141,7 +167,10 @@ export function parseChatBody(body: unknown): ChatCompletionRequest | string {
 
   if (chatMessagesHaveImageContent(messages) && !modelSupportsImageInput(b.model)) {
     const visionModels = listVisionModelAliases().join(", ");
-    return `Model "${b.model}" does not support image input. Use a vision-capable model such as: ${visionModels}`;
+    return new InvalidChatRequestError(
+      `Model "${b.model}" does not support image input. Use a vision-capable model such as: ${visionModels}`,
+      "vision_not_supported",
+    );
   }
 
   return {
@@ -166,13 +195,16 @@ export function buildChatQuote(
     minCallUsdc: number;
     defaultMaxCompletionTokens: number;
   },
-): ChatQuoteContext | string {
+): ChatQuoteContext | ChatQuoteFailure {
   const healthyProviders = providers.filter(
     (provider) => healthStore.getAll()[provider.name]?.healthy,
   );
   const entry = getModelPrice(buildPricingCatalog(healthyProviders, options.marginPct), body.model);
   if (!entry) {
-    return `Model "${body.model}" is not available from healthy providers`;
+    const configured = providers.some((provider) => provider.supportsModel(body.model));
+    return configured
+      ? new ModelUnavailableError(body.model)
+      : new ModelNotSupportedError(body.model);
   }
 
   const promptTokens = estimatePromptTokens(body.messages);
@@ -204,10 +236,20 @@ export function buildChatQuoteFromHttpContext(
     minCallUsdc: number;
     defaultMaxCompletionTokens: number;
   },
-): ChatQuoteContext | string {
+): ChatQuoteContext | ChatQuoteFailure {
   const body = parseChatBody(context.adapter.getBody?.());
-  if (typeof body === "string") return body;
+  if (body instanceof InvalidChatRequestError) return body;
   return buildChatQuote(body, providers, healthStore, options);
+}
+
+/** x402 `price()` must throw a typed error — never `new Error(string)`. */
+export function assertSuccessfulChatQuote(
+  result: ChatQuoteContext | ChatQuoteFailure,
+): ChatQuoteContext {
+  if (isChatQuoteFailure(result)) {
+    throw result;
+  }
+  return result;
 }
 
 export { formatUsdPrice } from "@lmxcloud/x402";

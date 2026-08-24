@@ -9,6 +9,7 @@ import type { HealthStore } from "../health/store.js";
 import { RESOURCE_TYPE_CHAT } from "../telemetry/types.js";
 import type { UsageStore } from "../usage/store.js";
 import type { RoutingPreference } from "./strategies.js";
+import type { RoutingSignalStore } from "./signal-store.js";
 
 /**
  * Optional billing attribution attached to failure telemetry rows.
@@ -42,6 +43,7 @@ export class InferenceRouter {
     private readonly providers: ProviderAdapter[],
     private readonly healthStore: HealthStore,
     private readonly usageStore?: UsageStore,
+    private readonly signalStore?: RoutingSignalStore,
   ) {}
 
   async route(
@@ -63,19 +65,23 @@ export class InferenceRouter {
       throw new ModelNotSupportedError(request.model);
     }
 
+    const attemptOrder = this.applyCircuitSkip(capable);
     let lastError: ProviderError | undefined;
+    let attemptedIndex = 0;
 
-    for (let index = 0; index < capable.length; index++) {
-      const provider = capable[index]!;
+    for (const provider of attemptOrder) {
       const started = performance.now();
+      const fallbackUsed = attemptedIndex > 0;
+      attemptedIndex += 1;
 
       try {
         const result = await provider.chatCompletion(request);
+        this.signalStore?.recordAttempt(provider.name, true);
         return {
           response: result.response,
           latencyMs: result.latencyMs,
           provider: provider.name,
-          fallbackUsed: index > 0,
+          fallbackUsed,
           costPer1kTokens: provider.costPer1kTokens,
           usage: result.usage,
           stream: result.stream,
@@ -84,19 +90,21 @@ export class InferenceRouter {
         const latencyMs = Math.round(performance.now() - started);
         if (err instanceof ProviderError) {
           lastError = err;
+          const errorCode =
+            err.telemetryCode ??
+            (err.statusCode
+              ? `provider_http_${err.statusCode}`
+              : "provider_error");
+          this.signalStore?.recordAttempt(provider.name, false, errorCode);
           await this.recordFailure({
             telemetry,
             resourceType,
             provider: provider.name,
             model: request.model,
             latencyMs,
-            fallbackUsed: index > 0,
+            fallbackUsed,
             unitPrice: provider.costPer1kTokens,
-            errorCode:
-              err.telemetryCode ??
-              (err.statusCode
-                ? `provider_http_${err.statusCode}`
-                : "provider_error"),
+            errorCode,
           });
           continue;
         }
@@ -155,23 +163,64 @@ export class InferenceRouter {
       candidates = candidates.filter((provider) => provider.isDepin);
     }
 
+    const gatewayHealthy = (name: string) =>
+      Boolean(this.healthStore.get(name)?.healthy);
+
     if (preference.preferredProvider) {
       const preferred = candidates.find(
         (provider) => provider.name === preference.preferredProvider,
       );
       if (preferred) {
-        candidates = [
-          preferred,
-          ...candidates.filter((provider) => provider.name !== preferred.name),
-        ];
+        const rest = candidates.filter(
+          (provider) => provider.name !== preferred.name,
+        );
+        const orderedRest = this.signalStore
+          ? this.signalStore.orderProviders(rest, gatewayHealthy)
+          : this.prioritizeHealthy(rest);
+        return [preferred, ...orderedRest];
       }
-    } else if (preference.strategy === "cheapest") {
+    }
+
+    if (preference.strategy === "cheapest") {
       candidates = this.sortByCost(candidates);
-    } else if (preference.strategy === "fastest") {
+      if (this.signalStore) {
+        return this.signalStore.orderProvidersPreservingPrimary(
+          candidates,
+          gatewayHealthy,
+        );
+      }
+      return this.prioritizeHealthy(candidates);
+    }
+
+    if (preference.strategy === "fastest") {
       candidates = this.sortByLatency(candidates);
+      if (this.signalStore) {
+        return this.signalStore.orderProvidersPreservingPrimary(
+          candidates,
+          gatewayHealthy,
+        );
+      }
+      return this.prioritizeHealthy(candidates);
+    }
+
+    if (this.signalStore) {
+      return this.signalStore.orderProviders(candidates, gatewayHealthy);
     }
 
     return this.prioritizeHealthy(candidates);
+  }
+
+  /**
+   * Skip open-circuit providers when at least one alternative is available.
+   * If every capable provider is open, try them all (last resort).
+   */
+  private applyCircuitSkip(capable: ProviderAdapter[]): ProviderAdapter[] {
+    if (!this.signalStore) return capable;
+
+    const available = capable.filter(
+      (provider) => !this.signalStore!.shouldSkip(provider.name),
+    );
+    return available.length > 0 ? available : capable;
   }
 
   private sortByCost(providers: ProviderAdapter[]): ProviderAdapter[] {

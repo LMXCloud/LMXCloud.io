@@ -19,7 +19,9 @@ import { ProviderBalanceMonitor } from "./providers/balance/monitor.js";
 import { createProviderBalancePollers } from "./providers/balance/registry.js";
 import { InMemoryProviderBalanceStore } from "./providers/balance/store.js";
 import { createProviderRegistry, getFallbackChain } from "./providers/registry.js";
+import { RoutingHistoryPoller } from "./routing/history-poller.js";
 import { InferenceRouter } from "./routing/router.js";
+import { RoutingSignalStore } from "./routing/signal-store.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerWebSearchRoutes } from "./routes/web-search.js";
@@ -50,6 +52,7 @@ import { createRateLimiter } from "./rate-limit.js";
 import { createUsageStore } from "./usage/index.js";
 import { createCreditStore } from "./credits/index.js";
 import { createOriginLockHook } from "./origin-lock.js";
+import { isChatQuoteFailure, quoteFailurePayload, quoteFailureStatusCode } from "./payments/quote-errors.js";
 
 
 
@@ -108,6 +111,16 @@ export async function buildServer() {
   });
 
   app.setErrorHandler((error, request, reply) => {
+    if (isChatQuoteFailure(error)) {
+      request.log.warn({ err: error, code: quoteFailurePayload(error).code }, error.name);
+      if (!reply.sent) {
+        void reply.status(quoteFailureStatusCode(error)).send({
+          error: quoteFailurePayload(error),
+        });
+      }
+      return;
+    }
+
     if (process.env.SENTRY_DSN) {
       Sentry.captureException(error);
     }
@@ -155,7 +168,22 @@ export async function buildServer() {
 
   const usageStore = createUsageStore();
 
-  const router = new InferenceRouter(providers, healthStore, usageStore);
+  const routingSignalStore = new RoutingSignalStore();
+  const routingHistoryPoller = new RoutingHistoryPoller(
+    routingSignalStore,
+    undefined,
+    undefined,
+    (err) => {
+      app.log.error({ err }, "routing history poll failed");
+    },
+  );
+
+  const router = new InferenceRouter(
+    providers,
+    healthStore,
+    usageStore,
+    routingSignalStore,
+  );
 
   const creditStore = createCreditStore();
 
@@ -324,12 +352,14 @@ export async function buildServer() {
 
   healthMonitor.start();
   balanceMonitor?.start();
+  routingHistoryPoller.start();
   irregularityMonitor.start();
 
   app.addHook("onClose", async () => {
 
     healthMonitor.stop();
     balanceMonitor?.stop();
+    routingHistoryPoller.stop();
     irregularityMonitor.stop();
 
     depositPoller?.stop();
@@ -381,6 +411,7 @@ export async function buildServer() {
   await registerStatusRoutes(app, {
     providers,
     healthStore,
+    routingSignalStore,
     anchorStore,
     anchoring: config.anchoring
       ? {

@@ -173,7 +173,37 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS idx_reconciliation_events_payment
     ON reconciliation_events (payment_event_id)
     WHERE payment_event_id IS NOT NULL`,
-];
+  // Vendor spend LMX pays (hosting/db/observability/inference) — not customer-usage cost
+  `CREATE TABLE IF NOT EXISTS infra_spend_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    service TEXT NOT NULL,
+    amount NUMERIC(18, 8) NOT NULL,
+    occurred_on DATE NOT NULL,
+    note TEXT,
+    kind TEXT NOT NULL DEFAULT 'spend'
+      CHECK (kind IN ('spend', 'balance', 'note')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_infra_spend_entries_service_date
+    ON infra_spend_entries (service, occurred_on DESC)`,
+  // First log from the 2026-08-22 funding pass. ON CONFLICT keeps this idempotent.
+  `INSERT INTO infra_spend_entries (id, service, amount, occurred_on, note, kind) VALUES
+    ('a1000000-0000-4000-8000-000000000001', 'neon', 0, '2026-08-22',
+      'Upgraded Free → Launch (usage-based, $0.106/CU-hr)', 'note'),
+    ('a1000000-0000-4000-8000-000000000002', 'railway', 0.68, '2026-08-22',
+      'Hobby plan, $0.68 of $5 included monthly credit used this cycle', 'spend'),
+    ('a1000000-0000-4000-8000-000000000003', 'ionet', 10.00, '2026-08-22',
+      'Account balance $10.00 after funding pass', 'balance'),
+    ('a1000000-0000-4000-8000-000000000004', 'akash', 0.00, '2026-08-22',
+      'Account balance was $0.00 at the 2026-08-22 seed — historical snapshot, not a live alarm', 'balance'),
+    ('a1000000-0000-4000-8000-000000000005', 'aethir', 3.53, '2026-08-22',
+      'Account balance $3.53 after funding pass', 'balance')
+    ON CONFLICT (id) DO NOTHING`,
+  `UPDATE infra_spend_entries
+    SET note = 'Account balance was $0.00 at the 2026-08-22 seed — historical snapshot, not a live alarm'
+    WHERE id = 'a1000000-0000-4000-8000-000000000004'
+      AND note ILIKE '%needs funding%'`,
+]
 
 export async function runMigrations(): Promise<void> {
   const client = await getPool().connect();

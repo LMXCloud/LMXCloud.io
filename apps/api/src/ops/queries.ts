@@ -1,4 +1,5 @@
 import { getPool } from "../db/pool.js";
+import { OPERATOR_ATTRIBUTION_USAGE_SQL } from "../health/operator-attribution.js";
 import type { PaymentEvent, PaymentEventStatus } from "../payments/types.js";
 import type { ReliabilityTelemetry } from "../telemetry/types.js";
 
@@ -581,6 +582,7 @@ export async function getReliabilityTelemetry(
        AVG(unit_price)::text AS avg_unit_price
      FROM usage_events
      WHERE created_at >= NOW() - ($1::int || ' days')::interval
+       AND NOT ${OPERATOR_ATTRIBUTION_USAGE_SQL}
        ${typeFilter}`,
     params,
   );
@@ -609,6 +611,7 @@ export async function getReliabilityTelemetry(
        AVG(unit_price)::text AS avg_unit_price
      FROM usage_events
      WHERE created_at >= NOW() - ($1::int || ' days')::interval
+       AND NOT ${OPERATOR_ATTRIBUTION_USAGE_SQL}
        ${typeFilter}
      GROUP BY resource_type, provider
      ORDER BY resource_type, provider`,
@@ -640,6 +643,7 @@ export async function getReliabilityTelemetry(
        AVG(cost) FILTER (WHERE success)::text AS avg_cost
      FROM usage_events
      WHERE created_at >= NOW() - ($1::int || ' days')::interval
+       AND NOT ${OPERATOR_ATTRIBUTION_USAGE_SQL}
        ${typeFilter}
      GROUP BY DATE(created_at AT TIME ZONE 'UTC'), resource_type, provider, model
      ORDER BY date, resource_type, provider, model`,

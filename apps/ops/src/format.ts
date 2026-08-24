@@ -5,6 +5,13 @@ export function formatUsd(n: number): string {
   return `$${n.toFixed(6)}`;
 }
 
+/** Vendor invoices / balances — two decimal dollars, not per-token dust. */
+export function formatSpendUsd(n: number): string {
+  const abs = Math.abs(n);
+  const formatted = abs >= 100 ? abs.toFixed(0) : abs.toFixed(2);
+  return n < 0 ? `-$${formatted}` : `$${formatted}`;
+}
+
 export function formatProviderBalance(
   balance: OpsProviderBalance | null | undefined,
 ): string {
@@ -28,6 +35,11 @@ export function formatEth(n: number): string {
 
 export function formatNum(n: number): string {
   return n.toLocaleString();
+}
+
+export function formatPct(rate: number | null | undefined): string {
+  if (rate == null || !Number.isFinite(rate)) return "—";
+  return `${(rate * 100).toFixed(1)}%`;
 }
 
 export function formatTokens(n: number): string {

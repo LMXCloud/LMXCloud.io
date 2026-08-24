@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import type { OpsIrregularity } from "../ops/irregularities.js";
 import { notifyTelegram } from "./telegram.js";
 
@@ -27,8 +28,40 @@ function formatCriticalIrregularity(item: OpsIrregularity): string {
   return lines.join("\n");
 }
 
+function captureCriticalToSentry(item: OpsIrregularity): void {
+  if (!process.env.SENTRY_DSN) return;
+
+  const provider =
+    item.relatedIds?.[0] ??
+    (item.id.startsWith("usage.provider_chat_success_low.")
+      ? item.id.slice("usage.provider_chat_success_low.".length)
+      : undefined);
+
+  Sentry.captureMessage(item.title, {
+    level: "error",
+    tags: {
+      signal: item.id.startsWith("usage.chat_success") ||
+        item.id.startsWith("usage.provider_chat_success")
+        ? "chat_success"
+        : item.category,
+      irregularity_id: item.id,
+      ...(provider ? { provider } : {}),
+    },
+    extra: {
+      detail: item.detail,
+      action: item.action,
+      metric: item.metric,
+    },
+  });
+}
+
+function notifyCritical(item: OpsIrregularity): void {
+  notifyTelegram(formatCriticalIrregularity(item));
+  captureCriticalToSentry(item);
+}
+
 /**
- * Fire-and-forget Telegram for critical irregularities.
+ * Fire-and-forget Telegram (+ Sentry) for critical irregularities.
  * Dedupes steady-state conditions: notifies on first sight and again after cooldown,
  * not on every poll cycle. Clears state when a condition resolves.
  */
@@ -50,14 +83,14 @@ export function notifyCriticalIrregularities(irregularities: OpsIrregularity[]):
     const lastAt = lastNotifiedAt.get(item.id);
 
     if (!wasActive) {
-      notifyTelegram(formatCriticalIrregularity(item));
+      notifyCritical(item);
       activeCriticalIds.add(item.id);
       lastNotifiedAt.set(item.id, now);
       continue;
     }
 
     if (lastAt !== undefined && now - lastAt >= cooldownMs) {
-      notifyTelegram(formatCriticalIrregularity(item));
+      notifyCritical(item);
       lastNotifiedAt.set(item.id, now);
     }
   }

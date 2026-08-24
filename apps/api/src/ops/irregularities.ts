@@ -4,6 +4,7 @@ import {
   PROVIDER_BILLING_EXHAUSTED_CODE,
 } from "../providers/billing-errors.js";
 import type { ProviderBalanceStatus } from "../providers/balance/types.js";
+import type { ReliabilityTelemetry } from "../telemetry/types.js";
 import type {
   OpsPaymentRow,
   OpsRecentUsage,
@@ -69,6 +70,8 @@ export type DetectIrregularitiesInput = {
   recentPayments: OpsPaymentRow[];
   recentUsage: OpsRecentUsage[];
   providerBalances?: Record<string, ProviderBalanceStatus>;
+  /** Chat-scoped reliability (success + failure attempts). */
+  chatReliability?: ReliabilityTelemetry | null;
 };
 
 const SEVERITY_RANK: Record<IrregularitySeverity, number> = {
@@ -84,6 +87,52 @@ function pct(part: number, whole: number): number {
 
 const PROVIDER_BILLING_FAILURE_MIN = 3;
 const PROVIDER_BILLING_DOMINANCE_PCT = 60;
+const CHAT_SUCCESS_COLLAPSE_FLOOR = 0.4;
+const CHAT_SUCCESS_COLLAPSE_MIN_ATTEMPTS = 10;
+const PROVIDER_CHAT_SUCCESS_FLOOR = 0.2;
+const PROVIDER_CHAT_SUCCESS_MIN_ATTEMPTS = 5;
+
+function detectChatSuccessCollapse(
+  chatReliability: ReliabilityTelemetry | null | undefined,
+  windowDays: number,
+): OpsIrregularity[] {
+  if (!chatReliability) return [];
+  const out: OpsIrregularity[] = [];
+  const { overall, byProvider } = chatReliability;
+
+  if (
+    overall.attempts >= CHAT_SUCCESS_COLLAPSE_MIN_ATTEMPTS &&
+    overall.successRate < CHAT_SUCCESS_COLLAPSE_FLOOR
+  ) {
+    out.push({
+      id: "usage.chat_success_collapse",
+      severity: "critical",
+      category: "usage",
+      title: "Chat success rate collapsed",
+      detail: `Overall chat success is ${(overall.successRate * 100).toFixed(1)}% (${overall.successes}/${overall.attempts}) over ${windowDays}d — gateway-healthy providers may still be failing real completions.`,
+      action:
+        "Check provider credits/billing, circuit breaker demotions on /v1/status, and upstream dashboards. Do not push new traffic until success recovers.",
+      metric: `${(overall.successRate * 100).toFixed(1)}% chat`,
+    });
+  }
+
+  for (const row of byProvider) {
+    if (row.attempts < PROVIDER_CHAT_SUCCESS_MIN_ATTEMPTS) continue;
+    if (row.successRate >= PROVIDER_CHAT_SUCCESS_FLOOR) continue;
+    out.push({
+      id: `usage.provider_chat_success_low.${row.provider}`,
+      severity: "critical",
+      category: "usage",
+      title: `Provider chat success low (${row.provider})`,
+      detail: `${row.provider} chat success is ${(row.successRate * 100).toFixed(1)}% (${row.successes}/${row.attempts}) over ${windowDays}d.`,
+      action: `Inspect ${row.provider} billing/credits and error codes; confirm the router has demoted it and fallback capacity is warm.`,
+      metric: `${(row.successRate * 100).toFixed(1)}%`,
+      relatedIds: [row.provider],
+    });
+  }
+
+  return out;
+}
 
 function detectProviderBillingExhaustion(
   recentUsage: OpsRecentUsage[],
@@ -188,6 +237,9 @@ export function detectIrregularities(
 
   out.push(...detectProviderBillingExhaustion(input.recentUsage));
   out.push(...detectProviderBalanceLow(input.providerBalances));
+  out.push(
+    ...detectChatSuccessCollapse(input.chatReliability, input.windowDays),
+  );
 
   if (input.x402Enabled && !input.paymentStoreReady) {
     out.push({

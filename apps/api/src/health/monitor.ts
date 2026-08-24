@@ -5,7 +5,8 @@ import {
   formatSyntheticHealthErrorDetail,
 } from "./error-detail.js";
 import type { ProviderHealthHistoryStore } from "./history.js";
-import type { HealthStore } from "./store.js";
+import { providerReachableFromProbe } from "./operator-attribution.js";
+import { providerUpForStatus, type HealthStore } from "./store.js";
 
 /** Prune at most once per this interval so poll stays cheap. */
 const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
@@ -61,8 +62,15 @@ export class HealthMonitor {
       this.providers.map(async (provider) => {
         const result = await provider.healthCheck();
         const checkedAt = Date.now();
+        const reachable = providerReachableFromProbe({
+          provider: provider.name,
+          healthy: result.healthy,
+          statusCode: result.statusCode,
+          errorDetail: result.errorDetail,
+        });
         this.store.set(provider.name, {
           healthy: result.healthy,
+          reachable,
           latencyMs: result.latencyMs,
           lastCheck: checkedAt,
           statusCode: result.statusCode,
@@ -77,11 +85,11 @@ export class HealthMonitor {
           checkedAt: new Date(checkedAt),
           errorDetail: formatGatewayHealthErrorDetail(result),
         });
-        return { provider: provider.name, result };
+        return { provider: provider.name, reachable, latencyMs: result.latencyMs };
       }),
     ).then((rows) => {
-      for (const { provider, result } of rows) {
-        this.maybeNotifyHealthChange(provider, result.healthy, result.latencyMs);
+      for (const { provider, reachable, latencyMs } of rows) {
+        this.maybeNotifyHealthChange(provider, reachable, latencyMs);
       }
     });
 
@@ -108,7 +116,9 @@ export class HealthMonitor {
     this.lastNotifiedHealthy.set(provider, healthy);
 
     const statuses = this.store.getAll();
-    const healthyCount = Object.values(statuses).filter((s) => s.healthy).length;
+    const healthyCount = Object.values(statuses).filter((s) =>
+      providerUpForStatus(s),
+    ).length;
 
     notifyProviderHealthChange({
       provider,
@@ -121,7 +131,8 @@ export class HealthMonitor {
 
   /**
    * Real minimal chatCompletion through the adapter path (not a bespoke fetch).
-   * Does not update InMemoryHealthStore — routing stays on the cheap gateway signal.
+   * Does not update InMemoryHealthStore — gateway poll remains the soft live ping;
+   * RoutingSignalStore consumes synthetic rows via the 6h history poller.
    */
   private async pollSynthetic(): Promise<void> {
     if (this.syntheticInFlight) return;

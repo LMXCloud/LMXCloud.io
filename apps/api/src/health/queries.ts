@@ -1,5 +1,9 @@
 import { getPool } from "../db/pool.js";
 import type { HealthCheckType } from "./history.js";
+import {
+  OPERATOR_ATTRIBUTION_HEALTH_SQL,
+  OPERATOR_ATTRIBUTION_USAGE_SQL,
+} from "./operator-attribution.js";
 
 function hasPostgres(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -72,7 +76,9 @@ function mapAggRow(row: {
 
 const SIGNAL_AGG_SQL = `
   COUNT(*)::text AS checks,
-  COUNT(*) FILTER (WHERE healthy)::text AS healthy_checks,
+  COUNT(*) FILTER (
+    WHERE healthy OR ${OPERATOR_ATTRIBUTION_HEALTH_SQL}
+  )::text AS healthy_checks,
   ROUND(AVG(latency_ms))::text AS avg_latency_ms,
   ROUND(
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms)
@@ -100,6 +106,7 @@ export async function getLatestHealthCheckErrors(
      WHERE check_type = $1
        AND healthy = false
        AND error_detail IS NOT NULL
+       AND NOT ${OPERATOR_ATTRIBUTION_HEALTH_SQL}
      ORDER BY provider, checked_at DESC`,
     [checkType],
   );
@@ -171,6 +178,7 @@ export async function getProviderHealthHistory(
      FROM usage_events
      WHERE created_at >= NOW() - ($1::int || ' days')::interval
        AND resource_type = 'chat'
+       AND NOT ${OPERATOR_ATTRIBUTION_USAGE_SQL}
      GROUP BY provider
      ORDER BY provider`,
     [windowDays],

@@ -36,6 +36,25 @@ export interface SupportedModel {
 }
 
 /**
+ * OpenAI-hosted IDs. Never advertise these and never silently remap them onto
+ * a DePIN model — this stack has no OpenAI integration (io.net / AkashML /
+ * Aethir Mesh / Nosana only). OpenAI SDK callers must pass an LMX alias from
+ * GET /v1/models. Production catalog verified 2026-08-22: gpt-4o-mini is absent.
+ */
+export const OPENAI_PROPRIETARY_MODEL_IDS = [
+  "gpt-4o-mini",
+  "gpt-4o",
+  "gpt-4-turbo",
+  "gpt-4",
+  "gpt-3.5-turbo",
+  "o1",
+  "o1-mini",
+  "o3",
+  "o3-mini",
+  "chatgpt-4o-latest",
+] as const;
+
+/**
  * Verified via chat completions against io.net + AkashML catalogs (2026-07).
  * Aethir Mesh overlap verified live GET /v1/models (2026-07-21); mesh uses
  * short lowercase IDs (e.g. minimax-m2.5), mapped in apps/api AETHIR_MODEL_MAP.
@@ -44,6 +63,10 @@ export interface SupportedModel {
  * Qwen 3.5/3.6, GLM 4.7 Flash, GPT-OSS, Gemma 4 26B. Nosana has no shared
  * gateway — only aliases listed in NOSANA_ENDPOINTS (per-deployment /v1 URLs)
  * are actually routable.
+ *
+ * Do not add OpenAI proprietary IDs (see OPENAI_PROPRIETARY_MODEL_IDS). Live
+ * GET /v1/models further filters to healthy providers, so ionet-only aliases
+ * disappear from the public catalog when io.net is down — that is intentional.
  */
 export const SUPPORTED_MODELS: SupportedModel[] = [
   {

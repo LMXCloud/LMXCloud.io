@@ -199,6 +199,9 @@ export function StatusPage() {
   const healthyCount = providers.filter(([, p]) => p.healthy).length;
   const allHealthy = providers.length > 0 && healthyCount === providers.length;
   const noneHealthy = providers.length > 0 && healthyCount === 0;
+  const overall = status?.reliability?.overall;
+  const routingChain =
+    status?.effective_routing_chain ?? status?.fallback_chain ?? [];
 
   const gatewayRows =
     history?.by_provider.map((row) => ({
@@ -220,14 +223,14 @@ export function StatusPage() {
     <PublicLayout>
       <SeoHead
         title="Provider Status — LMX Cloud DePIN inference"
-        description="Live health status for LMX Cloud inference providers on io.net, AkashML, and Aethir Mesh. Polled every 30 seconds — the same signal used for automatic failover."
+        description="Live health and real chat success rates for LMX Cloud inference providers on io.net, AkashML, and Aethir Mesh. Router uses gateway, synthetic, and real-traffic signals with circuit breaking."
         path="/status"
       />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
         <PageHeader
           eyebrow="Infrastructure"
           title="Provider status"
-          description="Live health for inference providers. Polled every 30 seconds — same signal the router uses for failover."
+          description="Live gateway health plus real chat success rates. The router weights gateway, synthetic probes, and real traffic — and circuit-breaks providers that crater."
           actions={
             <Button
               type="button"
@@ -251,7 +254,7 @@ export function StatusPage() {
           </AlertBanner>
         )}
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Overall"
             value={
@@ -267,14 +270,38 @@ export function StatusPage() {
             hint={
               loading
                 ? "Checking providers…"
-                : `${healthyCount} of ${providers.length} providers healthy`
+                : `${healthyCount} of ${providers.length} providers reachable`
+            }
+          />
+          <StatCard
+            label="Chat success (7d)"
+            value={
+              loading || !overall
+                ? "—"
+                : overall.attempts === 0
+                  ? "—"
+                  : `${(overall.success_rate * 100).toFixed(1)}%`
+            }
+            tone={
+              !overall || overall.attempts === 0
+                ? "info"
+                : overall.success_rate >= 0.8
+                  ? "success"
+                  : overall.success_rate >= 0.4
+                    ? "warning"
+                    : "error"
+            }
+            hint={
+              overall && overall.attempts > 0
+                ? `${overall.successes}/${overall.attempts} real chat attempts`
+                : "No chat samples in window"
             }
           />
           <StatCard
             label="Healthy providers"
             value={loading ? "—" : String(healthyCount)}
             tone="primary"
-            hint="Used for routing when strategy allows"
+            hint="Gateway reachable (excludes our key/funding faults)"
           />
           <StatCard
             label="Last updated"
@@ -284,32 +311,64 @@ export function StatusPage() {
           />
         </div>
 
-        {status?.fallback_chain && status.fallback_chain.length > 0 && (
+        {routingChain.length > 0 && (
           <Card className="mt-6">
             <div className="flex flex-wrap items-center gap-2">
               <Activity className="h-4 w-4 text-primary" strokeWidth={1.75} />
-              <p className="text-body-sm font-medium text-on-surface">Fallback chain</p>
-              <span className="text-body-sm text-on-surface-faint">· tier order</span>
+              <p className="text-body-sm font-medium text-on-surface">Effective routing order</p>
+              <span className="text-body-sm text-on-surface-faint">
+                · score + circuit (not static tier alone)
+              </span>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              {status.fallback_chain.map((name, index) => {
-                const provider = status.providers[name];
+              {routingChain.map((name, index) => {
+                const provider = status?.providers[name];
+                const demoted = provider?.routing?.demoted;
+                const circuit = provider?.routing?.circuit;
+                const tone =
+                  circuit === "open"
+                    ? "error"
+                    : demoted
+                      ? "warning"
+                      : provider?.healthy
+                        ? "success"
+                        : "error";
                 return (
                   <div key={name} className="flex items-center gap-2">
                     {index > 0 && (
                       <ArrowRight className="h-3.5 w-3.5 text-on-surface-faint" strokeWidth={1.75} />
                     )}
-                    <Chip tone={provider?.healthy ? "success" : "error"} className="gap-1.5">
+                    <Chip tone={tone} className="gap-1.5">
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${provider?.healthy ? "bg-success" : "bg-error"}`}
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          tone === "success"
+                            ? "bg-success"
+                            : tone === "warning"
+                              ? "bg-warning"
+                              : "bg-error"
+                        }`}
                       />
                       {name}
                       <span className="text-on-surface-faint">T{provider?.tier ?? "?"}</span>
+                      {circuit === "open" && (
+                        <span className="text-on-surface-faint">circuit open</span>
+                      )}
+                      {circuit === "half_open" && (
+                        <span className="text-on-surface-faint">half-open</span>
+                      )}
+                      {demoted && circuit !== "open" && (
+                        <span className="text-on-surface-faint">demoted</span>
+                      )}
                     </Chip>
                   </div>
                 );
               })}
             </div>
+            {status?.fallback_chain && status.fallback_chain.length > 0 && (
+              <p className="mt-3 text-body-sm text-on-surface-faint">
+                Static tier chain: {status.fallback_chain.join(" → ")}
+              </p>
+            )}
           </Card>
         )}
 
@@ -327,6 +386,8 @@ export function StatusPage() {
             <p className="mt-3 text-body-sm text-on-surface-muted">
               Three independent signals — not blended. Gateway is reachability;
               synthetic is a real completion probe; real traffic is customer usage.
+              Invalid API keys and insufficient credits are treated as operator
+              issues, not provider downtime.
             </p>
             <SignalTable
               title="Gateway ping"
@@ -438,11 +499,13 @@ export function StatusPage() {
         )}
 
         <div className="mt-8">
-          <DataTable title="Providers" minWidth={720}>
+          <DataTable title="Providers" minWidth={880}>
             <DataTableHead>
               <tr>
                 <DataTableTh>Provider</DataTableTh>
-                <DataTableTh>Status</DataTableTh>
+                <DataTableTh>Gateway</DataTableTh>
+                <DataTableTh>Real success (7d)</DataTableTh>
+                <DataTableTh>Routing</DataTableTh>
                 <DataTableTh>Tier</DataTableTh>
                 <DataTableTh>Type</DataTableTh>
                 <DataTableTh>Latency</DataTableTh>
@@ -451,33 +514,65 @@ export function StatusPage() {
             </DataTableHead>
             <DataTableBody>
               {loading && providers.length === 0 ? (
-                <DataTableEmpty colSpan={6}>Loading provider health…</DataTableEmpty>
+                <DataTableEmpty colSpan={8}>Loading provider health…</DataTableEmpty>
               ) : providers.length === 0 ? (
-                <DataTableEmpty colSpan={6}>No providers configured.</DataTableEmpty>
+                <DataTableEmpty colSpan={8}>No providers configured.</DataTableEmpty>
               ) : (
-                providers.map(([name, provider]) => (
-                  <DataTableRow key={name}>
-                    <DataTableCell mono>{name}</DataTableCell>
-                    <DataTableCell>
-                      <Chip tone={provider.healthy ? "success" : "error"} className="gap-1.5">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${provider.healthy ? "bg-success" : "bg-error"}`}
-                        />
-                        {provider.healthy ? "Healthy" : "Unhealthy"}
-                      </Chip>
-                    </DataTableCell>
-                    <DataTableCell>{provider.tier}</DataTableCell>
-                    <DataTableCell>
-                      <Chip tone={provider.is_depin ? "info" : "default"}>
-                        {provider.is_depin ? "DePIN" : "Centralized"}
-                      </Chip>
-                    </DataTableCell>
-                    <DataTableCell mono>
-                      {provider.latency !== null ? formatLatency(provider.latency) : "—"}
-                    </DataTableCell>
-                    <DataTableCell>{formatLastCheck(provider.last_check)}</DataTableCell>
-                  </DataTableRow>
-                ))
+                providers.map(([name, provider]) => {
+                  const attempts = provider.real_attempts ?? 0;
+                  const successes = provider.real_successes ?? 0;
+                  const rate = provider.real_success_rate;
+                  const circuit = provider.routing?.circuit ?? "closed";
+                  const demoted = provider.routing?.demoted ?? false;
+                  return (
+                    <DataTableRow key={name}>
+                      <DataTableCell mono>{name}</DataTableCell>
+                      <DataTableCell>
+                        <Chip tone={provider.healthy ? "success" : "error"} className="gap-1.5">
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${provider.healthy ? "bg-success" : "bg-error"}`}
+                          />
+                          {provider.healthy ? "Healthy" : "Unhealthy"}
+                        </Chip>
+                      </DataTableCell>
+                      <DataTableCell mono>
+                        {attempts > 0 && rate != null
+                          ? `${successes}/${attempts} · ${(rate * 100).toFixed(1)}%`
+                          : "—"}
+                      </DataTableCell>
+                      <DataTableCell>
+                        <Chip
+                          tone={
+                            circuit === "open"
+                              ? "error"
+                              : demoted || circuit === "half_open"
+                                ? "warning"
+                                : "success"
+                          }
+                          className="gap-1.5"
+                        >
+                          {circuit === "open"
+                            ? "Circuit open"
+                            : circuit === "half_open"
+                              ? "Half-open"
+                              : demoted
+                                ? "Demoted"
+                                : "Active"}
+                        </Chip>
+                      </DataTableCell>
+                      <DataTableCell>{provider.tier}</DataTableCell>
+                      <DataTableCell>
+                        <Chip tone={provider.is_depin ? "info" : "default"}>
+                          {provider.is_depin ? "DePIN" : "Centralized"}
+                        </Chip>
+                      </DataTableCell>
+                      <DataTableCell mono>
+                        {provider.latency !== null ? formatLatency(provider.latency) : "—"}
+                      </DataTableCell>
+                      <DataTableCell>{formatLastCheck(provider.last_check)}</DataTableCell>
+                    </DataTableRow>
+                  );
+                })
               )}
             </DataTableBody>
           </DataTable>

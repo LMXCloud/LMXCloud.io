@@ -1,12 +1,28 @@
 import type {
+  InfraSpendSnapshot,
   OpsMcpEventDetail,
   OpsOverview,
   OpsPaymentDetail,
   OpsUsageDetail,
 } from "./types";
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+const ENV_API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
 const ENV_OPS_KEY = (import.meta.env.VITE_OPS_API_KEY as string | undefined)?.trim() ?? "";
+
+function isLoopbackApi(url: string): boolean {
+  if (!url) return true;
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "127.0.0.1" || hostname === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+/** Same-origin in `vite dev` so Chrome does not block :5175 → :3000 as a local-network fetch. */
+const API_BASE =
+  import.meta.env.DEV && isLoopbackApi(ENV_API_BASE) ? "" : ENV_API_BASE;
 
 const OPS_KEY_STORAGE = "lmx_ops_api_key";
 
@@ -37,13 +53,17 @@ export function setStoredOpsKey(key: string): void {
 }
 
 export function getApiBase(): string {
-  return API_BASE;
+  return ENV_API_BASE || (import.meta.env.DEV ? "http://127.0.0.1:3000" : "");
+}
+
+function requireApiBase(): void {
+  if (!API_BASE && !import.meta.env.DEV) {
+    throw new Error("VITE_API_URL is not set");
+  }
 }
 
 async function opsFetch<T>(opsKey: string, path: string): Promise<T> {
-  if (!API_BASE) {
-    throw new Error("VITE_API_URL is not set");
-  }
+  requireApiBase();
   if (!opsKey) {
     throw new Error("Ops API key required");
   }
@@ -115,9 +135,7 @@ export async function executeOpsReconciliation(
   opsKey: string,
   id: string,
 ): Promise<{ object: string; status: string; refundTxHash: string | null }> {
-  if (!API_BASE) {
-    throw new Error("VITE_API_URL is not set");
-  }
+  requireApiBase();
   if (!opsKey) {
     throw new Error("Ops API key required");
   }
@@ -149,4 +167,53 @@ export async function executeOpsReconciliation(
     status: string;
     refundTxHash: string | null;
   };
+}
+
+export async function fetchInfraSpend(
+  opsKey: string,
+  opts: { months?: number } = {},
+): Promise<InfraSpendSnapshot> {
+  const params = new URLSearchParams();
+  if (opts.months) params.set("months", String(opts.months));
+  const query = params.size ? `?${params}` : "";
+  return opsFetch<InfraSpendSnapshot>(opsKey, `/v1/ops/infra-spend${query}`);
+}
+
+export async function logInfraSpend(
+  opsKey: string,
+  body: {
+    service: string;
+    amount: number;
+    date: string;
+    note?: string;
+    kind?: "spend" | "balance" | "note";
+  },
+): Promise<InfraSpendSnapshot["entries"][number]> {
+  requireApiBase();
+  if (!opsKey) {
+    throw new Error("Ops API key required");
+  }
+
+  const res = await fetch(`${API_BASE}/v1/ops/infra-spend`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${opsKey}`,
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const json = (await res.json()) as { error?: { message?: string } };
+      if (json.error?.message) message = json.error.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  return (await res.json()) as InfraSpendSnapshot["entries"][number];
 }

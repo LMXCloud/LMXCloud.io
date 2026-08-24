@@ -59,6 +59,11 @@ export class AllProvidersDownError extends Error {
 }
 
 export class ModelNotSupportedError extends Error {
+  readonly statusCode = 400;
+  readonly type = "invalid_request_error";
+  readonly code = "model_not_supported";
+  readonly param = "model";
+
   constructor(public readonly model: string) {
     super(`Model "${model}" is not supported by any configured provider`);
     this.name = "ModelNotSupportedError";

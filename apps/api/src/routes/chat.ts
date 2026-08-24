@@ -11,6 +11,7 @@ import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
 import type { PaymentStore } from "../payments/store.js";
 import { parseChatBody } from "../payments/quote-context.js";
+import { InvalidChatRequestError, quoteFailurePayload } from "../payments/quote-errors.js";
 import { estimateMaxStreamCost } from "../pricing/quote.js";
 import { hashPaymentPayload } from "../payments/idempotency.js";
 import { RESOURCE_TYPE_CHAT, recordProviderSuccess } from "../telemetry/index.js";
@@ -100,7 +101,7 @@ async function claimX402PaymentOrReject(
       network?: string;
     };
     const body = parseChatBody(request.body);
-    const model = typeof body === "string" ? "unknown" : body.model;
+    const model = body instanceof InvalidChatRequestError ? "unknown" : body.model;
     const network = requirements.network ?? "";
     const chainId = Number(String(network).split(":")[1]) || 0;
     const quotedAmount = requirements.amount
@@ -269,9 +270,9 @@ export async function registerChatRoutes(
     }
 
     const validated = parseChatBody(request.body);
-    if (typeof validated === "string") {
-      return reply.status(400).send({
-        error: { message: validated, type: "invalid_request_error" },
+    if (validated instanceof InvalidChatRequestError) {
+      return reply.status(validated.statusCode).send({
+        error: quoteFailurePayload(validated),
       });
     }
 

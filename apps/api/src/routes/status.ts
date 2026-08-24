@@ -8,11 +8,13 @@ import {
 import { getReliabilityTelemetry } from "../ops/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
-import type { HealthStore } from "../health/store.js";
+import { providerUpForStatus, type HealthStore } from "../health/store.js";
+import type { RoutingSignalStore } from "../routing/signal-store.js";
 
 interface StatusRouteDeps {
   providers: ProviderAdapter[];
   healthStore: HealthStore;
+  routingSignalStore?: RoutingSignalStore;
   anchorStore?: AnchorStore | null;
   anchoring?: {
     chainId: number;
@@ -51,6 +53,11 @@ function signalJson(
     p95_latency_ms: stats.p95LatencyMs,
     last_error_detail: lastErrorDetail ?? null,
   };
+}
+
+function roundRate(rate: number | null): number | null {
+  if (rate == null) return null;
+  return Math.round(rate * 10_000) / 10_000;
 }
 
 export async function registerStatusRoutes(
@@ -92,26 +99,60 @@ export async function registerStatusRoutes(
     }
 
     // Compact reliability snapshot for StatusPage — full series via GET /v1/ops/reliability
-    const reliability = await getReliabilityTelemetry(7, null);
+    const reliability = await getReliabilityTelemetry(7, "chat");
+
+    const gatewayHealthy = (name: string) =>
+      Boolean(statuses[name]?.healthy);
+
+    const routing = deps.routingSignalStore?.getRoutingSnapshots(
+      deps.providers,
+      gatewayHealthy,
+    );
+
+    const reliabilityByProvider = new Map(
+      reliability.byProvider.map((row) => [row.provider, row]),
+    );
+
+    const staticChain = getFallbackChain(deps.providers);
+    const effectiveChain = routing?.effectiveChain ?? staticChain;
 
     return {
       object: "status",
       providers: Object.fromEntries(
         deps.providers.map((provider) => {
           const status = statuses[provider.name];
+          const rel = reliabilityByProvider.get(provider.name);
+          const route = routing?.byProvider[provider.name];
           return [
             provider.name,
             {
-              healthy: status?.healthy ?? false,
+              healthy: providerUpForStatus(status),
               latency: status?.latencyMs ?? null,
               tier: provider.tier,
               is_depin: provider.isDepin,
               last_check: status?.lastCheck ?? null,
+              real_success_rate: rel ? rel.successRate : null,
+              real_attempts: rel ? rel.attempts : 0,
+              real_successes: rel ? rel.successes : 0,
+              routing: route
+                ? {
+                    circuit: route.circuit,
+                    demoted: route.demoted,
+                    score: roundRate(route.score),
+                    effective_priority: route.effectivePriority,
+                  }
+                : {
+                    circuit: "closed" as const,
+                    demoted: false,
+                    score: null,
+                    effective_priority: staticChain.indexOf(provider.name),
+                  },
             },
           ];
         }),
       ),
-      fallback_chain: getFallbackChain(deps.providers),
+      fallback_chain: staticChain,
+      effective_routing_chain: effectiveChain,
       anchoring,
       reliability: {
         window_days: reliability.windowDays,

@@ -358,6 +358,15 @@ export interface ProviderStatusInfo {
   tier: number;
   is_depin: boolean;
   last_check: number | null;
+  real_success_rate?: number | null;
+  real_attempts?: number;
+  real_successes?: number;
+  routing?: {
+    circuit: "closed" | "open" | "half_open";
+    demoted: boolean;
+    score: number | null;
+    effective_priority: number;
+  };
 }
 
 export interface StatusAnchoringInfo {
@@ -398,6 +407,8 @@ export interface StatusResponse {
   object: "status";
   providers: Record<string, ProviderStatusInfo>;
   fallback_chain: string[];
+  /** Live score/circuit order the router uses (may differ from static tier chain). */
+  effective_routing_chain?: string[];
   anchoring: StatusAnchoringInfo;
   reliability?: StatusReliabilityInfo;
 }

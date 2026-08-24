@@ -21,7 +21,13 @@ import type { HealthStore } from "../health/store.js";
 import {
   buildChatQuoteFromHttpContext,
   parseChatBody,
+  assertSuccessfulChatQuote,
 } from "./quote-context.js";
+import {
+  InvalidChatRequestError,
+  isChatQuoteFailure,
+  quoteFailurePayload,
+} from "./quote-errors.js";
 import { hashPaymentPayload } from "./idempotency.js";
 import type { PaymentStore } from "./store.js";
 import { roundCredits } from "../credits/pricing.js";
@@ -78,9 +84,9 @@ async function recordVerifiedPayment(
 
   const httpContext = context.transportContext as HTTPTransportContext | undefined;
   const body = parseChatBody(httpContext?.request.adapter.getBody?.());
-  const model = typeof body === "string" ? "unknown" : body.model;
+  const model = body instanceof InvalidChatRequestError ? "unknown" : body.model;
   let estimatedTokenCount: number | undefined;
-  if (typeof body !== "string" && httpContext) {
+  if (!(body instanceof InvalidChatRequestError) && httpContext) {
     const quoteResult = buildChatQuoteFromHttpContext(
       httpContext.request,
       deps.providers,
@@ -91,8 +97,9 @@ async function recordVerifiedPayment(
         defaultMaxCompletionTokens: deps.defaultMaxCompletionTokens,
       },
     );
-    estimatedTokenCount =
-      typeof quoteResult === "string" ? undefined : quoteResult.quote.estimatedTokens;
+    estimatedTokenCount = isChatQuoteFailure(quoteResult)
+      ? undefined
+      : quoteResult.quote.estimatedTokens;
   }
 
   const payloadHash = hashPaymentPayload(JSON.stringify(context.paymentPayload));
@@ -251,20 +258,19 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
         network: deps.networkId,
         maxTimeoutSeconds: 300,
         price: (context: HTTPRequestContext) => {
-          const quoteResult = buildChatQuoteFromHttpContext(
-            context,
-            deps.providers,
-            deps.healthStore,
-            {
-              marginPct: deps.marginPct,
-              minCallUsdc: deps.minCallUsdc,
-              defaultMaxCompletionTokens: deps.defaultMaxCompletionTokens,
-            },
+          const quote = assertSuccessfulChatQuote(
+            buildChatQuoteFromHttpContext(
+              context,
+              deps.providers,
+              deps.healthStore,
+              {
+                marginPct: deps.marginPct,
+                minCallUsdc: deps.minCallUsdc,
+                defaultMaxCompletionTokens: deps.defaultMaxCompletionTokens,
+              },
+            ),
           );
-          if (typeof quoteResult === "string") {
-            throw new Error(quoteResult);
-          }
-          return formatUsdPrice(quoteResult.quote.quotedAmount);
+          return formatUsdPrice(quote.quote.quotedAmount);
         },
       },
       description:
@@ -389,14 +395,11 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
             defaultMaxCompletionTokens: deps.defaultMaxCompletionTokens,
           },
         );
-        if (typeof quoteResult === "string") {
+        if (isChatQuoteFailure(quoteResult)) {
           return {
             contentType: "application/json",
             body: {
-              error: {
-                message: quoteResult,
-                type: "invalid_request_error",
-              },
+              error: quoteFailurePayload(quoteResult),
             },
           };
         }
