@@ -9,6 +9,10 @@ export class NotifyingCreditStore implements CreditStore {
     return this.inner.getBalance(apiKeyId);
   }
 
+  getBalances(apiKeyIds: string[]): Promise<Map<string, number>> {
+    return this.inner.getBalances(apiKeyIds);
+  }
+
   hasMinimumBalance(apiKeyId: string, minimum: number): Promise<boolean> {
     return this.inner.hasMinimumBalance(apiKeyId, minimum);
   }

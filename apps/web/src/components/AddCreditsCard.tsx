@@ -314,9 +314,9 @@ export function AddCreditsCard({ depositInfo, onDepositSubmitted }: AddCreditsCa
   const configBroken = !usdcContractAddress || !treasuryAddress;
 
   return (
-    <Card accent="info">
-      <p className="text-label-sm text-info">Fund with USDC</p>
-      <h3 className="mt-2 text-title-md text-on-surface">
+    <Card>
+      <p className="text-label-sm text-on-surface-muted">Fund with USDC</p>
+      <h3 className="mt-2 text-body-sm font-semibold text-on-surface">
         Add credits on {chainLabel}
       </h3>
       <p className="mt-2 text-body-sm text-on-surface-muted">
@@ -325,7 +325,7 @@ export function AddCreditsCard({ depositInfo, onDepositSubmitted }: AddCreditsCa
       </p>
 
       {chainMismatch && (
-        <AlertBanner tone="error" className="mt-4">
+        <AlertBanner tone="error" className="mt-4 border-0 py-0">
           Chain configuration mismatch — this dashboard targets {walletChain.name}{" "}
           (chain {targetChain.id}) but billing is configured for chain{" "}
           {depositInfo.chain_id}. Deposits are disabled until{" "}
@@ -334,13 +334,13 @@ export function AddCreditsCard({ depositInfo, onDepositSubmitted }: AddCreditsCa
       )}
 
       {configBroken && (
-        <AlertBanner tone="error" className="mt-4">
+        <AlertBanner tone="error" className="mt-4 border-0 py-0">
           Deposit addresses from the API are invalid. Contact support.
         </AlertBanner>
       )}
 
       {step === "idle" && !chainMismatch && !configBroken && (
-        <div className="mt-5">
+        <div className="mt-6">
           <Button type="button" onClick={() => setStep("amount")}>
             Add Credits
           </Button>
@@ -348,7 +348,7 @@ export function AddCreditsCard({ depositInfo, onDepositSubmitted }: AddCreditsCa
       )}
 
       {step === "amount" && !chainMismatch && !configBroken && (
-        <div className="mt-5 space-y-4">
+        <div className="mt-6 space-y-4">
           <div>
             <p className="text-label-sm text-on-surface-muted">Choose amount</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -430,7 +430,7 @@ export function AddCreditsCard({ depositInfo, onDepositSubmitted }: AddCreditsCa
       )}
 
       {step === "connect" && !chainMismatch && !configBroken && (
-        <div className="mt-5 space-y-4">
+        <div className="mt-6 space-y-4">
           <p className="text-body-sm text-on-surface-muted">
             {wrongNetwork && isConnected
               ? `Your wallet is on the wrong network. Switch to ${walletChain.name} to send USDC.`
@@ -476,7 +476,7 @@ export function AddCreditsCard({ depositInfo, onDepositSubmitted }: AddCreditsCa
       )}
 
       {(step === "confirm" || step === "submitted") && resolvedAmount && (
-        <div className="mt-5 space-y-3">
+        <div className="mt-6 space-y-3">
           <p className="text-body-sm text-on-surface">
             {step === "confirm" || isWriting
               ? "Confirm the USDC transfer in your wallet…"

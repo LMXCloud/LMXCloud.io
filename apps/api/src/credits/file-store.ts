@@ -41,6 +41,14 @@ export class FileCreditStore implements CreditStore {
     return this.balances.get(apiKeyId) ?? 0;
   }
 
+  async getBalances(apiKeyIds: string[]): Promise<Map<string, number>> {
+    const balances = new Map<string, number>();
+    for (const id of apiKeyIds) {
+      balances.set(id, await this.getBalance(id));
+    }
+    return balances;
+  }
+
   async hasMinimumBalance(apiKeyId: string, minimum: number): Promise<boolean> {
     const balance = await this.getBalance(apiKeyId);
     return balance >= roundCredits(minimum);

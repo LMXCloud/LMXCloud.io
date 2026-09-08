@@ -1,6 +1,6 @@
 # LMX Inference Router — Daily Demand Seeding Checklist
 
-**Goal:** 20+ daily active builders/agents using the router. Track two numbers every day: **new trials started** and **returning users** (returns are the real signal — trials just mean the credit worked).
+**Goal:** 5-10 users on the router as the current checkpoint (revised down from 20+ per the 2026-08-16 cashflow-sequencing decision — this is a first checkpoint before shifting focus to agent-workflow products, not the final target). Track two numbers every day: **new trials started** and **returning users** (returns are the real signal — trials just mean the credit worked).
 
 ---
 

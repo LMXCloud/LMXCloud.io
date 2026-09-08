@@ -107,6 +107,14 @@ export class PostgresUsageStore implements UsageStore {
   }
 
   async getUsage(apiKeyId: string): Promise<KeyUsageStats | null> {
+    const map = await this.getUsageForKeys([apiKeyId]);
+    return map.get(apiKeyId) ?? null;
+  }
+
+  async getUsageForKeys(apiKeyIds: string[]): Promise<Map<string, KeyUsageStats>> {
+    const usage = new Map<string, KeyUsageStats>();
+    if (apiKeyIds.length === 0) return usage;
+
     const result = await getPool().query<{
       api_key_id: string;
       request_count: number;
@@ -117,21 +125,21 @@ export class PostgresUsageStore implements UsageStore {
     }>(
       `SELECT api_key_id, request_count, prompt_tokens, completion_tokens, total_tokens, last_request_at
        FROM key_usage
-       WHERE api_key_id = $1`,
-      [apiKeyId],
+       WHERE api_key_id = ANY($1::uuid[])`,
+      [apiKeyIds],
     );
 
-    const row = result.rows[0];
-    if (!row) return null;
-
-    return {
-      apiKeyId: row.api_key_id,
-      requestCount: row.request_count,
-      promptTokens: Number(row.prompt_tokens),
-      completionTokens: Number(row.completion_tokens),
-      totalTokens: Number(row.total_tokens),
-      lastRequestAt: row.last_request_at?.toISOString() ?? null,
-    };
+    for (const row of result.rows) {
+      usage.set(row.api_key_id, {
+        apiKeyId: row.api_key_id,
+        requestCount: row.request_count,
+        promptTokens: Number(row.prompt_tokens),
+        completionTokens: Number(row.completion_tokens),
+        totalTokens: Number(row.total_tokens),
+        lastRequestAt: row.last_request_at?.toISOString() ?? null,
+      });
+    }
+    return usage;
   }
 
   async getUsageHistory(apiKeyIds: string[], days: number): Promise<UsageDayBucket[]> {

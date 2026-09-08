@@ -13,6 +13,23 @@ export class PostgresCreditStore implements CreditStore {
     return row ? Number(row.credit_balance) : 0;
   }
 
+  async getBalances(apiKeyIds: string[]): Promise<Map<string, number>> {
+    const balances = new Map<string, number>();
+    if (apiKeyIds.length === 0) return balances;
+
+    const result = await getPool().query<{ id: string; credit_balance: string }>(
+      `SELECT id, credit_balance FROM api_keys WHERE id = ANY($1::uuid[])`,
+      [apiKeyIds],
+    );
+    for (const row of result.rows) {
+      balances.set(row.id, Number(row.credit_balance));
+    }
+    for (const id of apiKeyIds) {
+      if (!balances.has(id)) balances.set(id, 0);
+    }
+    return balances;
+  }
+
   async hasMinimumBalance(apiKeyId: string, minimum: number): Promise<boolean> {
     const result = await getPool().query<{ ok: boolean }>(
       `SELECT credit_balance >= $2 AS ok

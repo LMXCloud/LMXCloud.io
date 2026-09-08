@@ -2,18 +2,16 @@ import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import {
   DEFAULT_MODEL_ALIAS,
   DEPIN_PROVIDER_ORDER,
-  formatModelProviders,
   listUniqueModelAliases,
-  MODEL_CATEGORIES,
   PROVIDER_LABELS,
-  type ModelCategory,
-  type SupportedModel,
 } from "@lmxcloud/shared";
 import {
+  Archive,
   ArrowRight,
   Bot,
   Code2,
   FileCheck,
+  GitFork,
   Package,
   Plug,
   Route,
@@ -25,14 +23,22 @@ import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { LandingFaq } from "../components/LandingFaq";
 import { BrandMark } from "../components/BrandMark";
+import { GithubStarButton } from "../components/GithubStarButton";
 import { PartnerMarquee } from "../components/PartnerMarquee";
 import { SeoHead } from "../components/SeoHead";
+import { SocialLinks } from "../components/SocialLinks";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { GlowingCard } from "../components/ui/GlowingCard";
 import { Chip } from "../components/ui/Chip";
 import { cn } from "../lib/cn";
-import { formatHeroSavings, LMX_PROVIDER_RATES } from "../lib/openai-benchmark";
+import {
+  formatHeroSavings,
+  getHeroSavingsHint,
+  getOpenAiBenchmark,
+  HERO_BENCHMARK_MODEL,
+  LMX_PROVIDER_RATES,
+} from "../lib/openai-benchmark";
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from "../lib/seo";
 
 const HeroNetworkGlobe = lazy(() =>
@@ -57,27 +63,15 @@ const ROUTING_NETWORKS_PHRASE =
     ? ROUTING_NETWORKS[0] ?? "DePIN networks"
     : `${ROUTING_NETWORKS.slice(0, -1).join(", ")}, and ${ROUTING_NETWORKS.at(-1)}`;
 
-const MODELS_BY_CATEGORY = SUPPORTED_MODEL_LIST.reduce<
-  Partial<Record<ModelCategory, SupportedModel[]>>
->((groups, model) => {
-  const bucket = groups[model.category] ?? [];
-  bucket.push(model);
-  groups[model.category] = bucket;
-  return groups;
-}, {});
+const MODEL_FAMILY_COUNT = new Set(SUPPORTED_MODEL_LIST.map((model) => model.category)).size;
 
-
-const CATEGORY_ORDER: ModelCategory[] = [
-  "meta",
-  "qwen",
-  "deepseek",
-  "glm",
-  "mistral",
-  "kimi",
-  "openai",
-  "google",
-  "minimax",
-];
+const HIGHLIGHTED_MODEL_ALIASES = [
+  DEFAULT_MODEL_ALIAS,
+  "mistral-nemo",
+  "glm-4.7-flash",
+  "qwen-3.6-35b",
+  "kimi-k2.5",
+].filter((alias) => SUPPORTED_MODEL_LIST.some((model) => model.alias === alias));
 
 const FEATURES = [
   {
@@ -122,6 +116,13 @@ const FEATURES = [
       "No single-vendor lock-in. Transparent headers show which provider served each call and whether fallback kicked in.",
     accent: "info" as const,
   },
+  {
+    icon: Archive,
+    title: "Self-hosted Vault",
+    description:
+      "Open-source agent memory you run yourself — one instance per operator, not an LMX-hosted service. Markdown notes with YAML frontmatter, exact-match query, and on-device semantic search. Consolidation calls Grid; everything else stays local.",
+    accent: "success" as const,
+  },
 ];
 
 const AUDIENCES = [
@@ -157,6 +158,12 @@ const AGENT_CHANNELS = [
     title: "ElizaOS plugin",
     body: "@lmxcloud/plugin-lmxcloud on npm. Wallet pays USDC per call — no API key, no signup, no pre-funded balance.",
     cta: { label: "ElizaOS docs", to: "/docs#eliza" as const },
+  },
+  {
+    icon: GitFork,
+    title: "Agent template",
+    body: "Open-source starter kit. Clone it, rewrite one file, get an agent that reasons via LMX Grid and remembers via its own Vault — zero configuration.",
+    cta: { label: "New agent quickstart", to: "/new-agent" as const },
   },
 ];
 
@@ -270,6 +277,7 @@ export function LandingPage() {
             {(
               [
                 { to: "/demo", label: "Live demo" },
+                { to: "/new-agent", label: "New agent" },
                 { to: "/docs", label: "Docs" },
                 { to: "/status", label: "Status" },
               ] as const
@@ -285,6 +293,7 @@ export function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <GithubStarButton />
             <SignedOut>
               <Button to="/sign-in" variant="tertiary" size="sm">
                 Sign in
@@ -319,9 +328,11 @@ export function LandingPage() {
 
           <div className="relative z-10 mx-auto grid min-h-[calc(100dvh-4rem)] max-w-[1200px] grid-cols-1 items-center gap-8 px-[clamp(20px,4vw,48px)] py-10 lg:grid-cols-[minmax(0,1fr)_min(44vw,520px)] lg:items-center lg:gap-8 lg:py-0">
             <div className="flex flex-col justify-center py-6 text-left lg:py-12">
-              <div className="mb-4 flex flex-wrap gap-2">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Chip tone="warning" title={getHeroSavingsHint()}>
+                  {formatHeroSavings()} vs {getOpenAiBenchmark(HERO_BENCHMARK_MODEL).label}
+                </Chip>
                 <Chip tone="primary">OpenAI-compatible</Chip>
-                <Chip tone="info">DePIN routing</Chip>
                 <Chip tone="success">x402 · USDC on Base</Chip>
               </div>
               <h1 className="text-display font-semibold text-on-surface">
@@ -342,9 +353,6 @@ export function LandingPage() {
                 </Button>
                 <Button to="/docs#pricing" variant="secondary" size="lg">
                   Agent payments (x402)
-                </Button>
-                <Button to="/docs#mcp" variant="secondary" size="lg">
-                  Use via MCP
                 </Button>
               </div>
             </div>
@@ -408,13 +416,13 @@ export function LandingPage() {
             <div className="mt-14">
               <p className="text-label-sm text-primary">Agent distribution</p>
               <h3 className="mt-2 text-headline-md text-on-surface">
-                Discoverable where agents already look
+                Find inference, or start from a kit
               </h3>
               <p className="mt-3 max-w-2xl text-body-md text-on-surface-muted">
-                x402 Bazaar, MCP, and ElizaOS are live — agents can find and pay for routed inference
-                without a manual integration.
+                x402 Bazaar, MCP, ElizaOS, and a forkable agent template are live — agents can find
+                and pay for routed inference, or start from a kit that already talks to Grid and Vault.
               </p>
-              <div className="mt-8 grid gap-4 md:grid-cols-3">
+              <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {AGENT_CHANNELS.map((channel) => (
                   <AudienceCard key={channel.title} {...channel} />
                 ))}
@@ -431,7 +439,7 @@ export function LandingPage() {
                 <SectionHeader
                   eyebrow="Model catalog"
                   title={`${SUPPORTED_MODEL_LIST.length} models on DePIN`}
-                  description={`Default ${DEFAULT_MODEL_ALIAS}. Short aliases route across ${ROUTING_NETWORKS_PHRASE} with automatic failover.`}
+                  description={`Default ${DEFAULT_MODEL_ALIAS}. ${SUPPORTED_MODEL_LIST.length} aliases across ${MODEL_FAMILY_COUNT} families, routed across ${ROUTING_NETWORKS_PHRASE} with automatic failover.`}
                 />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -445,14 +453,19 @@ export function LandingPage() {
             </div>
 
             <Card className="mt-8 p-5 sm:p-6">
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {CATEGORY_ORDER.map((category) => (
-                  <ModelCategoryBlock
-                    key={category}
-                    category={category}
-                    models={MODELS_BY_CATEGORY[category]}
-                  />
+              <p className="text-label-sm text-on-surface-faint">Highlighted aliases</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {HIGHLIGHTED_MODEL_ALIASES.map((alias) => (
+                  <span
+                    key={alias}
+                    className="rounded border border-border bg-background px-2 py-0.5 text-mono-sm text-on-surface-muted"
+                  >
+                    {alias}
+                  </span>
                 ))}
+                <span className="rounded border border-transparent px-2 py-0.5 text-mono-sm text-on-surface-faint">
+                  +{SUPPORTED_MODEL_LIST.length - HIGHLIGHTED_MODEL_ALIASES.length} more
+                </span>
               </div>
             </Card>
           </div>
@@ -502,45 +515,17 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* MCP onboarding */}
-        <section className="border-y border-border bg-surface py-16 sm:py-20">
-          <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
-            <SectionHeader
-              eyebrow="MCP quickstart"
-              title="Connect agents in 3 steps"
-              description="Use the hosted MCP endpoint as the default integration path. Keep local --dir config for development only."
-              centered
-            />
-            <div className="mt-10 grid gap-4 md:grid-cols-3">
-              {MCP_ONBOARDING_STEPS.map((step) => (
-                <GlowingCard key={step.step} accent="info">
-                  <p className="text-metric text-info/30">{step.step}</p>
-                  <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
-                  <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
-                </GlowingCard>
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button to="/docs#mcp" size="lg">
-                MCP quickstart
-              </Button>
-              <Button to="/console/keys" variant="secondary" size="lg">
-                Get API key
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        {/* How it works */}
+        {/* How it works — identity/payment, then MCP as a distinct integration path */}
         <section id="how-it-works" className="border-y border-border bg-surface py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <SectionHeader
               eyebrow="Workflow"
               title="From wallet to first request"
-              description="Developers and agents share the same inference layer — only the payment and identity path differs."
+              description="Identity and payment first — then routed inference. MCP is a separate integration path into that same endpoint, not a different product."
               centered
             />
-            <div className="mt-12 grid gap-4 md:grid-cols-3">
+            <p className="mt-12 text-center text-label-sm text-primary">Identity and payment</p>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
               {STEPS.map((step, index) => (
                 <GlowingCard key={step.step} accent="primary" className="relative">
                   {index < STEPS.length - 1 && (
@@ -554,6 +539,34 @@ export function LandingPage() {
                   <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
                 </GlowingCard>
               ))}
+            </div>
+
+            <div className="mt-14">
+              <p className="text-center text-label-sm text-info">MCP integration</p>
+              <h3 className="mt-2 text-center text-headline-md text-on-surface">
+                Same inference, as tools
+              </h3>
+              <p className="mx-auto mt-3 max-w-2xl text-center text-body-md text-on-surface-muted">
+                Hosted MCP is how agent clients call LMX without hand-writing REST. Configure the
+                endpoint, then quote and complete — the billing path is still a key or x402.
+              </p>
+              <div className="mt-8 grid gap-4 md:grid-cols-3">
+                {MCP_ONBOARDING_STEPS.map((step) => (
+                  <Card key={step.step}>
+                    <p className="text-mono-sm text-info">{step.step}</p>
+                    <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
+                    <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
+                  </Card>
+                ))}
+              </div>
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <Button to="/docs#mcp" size="lg">
+                  MCP quickstart
+                </Button>
+                <Button to="/console/keys" variant="secondary" size="lg">
+                  Get API key
+                </Button>
+              </div>
             </div>
           </div>
         </section>
@@ -596,7 +609,7 @@ export function LandingPage() {
               <p className="text-body-sm text-on-surface-faint">Web3-native inference infrastructure</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-4 text-body-sm text-on-surface-muted">
+          <div className="flex flex-wrap items-center gap-4 text-body-sm text-on-surface-muted">
             <a href="#features" className="hover:text-on-surface">
               Features
             </a>
@@ -615,6 +628,9 @@ export function LandingPage() {
             <Link to="/demo" className="hover:text-on-surface">
               Live demo
             </Link>
+            <Link to="/new-agent" className="hover:text-on-surface">
+              New agent
+            </Link>
             <Link to="/docs" className="hover:text-on-surface">
               Docs
             </Link>
@@ -630,6 +646,8 @@ export function LandingPage() {
             <Link to="/sign-up" className="hover:text-on-surface">
               Console
             </Link>
+            <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
+            <SocialLinks />
           </div>
         </div>
       </footer>
@@ -746,36 +764,6 @@ function AudienceCard({
         <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
       </Button>
     </GlowingCard>
-  );
-}
-
-function ModelCategoryBlock({
-  category,
-  models,
-}: {
-  category: ModelCategory;
-  models?: SupportedModel[];
-}) {
-  if (!models?.length) return null;
-
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-label-sm font-medium text-on-surface">{MODEL_CATEGORIES[category]}</h3>
-        <span className="text-mono-sm text-on-surface-faint">{models.length}</span>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {models.map((model) => (
-          <span
-            key={model.alias}
-            title={`${model.label} · ${formatModelProviders(model)}`}
-            className="rounded border border-border bg-background px-2 py-0.5 text-mono-sm text-on-surface-muted"
-          >
-            {model.alias}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 

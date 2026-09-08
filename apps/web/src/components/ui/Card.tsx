@@ -30,9 +30,9 @@ export function Card({
     <div
       data-accent={accent}
       className={cn(
-        "relative overflow-hidden rounded-lg border border-border",
-        variant === "base" && "bg-surface p-6",
-        variant === "elevated" && "border-border-strong bg-elevated p-6 shadow-md",
+        "relative overflow-hidden rounded-md border border-border",
+        variant === "base" && "bg-surface p-4",
+        variant === "elevated" && "border-border-strong bg-elevated p-4 shadow-md",
         variant === "media" && "bg-surface p-0",
         className,
       )}
@@ -44,7 +44,7 @@ export function Card({
       {variant === "media" && media && (
         <div className="border-b border-border">{media}</div>
       )}
-      {variant === "media" ? <div className="p-6">{children}</div> : children}
+      {variant === "media" ? <div className="p-4">{children}</div> : children}
     </div>
   );
 }

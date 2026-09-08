@@ -11,9 +11,9 @@ interface AlertBannerProps {
 }
 
 const toneStyles: Record<AlertTone, string> = {
-  error: "border-error/30 bg-error/10 text-error",
-  success: "border-success/30 bg-success/10 text-success",
-  info: "border-info/30 bg-info/10 text-info",
+  error: "text-error",
+  success: "text-success",
+  info: "text-info",
 };
 
 const icons: Record<AlertTone, typeof AlertCircle> = {
@@ -28,7 +28,7 @@ export function AlertBanner({ tone, children, className }: AlertBannerProps) {
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg border px-4 py-3 text-body-sm",
+        "flex items-start gap-3 border-b border-border py-3 text-body-sm",
         toneStyles[tone],
         className,
       )}

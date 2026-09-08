@@ -167,6 +167,7 @@ describe("PaymentReconciler balance credit-back", () => {
       paymentStore: null,
       creditStore: {
         getBalance: async () => 1,
+        getBalances: async () => new Map(),
         hasMinimumBalance: async () => true,
         deduct: async () => true,
         reserve: async () => true,
@@ -264,6 +265,7 @@ describe("PaymentReconciler x402 refund", () => {
       },
       creditStore: {
         getBalance: async () => 0,
+        getBalances: async () => new Map(),
         hasMinimumBalance: async () => false,
         deduct: async () => false,
         reserve: async () => false,
@@ -349,6 +351,7 @@ describe("PaymentReconciler x402 refund", () => {
       },
       creditStore: {
         getBalance: async () => 0,
+        getBalances: async () => new Map(),
         hasMinimumBalance: async () => false,
         deduct: async () => false,
         reserve: async () => false,

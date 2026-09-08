@@ -53,9 +53,8 @@ export function UsagePage() {
   const totalCost = buckets.reduce((sum, bucket) => sum + bucket.cost, 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Monitor"
         title="Usage"
         description="Account-wide inference activity across all linked keys."
         actions={
@@ -69,26 +68,22 @@ export function UsagePage() {
 
       {error && <AlertBanner tone="error">{error}</AlertBanner>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         <StatCard
           label={`Requests (${days}d)`}
           value={loading ? "…" : formatNumber(totalRequests)}
-          tone="info"
         />
         <StatCard
           label={`Tokens (${days}d)`}
           value={loading ? "…" : formatNumber(totalTokens)}
-          tone="primary"
         />
         <StatCard
           label={`Spend (${days}d)`}
-          value={loading ? "…" : formatUsd(totalCost)}
-          tone="warning"
-          hint="USD deducted from balances"
+          value={loading ? "…" : formatUsd(totalCost, 2)}
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-2 lg:grid-cols-2">
         <BarChart
           title="Daily requests"
           labels={buckets.map((bucket) => bucket.date)}
@@ -99,7 +94,6 @@ export function UsagePage() {
           title="Daily tokens"
           labels={buckets.map((bucket) => bucket.date)}
           values={buckets.map((bucket) => bucket.total_tokens)}
-          color="var(--color-warning)"
           spanDays={days}
           valueLabel={(value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value))}
         />
@@ -129,10 +123,10 @@ export function UsagePage() {
             [...buckets].reverse().map((bucket) => (
               <DataTableRow key={bucket.date}>
                 <DataTableCell mono>{bucket.date}</DataTableCell>
-                <DataTableCell mono>{bucket.requests}</DataTableCell>
-                <DataTableCell mono>{formatNumber(bucket.prompt_tokens)}</DataTableCell>
-                <DataTableCell mono>{formatNumber(bucket.completion_tokens)}</DataTableCell>
-                <DataTableCell mono className="text-warning">
+                <DataTableCell tabular>{bucket.requests}</DataTableCell>
+                <DataTableCell tabular>{formatNumber(bucket.prompt_tokens)}</DataTableCell>
+                <DataTableCell tabular>{formatNumber(bucket.completion_tokens)}</DataTableCell>
+                <DataTableCell tabular className="text-info">
                   {formatUsd(bucket.cost)}
                 </DataTableCell>
               </DataTableRow>

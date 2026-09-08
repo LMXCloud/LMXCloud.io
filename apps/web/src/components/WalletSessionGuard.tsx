@@ -96,49 +96,72 @@ export function WalletSessionGuard() {
   }
 
   return (
-    <div className="mb-6 space-y-3">
+    <div>
       {walletDisconnected && (
         <AlertBanner tone="info">
-          <p className="font-medium">Wallet disconnected</p>
-          <p className="mt-1 opacity-90">
+          <p className="font-semibold">Wallet disconnected</p>
+          <p className="mt-1 text-on-surface-muted">
             Your LMX session is still active, but your browser wallet is not connected.
             Reconnect to stay in sync with deposits and signing.
           </p>
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void handleAction()}
+            >
+              {actionLabel}
+            </Button>
+          </div>
         </AlertBanner>
       )}
 
       {needsNetworkSwitch && (
         <AlertBanner tone="info">
-          <p className="font-medium">Wrong network</p>
-          <p className="mt-1 opacity-90">
+          <p className="font-semibold">Wrong network</p>
+          <p className="mt-1 text-on-surface-muted">
             Your wallet is not on {targetChain.name}. Switch networks to keep your session
             aligned with LMX billing and deposits.
           </p>
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void handleAction()}
+            >
+              {actionLabel}
+            </Button>
+          </div>
         </AlertBanner>
       )}
 
       {needsReSign && sessionWallet && connectedWallet && (
         <AlertBanner tone="info">
-          <p className="font-medium">Wallet account changed</p>
-          <p className="mt-1 opacity-90">
+          <p className="font-semibold">Wallet account changed</p>
+          <p className="mt-1 text-on-surface-muted">
             Your session is linked to {formatWallet(sessionWallet)}, but your wallet is
             connected as {formatWallet(connectedWallet)}. Sign in again with your current
             account, or switch back in your wallet extension.
           </p>
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void handleAction()}
+            >
+              {actionLabel}
+            </Button>
+          </div>
         </AlertBanner>
       )}
 
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        disabled={busy}
-        onClick={() => void handleAction()}
-      >
-        {actionLabel}
-      </Button>
-
-      {error && <p className="text-body-sm text-error">{error}</p>}
+      {error && <p className="py-3 text-body-sm text-error">{error}</p>}
     </div>
   );
 }

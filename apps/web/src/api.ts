@@ -1,12 +1,16 @@
 import type {
   ApiError,
+  ApiKeyEnvironment,
   BalanceResponse,
   CreateKeyResponse,
   DepositInfoResponse,
   DepositHistoryResponse,
+  DeleteProjectResponse,
   KeysResponse,
   LoginResponse,
   PaymentsResponse,
+  ProjectsResponse,
+  ProjectInfo,
   UsageHistoryResponse,
   UsageLogsResponse,
   UsageResponse,
@@ -171,14 +175,30 @@ export async function validateSession(token: string): Promise<UsageResponse> {
 
 
 
-export async function fetchKeys(token: string): Promise<KeysResponse> {
+export async function fetchKeys(
+  token: string,
+  options: { projectId?: string } = {},
+): Promise<KeysResponse> {
+  const params = new URLSearchParams();
+  if (options.projectId) params.set("project_id", options.projectId);
+  const query = params.toString();
 
-  const res = await fetch(`${API_BASE}/v1/auth/keys`, { headers: authHeaders(token) });
+  let res: Response;
+  try {
+    res = await fetch(
+      `${API_BASE}/v1/auth/keys${query ? `?${query}` : ""}`,
+      { headers: authHeaders(token) },
+    );
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error("Could not reach the API to load keys. Try again.");
+    }
+    throw err;
+  }
 
   if (!res.ok) throw new Error(await parseError(res));
 
   return res.json() as Promise<KeysResponse>;
-
 }
 
 
@@ -206,14 +226,21 @@ export async function createApiKey(email?: string): Promise<CreateKeyResponse> {
 
 
 /** Create a key linked to the signed-in account (console). */
-export async function createAccountApiKey(sessionToken: string): Promise<CreateKeyResponse> {
+export async function createAccountApiKey(
+  sessionToken: string,
+  options: { environment?: ApiKeyEnvironment; projectId?: string; name?: string } = {},
+): Promise<CreateKeyResponse> {
   const res = await fetch(`${API_BASE}/v1/auth/keys`, {
     method: "POST",
     headers: {
       ...authHeaders(sessionToken),
       "Content-Type": "application/json",
     },
-    body: "{}",
+    body: JSON.stringify({
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(options.projectId ? { project_id: options.projectId } : {}),
+      ...(options.name ? { name: options.name } : {}),
+    }),
   });
 
   if (!res.ok) throw new Error(await parseError(res));
@@ -221,31 +248,119 @@ export async function createAccountApiKey(sessionToken: string): Promise<CreateK
   return res.json() as Promise<CreateKeyResponse>;
 }
 
-
-
-export async function revokeApiKey(token: string, id?: string): Promise<void> {
-
+export async function updateApiKeyEnvironment(
+  token: string,
+  id: string,
+  environment: ApiKeyEnvironment,
+): Promise<void> {
   const res = await fetch(`${API_BASE}/v1/auth/key`, {
-
-    method: "DELETE",
-
+    method: "PATCH",
     headers: {
-
       ...authHeaders(token),
-
       "Content-Type": "application/json",
-
     },
-
-    body: id ? JSON.stringify({ id }) : undefined,
-
+    body: JSON.stringify({ id, environment }),
   });
 
   if (!res.ok) throw new Error(await parseError(res));
+}
 
+export async function updateApiKeyProject(
+  token: string,
+  id: string,
+  projectId: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/auth/key`, {
+    method: "PATCH",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, project_id: projectId }),
+  });
+
+  if (!res.ok) throw new Error(await parseError(res));
+}
+
+export async function revokeApiKey(token: string, id?: string): Promise<void> {
+  const url = id
+    ? `${API_BASE}/v1/auth/keys/${encodeURIComponent(id)}`
+    : `${API_BASE}/v1/auth/key`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    });
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error("Could not reach the API to remove this key. Try again.");
+    }
+    throw err;
+  }
+
+  if (!res.ok) throw new Error(await parseError(res));
 }
 
 
+
+export async function fetchProjects(token: string): Promise<ProjectsResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/projects`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ProjectsResponse>;
+}
+
+export async function createProject(
+  token: string,
+  name: string,
+): Promise<ProjectInfo> {
+  const res = await fetch(`${API_BASE}/v1/auth/projects`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ProjectInfo>;
+}
+
+export async function renameProject(
+  token: string,
+  id: string,
+  name: string,
+): Promise<ProjectInfo> {
+  const res = await fetch(`${API_BASE}/v1/auth/projects`, {
+    method: "PATCH",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, name }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ProjectInfo>;
+}
+
+export async function deleteProject(
+  token: string,
+  id: string,
+): Promise<DeleteProjectResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/projects`, {
+    method: "DELETE",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<DeleteProjectResponse>;
+}
 
 export async function fetchBalance(token: string): Promise<BalanceResponse> {
 

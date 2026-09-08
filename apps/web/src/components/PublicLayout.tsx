@@ -2,11 +2,13 @@ import type { ReactNode } from "react";
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import { Link, NavLink } from "react-router-dom";
 import { BrandMark } from "./BrandMark";
+import { SocialLinks } from "./SocialLinks";
 import { Button } from "./ui/Button";
 import { cn } from "../lib/cn";
 
 const PUBLIC_NAV = [
   { to: "/docs", label: "Docs" },
+  { to: "/new-agent", label: "New agent" },
   { to: "/status", label: "Status" },
 ] as const;
 
@@ -75,7 +77,10 @@ export function PublicLayout({ children }: PublicLayoutProps) {
               <p className="text-body-sm text-on-surface-faint">Decentralized inference infrastructure</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-4 text-body-sm text-on-surface-muted">
+          <div className="flex flex-wrap items-center gap-4 text-body-sm text-on-surface-muted">
+            <Link to="/new-agent" className="hover:text-on-surface">
+              New agent
+            </Link>
             <Link to="/docs" className="hover:text-on-surface">
               Docs
             </Link>
@@ -91,6 +96,8 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             <Link to="/sign-up" className="hover:text-on-surface">
               Console
             </Link>
+            <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
+            <SocialLinks />
           </div>
         </div>
       </footer>

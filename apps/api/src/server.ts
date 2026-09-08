@@ -95,6 +95,8 @@ export async function buildServer() {
 
     origin: true,
 
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+
     exposedHeaders: [
       "x-lmx-provider",
       "x-lmx-fallback",

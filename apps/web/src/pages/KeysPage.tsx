@@ -1,6 +1,14 @@
-import { Check, Copy, KeyRound, Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { API_BASE, createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
+import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  createAccountApiKey,
+  fetchKeys,
+  fetchProjects,
+  revokeApiKey,
+  updateApiKeyEnvironment,
+  updateApiKeyProject,
+} from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
 import { CodeBlock } from "../components/console/CodeBlock";
 import {
@@ -12,23 +20,47 @@ import {
   DataTableRow,
   DataTableTh,
 } from "../components/console/DataTable";
+import { EnvironmentChip } from "../components/console/EnvironmentChip";
 import { PageHeader } from "../components/console/PageHeader";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
+import { Input } from "../components/ui/Input";
+import { Tabs } from "../components/ui/Tabs";
 import { useAuth } from "../context/AuthContext";
+import {
+  API_KEY_ENVIRONMENT_OPTIONS,
+  normalizeApiKeyEnvironment,
+} from "../lib/environment";
 import { formatDateTime, formatNumber, formatUsd, formatWallet } from "../lib/format";
-import { chatCompletionCurl, mcpConfig } from "../lib/snippets";
-import type { ApiKeyInfo } from "../types";
+import { agentEnvLine, mcpConfig } from "../lib/snippets";
+import type { ApiKeyEnvironment, ApiKeyInfo, ProjectInfo } from "../types";
+
+const ALL_PROJECTS = "all";
+
+const selectClassName =
+  "h-10 rounded-md border border-border bg-background px-2.5 text-body-sm text-on-surface";
+
+function keyLabel(key: ApiKeyInfo): string {
+  const name = key.name?.trim();
+  return name || `${key.id.slice(0, 8)}…`;
+}
 
 export function KeysPage() {
   const { apiKey, email, wallet, authMode, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedProjectId = searchParams.get("project") ?? ALL_PROJECTS;
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
+  const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [createEnvironment, setCreateEnvironment] =
+    useState<ApiKeyEnvironment>("development");
+  const [createName, setCreateName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
 
   const mcpHostedUrl =
@@ -37,23 +69,55 @@ export function KeysPage() {
   const mcpKey = newKey ?? apiKey;
   const mcpConfigText = mcpKey ? mcpConfig(mcpKey, mcpHostedUrl) : null;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!apiKey) return;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     try {
-      const res = await fetchKeys(apiKey);
-      setKeys(res.data);
+      const projectsRes = await fetchProjects(apiKey);
+      setProjects(projectsRes.data);
+      const validProjectId =
+        selectedProjectId !== ALL_PROJECTS &&
+        projectsRes.data.some((project) => project.id === selectedProjectId)
+          ? selectedProjectId
+          : undefined;
+      if (selectedProjectId !== ALL_PROJECTS && !validProjectId) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      const keysRes = await fetchKeys(apiKey, { projectId: validProjectId });
+      setKeys(keysRes.data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load keys");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
-  }, [apiKey]);
+  }, [apiKey, selectedProjectId, setSearchParams]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  );
+  const defaultProject = useMemo(
+    () => projects.find((project) => project.is_default) ?? projects[0] ?? null,
+    [projects],
+  );
+  const createProjectId =
+    selectedProject?.id ?? defaultProject?.id ?? undefined;
+  const showingAll = selectedProjectId === ALL_PROJECTS;
+  const tableColSpan = showingAll ? 8 : 7;
+
+  function handleProjectFilterChange(value: string) {
+    if (value === ALL_PROJECTS) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setSearchParams({ project: value }, { replace: true });
+  }
 
   async function handleCreate() {
     if (!apiKey) return;
@@ -61,9 +125,15 @@ export function KeysPage() {
     setError(null);
     setNewKey(null);
     setCopyState("idle");
+    const trimmedName = createName.trim();
     try {
-      const result = await createAccountApiKey(apiKey);
+      const result = await createAccountApiKey(apiKey, {
+        environment: createEnvironment,
+        projectId: createProjectId,
+        ...(trimmedName ? { name: trimmedName } : {}),
+      });
       setNewKey(result.api_key);
+      setCreateName("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create key");
@@ -85,7 +155,14 @@ export function KeysPage() {
 
   async function handleRevoke(key: ApiKeyInfo) {
     if (!apiKey) return;
-    if (!window.confirm("Revoke this API key? It will stop working immediately.")) {
+    const sessionNote = key.is_current
+      ? " This is your current session key — you will be signed out."
+      : "";
+    if (
+      !window.confirm(
+        `Remove API key “${keyLabel(key)}”? It will stop working immediately.${sessionNote}`,
+      )
+    ) {
       return;
     }
 
@@ -97,44 +174,139 @@ export function KeysPage() {
         logout();
         return;
       }
-      await load();
+      setKeys((prev) => prev.filter((entry) => entry.id !== key.id));
+      await load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke key");
+      setError(err instanceof Error ? err.message : "Failed to remove key");
     } finally {
       setRevokingId(null);
     }
   }
 
+  async function handleUpdateProject(key: ApiKeyInfo, projectId: string) {
+    if (!apiKey) return;
+    if (key.project_id === projectId) return;
+
+    setUpdatingId(key.id);
+    setError(null);
+    try {
+      await updateApiKeyProject(apiKey, key.id, projectId);
+      await load({ silent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to move key");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function handleUpdateEnvironment(key: ApiKeyInfo, environment: ApiKeyEnvironment) {
+    if (!apiKey) return;
+    if (normalizeApiKeyEnvironment(key.environment) === environment) return;
+
+    setUpdatingId(key.id);
+    setError(null);
+    try {
+      await updateApiKeyEnvironment(apiKey, key.id, environment);
+      await load({ silent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update environment");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Credentials"
         title="API Keys"
         description={`Manage keys linked to ${
           authMode === "wallet" && wallet
             ? formatWallet(wallet)
             : email || "your account"
-        }. Keys authenticate inference requests.`}
-        actions={
-          <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
+        }. ${
+          selectedProject
+            ? `Showing ${selectedProject.name}.`
+            : "All projects by default — pick one to nest keys under it."
+        }`}
+      />
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="keys-project-filter">
+            Project
+          </label>
+          <select
+            id="keys-project-filter"
+            value={showingAll ? ALL_PROJECTS : selectedProjectId}
+            onChange={(event) => handleProjectFilterChange(event.target.value)}
+            className={selectClassName}
+          >
+            <option value={ALL_PROJECTS}>All projects</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+                {project.is_default ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+          <Tabs
+            items={API_KEY_ENVIRONMENT_OPTIONS}
+            value={createEnvironment}
+            onChange={setCreateEnvironment}
+          />
+        </div>
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleCreate();
+          }}
+        >
+          <div className="w-52">
+            <Input
+              value={createName}
+              onChange={(event) => setCreateName(event.target.value)}
+              placeholder="Agent name (optional)"
+              maxLength={80}
+              autoComplete="off"
+            />
+          </div>
+          <Button type="submit" pill disabled={creating}>
             <Plus className="h-4 w-4" strokeWidth={1.75} />
             {creating ? "Creating…" : "Create key"}
           </Button>
-        }
-      />
+          {createProjectId && (
+            <p className="text-body-sm text-on-surface-muted">
+              New keys go in {selectedProject?.name ?? defaultProject?.name ?? "Default"}.
+            </p>
+          )}
+        </form>
+      </div>
 
-      {error && <AlertBanner tone="error">{error}</AlertBanner>}
+      {error && (
+        <AlertBanner tone="error">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>{error}</span>
+            <Button type="button" variant="secondary" size="sm" onClick={() => void load()}>
+              Retry
+            </Button>
+          </div>
+        </AlertBanner>
+      )}
 
       {newKey && (
         <Card accent="success">
-          <p className="text-label-sm text-success">New key created</p>
-          <code className="mt-3 block break-all rounded-md border border-border bg-background px-4 py-3 text-mono-sm text-on-surface">
-            {newKey}
-          </code>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-label-sm text-success">New key created</p>
+            <EnvironmentChip environment={createEnvironment} />
+          </div>
           <p className="mt-3 text-body-sm text-on-surface-muted">
-            Copy this key now. It won&apos;t be shown again. Your dashboard session
-            stays on the current key — use the new key in API requests or scripts.
+            Paste this into your forked template <code className="text-mono-sm">.env</code>.
+            Copy it now — it won&apos;t be shown again. This is not your dashboard session key.
           </p>
+          <div className="mt-3">
+            <CodeBlock label=".env" code={agentEnvLine(newKey)} />
+          </div>
           <Button
             type="button"
             variant="secondary"
@@ -147,74 +319,19 @@ export function KeysPage() {
         </Card>
       )}
 
-      {apiKey && (
-        <Card>
-          <p className="text-label-sm text-on-surface">Quick start</p>
-          <p className="mt-1 text-body-sm text-on-surface-muted">
-            Your session key works immediately — no need to create another unless you want rotation.
-          </p>
-          <div className="mt-4">
-            <CodeBlock label="cURL" code={chatCompletionCurl(API_BASE, apiKey, "llama-3.1-8b")} />
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-label-sm text-on-surface">Use with MCP</p>
-            <p className="mt-1 text-body-sm text-on-surface-muted">
-              Copy into <code className="text-mono-sm">.cursor/mcp.json</code> or any MCP client.
-              Uses your session key by default; create a new key above to rotate.
-              Smoke test: <code className="text-mono-sm">get_balance</code> →{" "}
-              <code className="text-mono-sm">chat_completion</code> →{" "}
-              <code className="text-mono-sm">get_usage</code>.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!mcpConfigText}
-            onClick={() => void handleCopyMcpConfig()}
-          >
-            {copyState === "copied" ? (
-              <>
-                <Check className="h-4 w-4" strokeWidth={1.75} />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" strokeWidth={1.75} />
-                Copy config
-              </>
-            )}
-          </Button>
-        </div>
-
-        {mcpConfigText ? (
-          <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-background p-4 text-mono-sm text-on-surface-muted">
-            <code>{mcpConfigText}</code>
-          </pre>
-        ) : (
-          <p className="mt-4 text-body-sm text-on-surface-muted">
-            Sign in to generate MCP config with your bearer token.
-          </p>
-        )}
-        {copyState === "error" && (
-          <p className="mt-3 text-body-sm text-error">
-            Clipboard write failed. Copy manually from the block above.
-          </p>
-        )}
-      </Card>
-
       <DataTable
-        title="Your keys"
-        description="Each key has its own balance and usage counters."
+        title={selectedProject ? `${selectedProject.name} keys` : "Your keys"}
+        description={
+          selectedProject
+            ? "Keys in this project have their own balance and usage counters. Remove a key to revoke it immediately."
+            : "Each key has its own balance and usage counters. Remove a key to revoke it immediately."
+        }
       >
         <DataTableHead>
           <tr>
             <DataTableTh>Key</DataTableTh>
+            <DataTableTh>Name</DataTableTh>
+            {showingAll && <DataTableTh>Project</DataTableTh>}
             <DataTableTh>Balance</DataTableTh>
             <DataTableTh>Requests</DataTableTh>
             <DataTableTh>Tokens</DataTableTh>
@@ -224,50 +341,196 @@ export function KeysPage() {
         </DataTableHead>
         <DataTableBody>
           {loading ? (
-            <DataTableEmpty colSpan={6}>Loading keys…</DataTableEmpty>
+            <DataTableEmpty colSpan={tableColSpan}>Loading keys…</DataTableEmpty>
           ) : keys.length === 0 ? (
-            <DataTableEmpty colSpan={6}>
+            <DataTableEmpty colSpan={tableColSpan}>
               <div className="flex flex-col items-center gap-2">
                 <KeyRound className="h-8 w-8 text-on-surface-faint" strokeWidth={1.5} />
-                <p>No keys found. Create one to get started.</p>
+                <p>
+                  {error
+                    ? "Keys could not be loaded."
+                    : selectedProject
+                      ? `No keys in ${selectedProject.name} yet.`
+                      : "No keys found. Create one to get started."}
+                </p>
+                {error ? (
+                  <Button type="button" variant="tertiary" size="sm" onClick={() => void load()}>
+                    Retry
+                  </Button>
+                ) : (
+                  <Button to="/console/projects" variant="tertiary" size="sm">
+                    Manage projects
+                  </Button>
+                )}
               </div>
             </DataTableEmpty>
           ) : (
             keys.map((key) => (
               <DataTableRow key={key.id}>
-                <DataTableCell mono>
-                  <div className="text-on-surface">{key.id.slice(0, 8)}…</div>
-                  {key.is_current && (
-                    <Chip tone="primary" className="mt-1.5">
-                      current session
-                    </Chip>
+                <DataTableCell>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-on-surface">{key.id.slice(0, 8)}…</span>
+                    <EnvironmentChip environment={key.environment} />
+                    {key.is_current && (
+                      <Chip tone="default">current session</Chip>
+                    )}
+                  </div>
+                </DataTableCell>
+                <DataTableCell>
+                  {key.name?.trim() ? (
+                    <span className="text-on-surface">{key.name}</span>
+                  ) : (
+                    <span className="text-on-surface-faint">—</span>
                   )}
                 </DataTableCell>
-                <DataTableCell mono className="text-success">
-                  {formatUsd(key.balance)}
-                </DataTableCell>
-                <DataTableCell mono>{formatNumber(key.usage.requests)}</DataTableCell>
-                <DataTableCell mono>{formatNumber(key.usage.total_tokens)}</DataTableCell>
+                {showingAll && (
+                  <DataTableCell>
+                    <Link
+                      to={
+                        key.project_id
+                          ? `/console/keys?project=${encodeURIComponent(key.project_id)}`
+                          : "/console/projects"
+                      }
+                      className="text-on-surface-muted hover:text-on-surface"
+                    >
+                      {key.project_name ?? "Unassigned"}
+                    </Link>
+                  </DataTableCell>
+                )}
+                <DataTableCell tabular>{formatUsd(key.balance)}</DataTableCell>
+                <DataTableCell tabular>{formatNumber(key.usage.requests)}</DataTableCell>
+                <DataTableCell tabular>{formatNumber(key.usage.total_tokens)}</DataTableCell>
                 <DataTableCell className="text-on-surface-muted">
                   {formatDateTime(key.last_used_at)}
                 </DataTableCell>
                 <DataTableCell className="text-right">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={revokingId === key.id}
-                    onClick={() => void handleRevoke(key)}
-                    className="border-error/40 text-error hover:border-error hover:bg-error/10"
-                  >
-                    {revokingId === key.id ? "…" : "Revoke"}
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {showingAll && projects.length > 0 && (
+                      <>
+                        <label className="sr-only" htmlFor={`key-project-${key.id}`}>
+                          Project
+                        </label>
+                        <select
+                          id={`key-project-${key.id}`}
+                          value={key.project_id ?? ""}
+                          disabled={updatingId === key.id || revokingId === key.id || !key.project_id}
+                          onChange={(event) =>
+                            void handleUpdateProject(key, event.target.value)
+                          }
+                          className="h-8 rounded-md border border-border bg-background px-2 text-body-sm text-on-surface"
+                        >
+                          {projects.map((project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.name}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                    <label className="sr-only" htmlFor={`key-env-${key.id}`}>
+                      Environment
+                    </label>
+                    <select
+                      id={`key-env-${key.id}`}
+                      value={normalizeApiKeyEnvironment(key.environment)}
+                      disabled={updatingId === key.id || revokingId === key.id}
+                      onChange={(event) =>
+                        void handleUpdateEnvironment(
+                          key,
+                          event.target.value as ApiKeyEnvironment,
+                        )
+                      }
+                      className="h-8 rounded-md border border-border bg-background px-2 text-body-sm text-on-surface"
+                    >
+                      {API_KEY_ENVIRONMENT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      disabled={revokingId === key.id}
+                      onClick={() => void handleRevoke(key)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      {revokingId === key.id ? "Removing…" : "Remove"}
+                    </Button>
+                  </div>
                 </DataTableCell>
               </DataTableRow>
             ))
           )}
         </DataTableBody>
       </DataTable>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-label-sm text-on-surface-muted">New agent</p>
+              <p className="mt-1 text-body-sm text-on-surface-muted">
+                Scaffold from <code className="text-mono-sm">lmx-agent-template</code>, pick a named
+                key or wallet, and watch the first request land.
+              </p>
+            </div>
+            <Button to="/console/agents/new" size="sm">
+              New agent quickstart
+            </Button>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-label-sm text-on-surface-muted">Use with MCP</p>
+              <p className="mt-1 text-body-sm text-on-surface-muted">
+                Copy into <code className="text-mono-sm">.cursor/mcp.json</code> or any MCP client.
+                Uses your session key by default; create a new key above to rotate.
+                Smoke test: <code className="text-mono-sm">get_balance</code> →{" "}
+                <code className="text-mono-sm">chat_completion</code> →{" "}
+                <code className="text-mono-sm">get_usage</code>.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!mcpConfigText}
+              onClick={() => void handleCopyMcpConfig()}
+            >
+              {copyState === "copied" ? (
+                <>
+                  <Check className="h-4 w-4" strokeWidth={1.75} />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" strokeWidth={1.75} />
+                  Copy config
+                </>
+              )}
+            </Button>
+          </div>
+
+          {mcpConfigText ? (
+            <pre className="mt-6 overflow-x-auto rounded-md border border-border bg-background p-4 text-mono-sm text-on-surface-muted">
+              <code>{mcpConfigText}</code>
+            </pre>
+          ) : (
+            <p className="mt-6 text-body-sm text-on-surface-muted">
+              Sign in to generate MCP config with your bearer token.
+            </p>
+          )}
+          {copyState === "error" && (
+            <p className="mt-3 text-body-sm text-error">
+              Clipboard write failed. Copy manually from the block above.
+            </p>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

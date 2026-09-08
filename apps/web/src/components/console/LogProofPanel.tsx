@@ -1,4 +1,4 @@
-import { ExternalLink, FileJson, ShieldCheck, X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchUsageLogProof, type UsageLogProofResponse } from "../../api";
 import { AlertBanner } from "./AlertBanner";
@@ -78,17 +78,13 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
 
   const anchoringLive = proof ? isAnchoringLive(proof, anchoringEnabled) : false;
   const panelTitle = anchoringLive ? "On-chain proof" : "Request receipt";
-  const PanelIcon = anchoringLive ? ShieldCheck : FileJson;
 
   return (
-    <Card accent="primary" className="relative">
+    <Card className="relative">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <PanelIcon className="h-5 w-5 text-primary" strokeWidth={1.75} />
-          <div>
-            <p className="text-label-sm text-primary">{panelTitle}</p>
-            <p className="text-mono-sm text-on-surface-muted">{logId}</p>
-          </div>
+        <div>
+          <p className="text-label-sm text-on-surface-muted">{panelTitle}</p>
+          <p className="mt-1 text-mono-sm text-on-surface-muted">{logId}</p>
         </div>
         <Button type="button" variant="tertiary" size="sm" onClick={onClose} aria-label="Close">
           <X className="h-4 w-4" strokeWidth={1.75} />
@@ -101,14 +97,14 @@ export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPane
 
       {error && (
         <div className="mt-4">
-          <AlertBanner tone="error">{error}</AlertBanner>
+          <AlertBanner tone="error" className="border-0 py-0">{error}</AlertBanner>
         </div>
       )}
 
       {proof && !loading && (
         <div className="mt-4 space-y-4">
           {!anchoringLive && proof.receipt_hash && (
-            <AlertBanner tone="info">
+            <AlertBanner tone="info" className="border-0 py-0">
               This deployment records cryptographic receipts for each request. On-chain Merkle
               anchoring is a local-dev feature for now — production shows receipt metadata only.
             </AlertBanner>

@@ -2,6 +2,7 @@ import { SignUp } from "@clerk/clerk-react";
 import { Link, useNavigate } from "react-router-dom";
 import { WalletConnectButton } from "../components/WalletConnectButton";
 import { CLERK_PUBLISHABLE_KEY, clerkAppearance } from "../lib/clerk";
+import { peekAuthNext } from "../lib/auth-next";
 
 export function SignUpPage() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export function SignUpPage() {
 
       <WalletConnectButton
         label="Connect Wallet"
-        onSuccess={() => navigate("/console/overview", { replace: true })}
+        onSuccess={() => navigate(peekAuthNext() ?? "/console/overview", { replace: true })}
       />
 
       <p className="mt-6 max-w-[400px] text-center text-body-sm text-on-surface-muted">

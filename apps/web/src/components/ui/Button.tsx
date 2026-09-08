@@ -23,7 +23,7 @@ const sizeClasses: Record<ButtonSize, string> = {
 };
 
 const baseClasses =
-  "inline-flex items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-colors duration-base ease-standard outline-none focus-visible:shadow-focus disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap transition-colors duration-base ease-standard outline-none focus-visible:shadow-focus disabled:pointer-events-none";
 
 type CommonProps = {
   variant?: ButtonVariant;
@@ -31,6 +31,7 @@ type CommonProps = {
   className?: string;
   children?: ReactNode;
   dangerHover?: boolean;
+  pill?: boolean;
 };
 
 type ButtonAsButton = CommonProps &
@@ -55,12 +56,14 @@ export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonPr
       className,
       children,
       dangerHover,
+      pill,
       ...props
     },
     ref,
   ) {
     const classes = cn(
       baseClasses,
+      pill ? "rounded-full" : "rounded-md",
       variantClasses[variant],
       sizeClasses[size],
       dangerHover && variant === "tertiary" && "hover:text-error hover:bg-surface",

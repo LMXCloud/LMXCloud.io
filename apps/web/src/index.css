@@ -72,14 +72,14 @@
   --text-label-sm: 0.75rem;
   --text-label-sm--line-height: 1.2;
   --text-label-sm--letter-spacing: 0.08em;
-  --text-label-sm--font-weight: 500;
+  --text-label-sm--font-weight: 400;
 
   --text-mono-sm: 0.8125rem;
   --text-mono-sm--line-height: 1.4;
   --text-mono-sm--letter-spacing: 0;
   --text-mono-sm--font-weight: 500;
 
-  --text-metric: 2.5rem;
+  --text-metric: 1.5rem;
   --text-metric--line-height: 1;
   --text-metric--letter-spacing: -0.02em;
   --text-metric--font-weight: 600;
@@ -129,20 +129,29 @@ body {
 }
 
 @utility text-metric {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-metric);
   line-height: var(--text-metric--line-height);
   letter-spacing: var(--text-metric--letter-spacing);
   font-weight: var(--text-metric--font-weight);
+  font-variant-numeric: tabular-nums;
 }
 
 @utility text-hero-stat {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-hero-stat);
   line-height: var(--text-hero-stat--line-height);
   letter-spacing: var(--text-hero-stat--letter-spacing);
   font-weight: var(--text-hero-stat--font-weight);
   font-variant-numeric: tabular-nums;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes partner-marquee {

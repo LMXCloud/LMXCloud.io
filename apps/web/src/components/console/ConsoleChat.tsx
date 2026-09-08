@@ -6,6 +6,7 @@ import {
   type ChatMessage,
 } from "../../api";
 import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
 import { Chip } from "../ui/Chip";
 import { Input } from "../ui/Input";
 
@@ -191,11 +192,11 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
   }
 
   return (
-    <div className="flex h-[min(560px,72vh)] flex-col overflow-hidden rounded-xl border border-border bg-surface">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+    <Card className="flex h-[min(560px,72vh)] flex-col overflow-hidden p-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-6 pb-4">
         <div>
-          <p className="text-body-sm font-medium text-on-surface">Live inference</p>
-          <p className="text-body-sm text-on-surface-muted">
+          <p className="text-body-sm font-semibold text-on-surface">Live inference</p>
+          <p className="mt-1 text-body-sm text-on-surface-muted">
             Bills your session key · OpenAI-compatible
           </p>
         </div>
@@ -208,7 +209,7 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={sending}
-            className="max-w-[14rem] rounded-md border border-border bg-background px-2 py-1.5 text-body-sm text-on-surface"
+            className="max-w-[14rem] rounded-md border border-border bg-background px-3 py-2 text-body-sm text-on-surface"
           >
             {SUPPORTED_MODELS.map((entry) => (
               <option key={entry.alias} value={entry.alias}>
@@ -222,14 +223,14 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-6 py-4">
         {entries.map((entry) => (
           <div
             key={entry.id}
             className={`flex ${entry.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[90%] rounded-lg px-3 py-2 text-body-sm ${
+              className={`max-w-[90%] rounded-md px-3 py-2 text-body-sm ${
                 entry.role === "user"
                   ? "bg-primary-pressed text-background"
                   : "border border-border bg-background text-on-surface"
@@ -244,14 +245,14 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
               {entry.meta && (
                 <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2">
                   <Chip tone="default">{entry.meta.model}</Chip>
-                  <Chip tone="info">{entry.meta.provider}</Chip>
+                  <Chip tone="default">{entry.meta.provider}</Chip>
                   {entry.meta.fallback && <Chip tone="warning">fallback</Chip>}
                   <Chip tone="default">{`${entry.meta.latencyMs}ms`}</Chip>
                   <Chip tone="info">{formatUsd(entry.meta.cost)}</Chip>
                   <Chip tone="default">
                     {entry.meta.promptTokens}+{entry.meta.completionTokens} tok
                   </Chip>
-                  <Chip tone="success">bal {formatUsd(entry.meta.balance)}</Chip>
+                  <Chip tone="default">bal {formatUsd(entry.meta.balance)}</Chip>
                 </div>
               )}
             </div>
@@ -260,7 +261,7 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
 
         {sending && (
           <div className="flex justify-start">
-            <div className="rounded-lg border border-border bg-background px-3 py-2 text-body-sm text-on-surface-muted">
+            <div className="rounded-md border border-border bg-background px-3 py-2 text-body-sm text-on-surface-muted">
               Routing request…
             </div>
           </div>
@@ -268,7 +269,7 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
       </div>
 
       <form
-        className="border-t border-border p-3"
+        className="px-6 pb-6 pt-4"
         onSubmit={(e) => {
           e.preventDefault();
           void handleSend();
@@ -288,6 +289,6 @@ export function ConsoleChat({ apiKey, defaultModel = DEFAULT_MODEL_ALIAS }: Cons
           </Button>
         </div>
       </form>
-    </div>
+    </Card>
   );
 }

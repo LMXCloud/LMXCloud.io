@@ -12,6 +12,7 @@ function record(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
   return {
     id: "key-1",
     keyHash: "hash",
+    environment: "development",
     createdAt: "2026-08-01T00:00:00.000Z",
     ...overrides,
   };
@@ -29,9 +30,17 @@ function mockKeyStore(
     linkWallet: async () => ({ ok: false, code: "not_found", message: "no" }),
     touchLastUsed: async () => undefined,
     listForRecord: async () => [],
+    updateEnvironment: async () => null,
+    updateKey: async () => null,
     revoke: async () => false,
     emailHasAccount: async () => false,
     walletHasAccount: async () => false,
+    listProjectsForRecord: async () => [],
+    ensureDefaultProject: async () => null,
+    findProjectForOwner: async () => null,
+    createProject: async () => null,
+    renameProject: async () => null,
+    deleteProject: async () => ({ ok: false, code: "not_found", message: "no" }),
     ...overrides,
   };
 }
@@ -39,6 +48,11 @@ function mockKeyStore(
 function mockCreditStore(balances: Map<string, number>): CreditStore {
   return {
     getBalance: async (id) => balances.get(id) ?? 0,
+    getBalances: async (ids) => {
+      const map = new Map<string, number>();
+      for (const id of ids) map.set(id, balances.get(id) ?? 0);
+      return map;
+    },
     hasMinimumBalance: async (id, min) => (balances.get(id) ?? 0) >= min,
     deduct: async () => true,
     credit: async (id, amount, _meta?: CreditMeta) => {

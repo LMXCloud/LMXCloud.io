@@ -38,9 +38,8 @@ export function PlaygroundPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Develop"
         title="Playground"
         description="Test inference, inspect routing metadata, and copy ready-to-run snippets for your stack."
       />
@@ -48,9 +47,9 @@ export function PlaygroundPage() {
       <ConsoleChat apiKey={apiKey} />
 
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-label-sm text-on-surface">Quick snippets</p>
+            <p className="text-label-sm text-on-surface-muted">Quick snippets</p>
             <p className="mt-1 text-body-sm text-on-surface-muted">
               Session key <code className="text-mono-sm">{maskKey(apiKey)}</code> · API{" "}
               <code className="text-mono-sm">{API_BASE}</code>
@@ -63,7 +62,7 @@ export function PlaygroundPage() {
           />
         </div>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-6 space-y-4">
           {snippetTab === "curl" &&
             curlSnippets.map((snippet) => (
               <CodeBlock key={snippet.label} label={snippet.label} code={snippet.code} />

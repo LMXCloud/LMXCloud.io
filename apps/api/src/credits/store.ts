@@ -10,6 +10,7 @@ export type CreditMeta = {
 
 export interface CreditStore {
   getBalance(apiKeyId: string): Promise<number>;
+  getBalances(apiKeyIds: string[]): Promise<Map<string, number>>;
   hasMinimumBalance(apiKeyId: string, minimum: number): Promise<boolean>;
   deduct(apiKeyId: string, amount: number): Promise<boolean>;
   credit(apiKeyId: string, amount: number, meta?: CreditMeta): Promise<number>;

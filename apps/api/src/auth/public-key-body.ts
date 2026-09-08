@@ -1,5 +1,9 @@
+import type { ApiKeyEnvironment } from "./environment.js";
+import { parseOptionalEnvironment } from "./environment.js";
+
 export interface PublicCreateKeyBody {
   email?: string;
+  environment?: ApiKeyEnvironment;
 }
 
 export type PublicCreateKeyBodyResult = PublicCreateKeyBody | string;
@@ -29,6 +33,14 @@ export function validatePublicCreateKeyBody(body: unknown): PublicCreateKeyBodyR
       return "Field 'email' must be a non-empty string";
     }
     result.email = b.email.trim();
+  }
+
+  const environment = parseOptionalEnvironment(b.environment);
+  if (!environment.ok) {
+    return environment.error;
+  }
+  if (b.environment !== undefined && b.environment !== null) {
+    result.environment = environment.value;
   }
 
   return result;

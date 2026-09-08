@@ -69,14 +69,13 @@ export function ModelsPage() {
   const selected = selectedModel ?? filtered[0]?.id ?? null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Develop"
         title="Models & pricing"
         description="Live catalog from healthy providers. x402 per-call quotes use the same list prices."
         actions={
           <div className="flex flex-wrap gap-2">
-            {network && <Chip tone="info">{network}</Chip>}
+            {network && <Chip tone="default">{network}</Chip>}
             {minCall && <Chip tone="default">min {minCall} USDC</Chip>}
           </div>
         }
@@ -130,9 +129,9 @@ export function ModelsPage() {
                   </button>
                 </DataTableCell>
                 <DataTableCell>
-                  <Chip tone="info">{model.provider}</Chip>
+                  <Chip tone="default">{model.provider}</Chip>
                 </DataTableCell>
-                <DataTableCell mono>{formatPricePer1k(model.list_price_per_1k_tokens)}</DataTableCell>
+                <DataTableCell tabular>{formatPricePer1k(model.list_price_per_1k_tokens)}</DataTableCell>
                 <DataTableCell>
                   {liveModelIds.has(model.id) ? (
                     <Chip tone="success">live</Chip>
@@ -148,11 +147,11 @@ export function ModelsPage() {
 
       {selected && apiKey && (
         <Card>
-          <p className="text-label-sm text-on-surface">Try {selected}</p>
+            <p className="text-label-sm text-on-surface-muted">Try {selected}</p>
           <p className="mt-1 text-body-sm text-on-surface-muted">
             Copy a cURL request or open the playground to test interactively.
           </p>
-          <div className="mt-4">
+          <div className="mt-6">
             <CodeBlock
               label="cURL"
               code={chatCompletionCurl(API_BASE, apiKey, selected)}

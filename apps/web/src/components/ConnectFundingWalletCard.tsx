@@ -125,15 +125,15 @@ export function ConnectFundingWalletCard({ onLinked }: ConnectFundingWalletCardP
   const busy = linking || connectBusy;
 
   return (
-    <Card accent="primary">
-      <p className="text-label-sm text-primary">Buy credits</p>
-      <h3 className="mt-2 text-title-md text-on-surface">Fund with USDC</h3>
+    <Card>
+      <p className="text-label-sm text-on-surface-muted">Buy credits</p>
+      <h3 className="mt-2 text-body-sm font-semibold text-on-surface">Fund with USDC</h3>
       <p className="mt-2 text-body-sm text-on-surface-muted">
         Credits are funded on stablecoin rails only. Connect a wallet, verify it with a
         signature, then send USDC on {targetChain.name}. 1 USDC = $1.00 in API credits.
       </p>
 
-      <AlertBanner tone="info" className="mt-4">
+      <AlertBanner tone="info" className="mt-4 border-0 py-0">
         Email sign-in stays active after linking. The connected wallet is used only for
         deposits — send USDC from that verified address.
       </AlertBanner>
@@ -145,7 +145,7 @@ export function ConnectFundingWalletCard({ onLinked }: ConnectFundingWalletCardP
         </p>
       )}
 
-      <div className="mt-5">
+      <div className="mt-6">
         <Button type="button" disabled={busy} onClick={handlePrimary}>
           {linking
             ? "Confirm in wallet…"

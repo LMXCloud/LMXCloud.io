@@ -95,9 +95,8 @@ export function LogsPage() {
   const proofButtonLabel = anchoringEnabled ? "Verify" : "Receipt";
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Monitor"
         title="Request logs"
         description={
           anchoringEnabled
@@ -160,7 +159,7 @@ export function LogsPage() {
                 </DataTableCell>
                 <DataTableCell mono>{log.route}</DataTableCell>
                 <DataTableCell>
-                  <Chip tone="info">{log.provider}</Chip>
+                  <Chip tone="default">{log.provider}</Chip>
                 </DataTableCell>
                 <DataTableCell mono className="max-w-[180px] truncate" title={log.model}>
                   {log.model}
@@ -168,16 +167,16 @@ export function LogsPage() {
                 <DataTableCell mono title={log.api_key_id}>
                   {maskKey(log.api_key_id)}
                 </DataTableCell>
-                <DataTableCell mono>
+                <DataTableCell tabular>
                   {formatNumber(log.total_tokens)}
                   <span className="ml-1 text-on-surface-muted">
                     ({formatNumber(log.prompt_tokens)}+{formatNumber(log.completion_tokens)})
                   </span>
                 </DataTableCell>
-                <DataTableCell mono className="text-warning">
+                <DataTableCell tabular className="text-info">
                   {formatUsd(log.cost)}
                 </DataTableCell>
-                <DataTableCell mono>{formatLatency(log.latency_ms)}</DataTableCell>
+                <DataTableCell tabular>{formatLatency(log.latency_ms)}</DataTableCell>
                 <DataTableCell>
                   <Chip tone={statusTone(log.status)}>{log.status}</Chip>
                   {log.fallback_used && (

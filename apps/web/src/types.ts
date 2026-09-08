@@ -10,13 +10,23 @@ export interface KeyUsage {
   last_request_at: string | null;
 }
 
+export const API_KEY_ENVIRONMENTS = ["development", "staging", "production"] as const;
+
+export type ApiKeyEnvironment = (typeof API_KEY_ENVIRONMENTS)[number];
+
 export interface ApiKeyInfo {
   object: string;
   id: string;
+  name: string | null;
   email: string | null;
   wallet: string | null;
+  environment: ApiKeyEnvironment;
+  project_id: string | null;
+  project_name: string | null;
   created_at: string;
   last_used_at: string | null;
+  /** Present once the API issues TTL keys; omitted today. */
+  expires_at?: string | null;
   balance: number;
   currency: string;
   is_current: boolean;
@@ -91,11 +101,39 @@ export interface CreateKeyResponse {
   object: string;
   api_key: string;
   id: string;
+  name: string | null;
   email: string | null;
   wallet: string | null;
+  environment: ApiKeyEnvironment;
+  project_id: string | null;
   created_at: string;
   balance: number;
   currency: string;
+}
+
+export interface ProjectInfo {
+  object: string;
+  id: string;
+  name: string;
+  is_default: boolean;
+  created_at: string;
+  key_count: number;
+  balance: number;
+  currency: string;
+}
+
+export interface ProjectsResponse {
+  object: string;
+  data: ProjectInfo[];
+}
+
+export interface CreateProjectResponse extends ProjectInfo {}
+
+export interface DeleteProjectResponse {
+  object: string;
+  id: string;
+  deleted: boolean;
+  moved_keys: number;
 }
 
 export interface LoginResponse {

@@ -20,4 +20,11 @@ export async function createApiKeyStore(): Promise<ApiKeyStore> {
 }
 
 export { createAuthHook } from "./middleware.js";
-export type { ApiKeyRecord, ApiKeyStore } from "./store.js";
+export type {
+  ApiKeyRecord,
+  ApiKeyStore,
+  ApiKeyEnvironment,
+  ProjectRecord,
+  DeleteProjectResult,
+} from "./store.js";
+export { DEFAULT_PROJECT_NAME } from "./store.js";

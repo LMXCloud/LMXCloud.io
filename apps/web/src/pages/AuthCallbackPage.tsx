@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useAuth } from "../context/AuthContext";
+import { consumeAuthNext } from "../lib/auth-next";
 
 export function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export function AuthCallbackPage() {
     }
     if (sessionReady && !navigated.current) {
       navigated.current = true;
-      navigate("/console/overview", { replace: true });
+      navigate(consumeAuthNext(), { replace: true });
     }
   }, [isLoaded, isSignedIn, sessionReady, navigate]);
 

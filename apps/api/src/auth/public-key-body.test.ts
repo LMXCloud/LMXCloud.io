@@ -48,4 +48,21 @@ describe("validatePublicCreateKeyBody", () => {
   it("rejects non-object bodies", () => {
     assert.equal(validatePublicCreateKeyBody("nope"), "Request body must be a JSON object");
   });
+
+  it("accepts an environment tag", () => {
+    assert.deepEqual(validatePublicCreateKeyBody({ environment: "staging" }), {
+      environment: "staging",
+    });
+    assert.deepEqual(
+      validatePublicCreateKeyBody({ email: "you@example.com", environment: "Production" }),
+      { email: "you@example.com", environment: "production" },
+    );
+  });
+
+  it("rejects an invalid environment tag", () => {
+    assert.equal(
+      validatePublicCreateKeyBody({ environment: "prod" }),
+      "Field 'environment' must be one of: development, staging, production",
+    );
+  });
 });

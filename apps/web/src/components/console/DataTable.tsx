@@ -20,8 +20,8 @@ export function DataTable({
   return (
     <Card variant="base" className={cn("overflow-hidden p-0", className)}>
       {(title || description) && (
-        <div className="border-b border-border px-5 py-4">
-          {title && <h3 className="text-title-md text-on-surface">{title}</h3>}
+        <div className="px-4 pt-4 pb-3">
+          {title && <h3 className="text-body-sm font-semibold text-on-surface">{title}</h3>}
           {description && (
             <p className="mt-1 text-body-sm text-on-surface-muted">{description}</p>
           )}
@@ -41,7 +41,7 @@ export function DataTable({
 
 export function DataTableHead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-border bg-elevated/40 text-label-sm text-on-surface-muted">
+    <thead className="text-label-sm text-on-surface-muted">
       {children}
     </thead>
   );
@@ -61,7 +61,7 @@ export function DataTableRow({
   return (
     <tr
       className={cn(
-        "border-b border-border/60 transition-colors duration-base ease-standard last:border-0 hover:bg-elevated/30",
+        "border-t border-border/60 transition-colors duration-base ease-standard hover:bg-elevated/30",
         className,
       )}
     >
@@ -74,15 +74,20 @@ export function DataTableCell({
   children,
   className,
   mono,
+  tabular,
   title,
 }: {
   children: ReactNode;
   className?: string;
   mono?: boolean;
+  tabular?: boolean;
   title?: string;
 }) {
   return (
-    <td title={title} className={cn("px-5 py-3.5", mono && "text-mono-sm", className)}>
+    <td
+      title={title}
+      className={cn("px-4 py-2", mono && "text-mono-sm", tabular && "tabular-nums", className)}
+    >
       {children}
     </td>
   );
@@ -95,7 +100,7 @@ export function DataTableTh({
   children: ReactNode;
   className?: string;
 }) {
-  return <th className={cn("px-5 py-3 font-medium", className)}>{children}</th>;
+  return <th className={cn("px-4 py-2 font-normal", className)}>{children}</th>;
 }
 
 export function DataTableEmpty({
@@ -107,7 +112,7 @@ export function DataTableEmpty({
 }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="px-5 py-12 text-center text-on-surface-muted">
+      <td colSpan={colSpan} className="px-4 py-8 text-center text-on-surface-muted">
         {children}
       </td>
     </tr>

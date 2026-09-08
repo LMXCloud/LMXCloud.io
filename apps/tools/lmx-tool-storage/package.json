@@ -1,0 +1,40 @@
+{
+  "name": "@lmxcloud/lmx-tool-storage",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Self-hostable vault storage — namespaced markdown+frontmatter documents",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -b --force",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.3",
+    "@huggingface/transformers": "^4.2.0",
+    "dotenv": "^16.5.0",
+    "gray-matter": "^4.0.3",
+    "hono": "^4.7.10",
+    "pg": "^8.22.0",
+    "sqlite-vec": "^0.1.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

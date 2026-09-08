@@ -1,9 +1,19 @@
-import type { FastifyInstance, preHandlerHookHandler } from "fastify";
+import type { FastifyInstance, FastifyReply, preHandlerHookHandler } from "fastify";
 import { resolveClerkUser } from "../auth/clerk.js";
 import { extractBearerToken } from "../auth/keys.js";
 import { createSessionToken, createSessionTokenForIdentity } from "../auth/session.js";
 import { verifySiweMessage } from "../auth/siwe.js";
-import type { ApiKeyStore } from "../auth/store.js";
+import type { ApiKeyRecord, ApiKeyStore } from "../auth/store.js";
+import {
+  parseOptionalEnvironment,
+  parseRequiredEnvironment,
+  type ApiKeyEnvironment,
+} from "../auth/environment.js";
+import {
+  normalizeProjectName,
+  parseOptionalKeyName,
+  parseOptionalProjectId,
+} from "../auth/projects.js";
 import {
   validatePublicCreateKeyBody,
   WALLET_VERIFICATION_REQUIRED,
@@ -37,6 +47,32 @@ interface AuthRouteDeps {
 
 interface RevokeKeyBody {
   id?: string;
+}
+
+interface UpdateKeyBody {
+  id?: string;
+  environment?: ApiKeyEnvironment;
+  projectId?: string;
+  name?: string;
+}
+
+interface AuthenticatedCreateKeyBody {
+  environment?: ApiKeyEnvironment;
+  projectId?: string;
+  name?: string;
+}
+
+interface CreateProjectBody {
+  name: string;
+}
+
+interface UpdateProjectBody {
+  id: string;
+  name: string;
+}
+
+interface DeleteProjectBody {
+  id: string;
 }
 
 interface WalletNonceBody {
@@ -94,20 +130,179 @@ function validateRevokeKeyBody(body: unknown): RevokeKeyBody | string {
   return { id: b.id.trim() };
 }
 
+function validateAuthenticatedCreateKeyBody(
+  body: unknown,
+): AuthenticatedCreateKeyBody | string {
+  if (body === undefined || body === null) {
+    return {};
+  }
+
+  if (typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+
+  const b = body as Record<string, unknown>;
+  const environment = parseOptionalEnvironment(b.environment);
+  if (!environment.ok) {
+    return environment.error;
+  }
+
+  const projectId = parseOptionalProjectId(b.project_id);
+  if (!projectId.ok) {
+    return projectId.error;
+  }
+
+  const name = parseOptionalKeyName(b.name);
+  if (!name.ok) {
+    return name.error;
+  }
+
+  const result: AuthenticatedCreateKeyBody = {};
+  if (b.environment !== undefined && b.environment !== null) {
+    result.environment = environment.value;
+  }
+  if (projectId.value) {
+    result.projectId = projectId.value;
+  }
+  if (name.value) {
+    result.name = name.value;
+  }
+  return result;
+}
+
+function validateUpdateKeyBody(body: unknown): UpdateKeyBody | string {
+  if (body === undefined || body === null || typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+
+  const b = body as Record<string, unknown>;
+  const hasEnvironment = b.environment !== undefined && b.environment !== null;
+  const hasProjectId = b.project_id !== undefined && b.project_id !== null && b.project_id !== "";
+  const name = parseOptionalKeyName(b.name);
+  if (!name.ok) {
+    return name.error;
+  }
+
+  if (!hasEnvironment && !hasProjectId && !name.value) {
+    return "Provide 'environment', 'project_id', and/or 'name'";
+  }
+
+  const result: UpdateKeyBody = {};
+
+  if (hasEnvironment) {
+    const environment = parseRequiredEnvironment(b.environment);
+    if (!environment.ok) {
+      return environment.error;
+    }
+    result.environment = environment.value;
+  }
+
+  if (hasProjectId) {
+    const projectId = parseOptionalProjectId(b.project_id);
+    if (!projectId.ok) {
+      return projectId.error;
+    }
+    if (!projectId.value) {
+      return "Field 'project_id' must be a non-empty string";
+    }
+    result.projectId = projectId.value;
+  }
+
+  if (name.value) {
+    result.name = name.value;
+  }
+
+  if (b.id === undefined) {
+    return result;
+  }
+
+  if (typeof b.id !== "string" || b.id.trim() === "") {
+    return "Field 'id' must be a non-empty string";
+  }
+
+  result.id = b.id.trim();
+  return result;
+}
+
+function validateCreateProjectBody(body: unknown): CreateProjectBody | string {
+  if (body === undefined || body === null || typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+  const b = body as Record<string, unknown>;
+  const name = normalizeProjectName(b.name);
+  if (!name.ok) {
+    return name.error;
+  }
+  return { name: name.value };
+}
+
+function validateUpdateProjectBody(body: unknown): UpdateProjectBody | string {
+  if (body === undefined || body === null || typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+  const b = body as Record<string, unknown>;
+  if (typeof b.id !== "string" || b.id.trim() === "") {
+    return "Field 'id' must be a non-empty string";
+  }
+  const name = normalizeProjectName(b.name);
+  if (!name.ok) {
+    return name.error;
+  }
+  return { id: b.id.trim(), name: name.value };
+}
+
+function validateDeleteProjectBody(body: unknown): DeleteProjectBody | string {
+  if (body === undefined || body === null || typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+  const b = body as Record<string, unknown>;
+  if (typeof b.id !== "string" || b.id.trim() === "") {
+    return "Field 'id' must be a non-empty string";
+  }
+  return { id: b.id.trim() };
+}
+
 function serializeKey(record: {
   id: string;
   email?: string;
   wallet?: string;
+  environment: ApiKeyEnvironment;
+  projectId?: string;
+  name?: string;
   createdAt: string;
   lastUsedAt?: string;
-}) {
+}, projectName?: string | null) {
   return {
     object: "api_key",
     id: record.id,
+    name: record.name ?? null,
     email: record.email ?? null,
     wallet: record.wallet ?? null,
+    environment: record.environment,
+    project_id: record.projectId ?? null,
+    project_name: projectName ?? null,
     created_at: record.createdAt,
     last_used_at: record.lastUsedAt ?? null,
+  };
+}
+
+function serializeProject(
+  project: {
+    id: string;
+    name: string;
+    isDefault: boolean;
+    createdAt: string;
+  },
+  extras?: { keyCount?: number; balance?: number },
+) {
+  return {
+    object: "project",
+    id: project.id,
+    name: project.name,
+    is_default: project.isDefault,
+    created_at: project.createdAt,
+    ...(extras?.keyCount !== undefined ? { key_count: extras.keyCount } : {}),
+    ...(extras?.balance !== undefined ? { balance: extras.balance, currency: "USD" } : {}),
   };
 }
 
@@ -409,15 +604,18 @@ export async function registerAuthRoutes(
       object: "api_key",
       api_key: plainKey,
       id: record.id,
+      name: record.name ?? null,
       email: record.email ?? null,
       wallet: record.wallet ?? null,
+      environment: record.environment,
+      project_id: record.projectId ?? null,
       created_at: record.createdAt,
       balance: roundCredits(balance),
       currency: "USD",
     });
   });
 
-  app.post(
+  app.post<{ Body: unknown }>(
     "/v1/auth/keys",
     { preHandler: deps.authenticate },
     async (request, reply) => {
@@ -433,10 +631,39 @@ export async function registerAuthRoutes(
         });
       }
 
+      const validated = validateAuthenticatedCreateKeyBody(request.body);
+      if (typeof validated === "string") {
+        return reply.status(400).send({
+          error: { message: validated, type: "invalid_request_error" },
+        });
+      }
+
       const input =
         owner.email !== undefined
-          ? { email: owner.email }
-          : { wallet: owner.wallet! };
+          ? {
+              email: owner.email,
+              environment: validated.environment,
+              projectId: validated.projectId,
+              name: validated.name,
+            }
+          : {
+              wallet: owner.wallet!,
+              environment: validated.environment,
+              projectId: validated.projectId,
+              name: validated.name,
+            };
+
+      if (validated.projectId) {
+        const project = await deps.store.findProjectForOwner(validated.projectId, owner);
+        if (!project) {
+          return reply.status(404).send({
+            error: {
+              message: "Project not found",
+              type: "invalid_request_error",
+            },
+          });
+        }
+      }
 
       const { record, plainKey } = await deps.store.create(input);
       await deps.creditStore.credit(record.id, deps.initialCreditBalance, {
@@ -456,8 +683,11 @@ export async function registerAuthRoutes(
         object: "api_key",
         api_key: plainKey,
         id: record.id,
+        name: record.name ?? null,
         email: record.email ?? null,
         wallet: record.wallet ?? null,
+        environment: record.environment,
+        project_id: record.projectId ?? null,
         created_at: record.createdAt,
         balance: roundCredits(balance),
         currency: "USD",
@@ -465,38 +695,138 @@ export async function registerAuthRoutes(
     },
   );
 
-  app.get(
+  app.get<{ Querystring: { project_id?: string } }>(
     "/v1/auth/keys",
     { preHandler: deps.authenticate },
-    async (request) => {
-      const records = await deps.store.listForRecord(request.apiKey!);
-      const currentId = request.apiKey!.id;
+    async (request, reply) => {
+      const owner = request.apiKey!;
+      const projects = await deps.store.listProjectsForRecord(owner);
+      const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 
-      const data = await Promise.all(
-        records.map(async (record) => {
-          const usage = await deps.usageStore.getUsage(record.id);
-          const balance = await deps.creditStore.getBalance(record.id);
+      const projectId = request.query.project_id?.trim();
+      if (projectId && !projects.some((project) => project.id === projectId)) {
+        return reply.status(404).send({
+          error: {
+            message: "Project not found",
+            type: "invalid_request_error",
+          },
+        });
+      }
 
-          return {
-            ...serializeKey(record),
-            balance: roundCredits(balance),
-            currency: "USD",
-            is_current: record.id === currentId,
-            usage: {
-              requests: usage?.requestCount ?? 0,
-              prompt_tokens: usage?.promptTokens ?? 0,
-              completion_tokens: usage?.completionTokens ?? 0,
-              total_tokens: usage?.totalTokens ?? 0,
-              last_request_at: usage?.lastRequestAt ?? null,
-            },
-          };
-        }),
+      const records = await deps.store.listForRecord(
+        owner,
+        projectId ? { projectId } : undefined,
       );
+      const currentId = owner.id;
+      const keyIds = records.map((record) => record.id);
+      const [usageByKey, balances] = await Promise.all([
+        deps.usageStore.getUsageForKeys(keyIds),
+        deps.creditStore.getBalances(keyIds),
+      ]);
+
+      const data = records.map((record) => {
+        const usage = usageByKey.get(record.id);
+        const balance = balances.get(record.id) ?? 0;
+
+        return {
+          ...serializeKey(
+            record,
+            record.projectId ? projectNames.get(record.projectId) ?? null : null,
+          ),
+          balance: roundCredits(balance),
+          currency: "USD",
+          is_current: record.id === currentId,
+          usage: {
+            requests: usage?.requestCount ?? 0,
+            prompt_tokens: usage?.promptTokens ?? 0,
+            completion_tokens: usage?.completionTokens ?? 0,
+            total_tokens: usage?.totalTokens ?? 0,
+            last_request_at: usage?.lastRequestAt ?? null,
+          },
+        };
+      });
 
       return {
         object: "list",
         data,
       };
+    },
+  );
+
+  app.patch<{ Body: unknown }>(
+    "/v1/auth/key",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const validated = validateUpdateKeyBody(request.body);
+
+      if (typeof validated === "string") {
+        return reply.status(400).send({
+          error: { message: validated, type: "invalid_request_error" },
+        });
+      }
+
+      const targetId = validated.id ?? request.apiKey!.id;
+      const updated = await deps.store.updateKey(targetId, request.apiKey!, {
+        environment: validated.environment,
+        projectId: validated.projectId,
+        name: validated.name,
+      });
+
+      if (!updated) {
+        return reply.status(404).send({
+          error: {
+            message: "API key not found or already revoked",
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      const project = updated.projectId
+        ? await deps.store.findProjectForOwner(updated.projectId, request.apiKey!)
+        : null;
+
+      return reply.status(200).send(serializeKey(updated, project?.name ?? null));
+    },
+  );
+
+  async function sendRevokeResponse(
+    targetId: string,
+    owner: ApiKeyRecord,
+    reply: FastifyReply,
+  ) {
+    const revoked = await deps.store.revoke(targetId, owner);
+
+    if (!revoked) {
+      return reply.status(404).send({
+        error: {
+          message: "API key not found or already revoked",
+          type: "invalid_request_error",
+        },
+      });
+    }
+
+    return reply.status(200).send({
+      object: "api_key.deleted",
+      id: targetId,
+      deleted: true,
+    });
+  }
+
+  app.delete<{ Params: { id: string } }>(
+    "/v1/auth/keys/:id",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const targetId = request.params.id.trim();
+      if (!targetId) {
+        return reply.status(400).send({
+          error: {
+            message: "Key id is required",
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      return sendRevokeResponse(targetId, request.apiKey!, reply);
     },
   );
 
@@ -513,21 +843,135 @@ export async function registerAuthRoutes(
       }
 
       const targetId = validated.id ?? request.apiKey!.id;
-      const revoked = await deps.store.revoke(targetId, request.apiKey!);
+      return sendRevokeResponse(targetId, request.apiKey!, reply);
+    },
+  );
 
-      if (!revoked) {
-        return reply.status(404).send({
+  app.get(
+    "/v1/auth/projects",
+    { preHandler: deps.authenticate },
+    async (request) => {
+      const owner = request.apiKey!;
+      if (!owner.email && !owner.wallet) {
+        return { object: "list", data: [] };
+      }
+
+      const projects = await deps.store.listProjectsForRecord(owner);
+      const keys = await deps.store.listForRecord(owner);
+      const balances = await deps.creditStore.getBalances(keys.map((key) => key.id));
+
+      const data = projects.map((project) => {
+        const projectKeys = keys.filter((key) => key.projectId === project.id);
+        const balance = projectKeys.reduce(
+          (sum, key) => sum + (balances.get(key.id) ?? 0),
+          0,
+        );
+        return serializeProject(project, {
+          keyCount: projectKeys.length,
+          balance: roundCredits(balance),
+        });
+      });
+
+      return { object: "list", data };
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    "/v1/auth/projects",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const owner = request.apiKey!;
+      if (!owner.email && !owner.wallet) {
+        return reply.status(400).send({
           error: {
-            message: "API key not found or already revoked",
+            message:
+              "This session is not linked to an email or wallet — sign in again before creating projects",
             type: "invalid_request_error",
           },
         });
       }
 
+      const validated = validateCreateProjectBody(request.body);
+      if (typeof validated === "string") {
+        return reply.status(400).send({
+          error: { message: validated, type: "invalid_request_error" },
+        });
+      }
+
+      const created = await deps.store.createProject(owner, validated.name);
+      if (!created) {
+        return reply.status(409).send({
+          error: {
+            message: "A project with this name already exists",
+            type: "invalid_request_error",
+            code: "project_name_taken",
+          },
+        });
+      }
+
+      return reply.status(201).send(
+        serializeProject(created, { keyCount: 0, balance: 0 }),
+      );
+    },
+  );
+
+  app.patch<{ Body: unknown }>(
+    "/v1/auth/projects",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const validated = validateUpdateProjectBody(request.body);
+      if (typeof validated === "string") {
+        return reply.status(400).send({
+          error: { message: validated, type: "invalid_request_error" },
+        });
+      }
+
+      const updated = await deps.store.renameProject(
+        validated.id,
+        request.apiKey!,
+        validated.name,
+      );
+      if (!updated) {
+        return reply.status(404).send({
+          error: {
+            message: "Project not found, or a project with this name already exists",
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      return reply.status(200).send(serializeProject(updated));
+    },
+  );
+
+  app.delete<{ Body: unknown }>(
+    "/v1/auth/projects",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const validated = validateDeleteProjectBody(request.body);
+      if (typeof validated === "string") {
+        return reply.status(400).send({
+          error: { message: validated, type: "invalid_request_error" },
+        });
+      }
+
+      const deleted = await deps.store.deleteProject(validated.id, request.apiKey!);
+      if (!deleted.ok) {
+        const status = deleted.code === "default_project" ? 400 : 404;
+        return reply.status(status).send({
+          error: {
+            message: deleted.message,
+            type: "invalid_request_error",
+            code: deleted.code,
+          },
+        });
+      }
+
       return reply.status(200).send({
-        object: "api_key.deleted",
-        id: targetId,
+        object: "project.deleted",
+        id: validated.id,
         deleted: true,
+        moved_keys: deleted.movedKeyCount,
       });
     },
   );

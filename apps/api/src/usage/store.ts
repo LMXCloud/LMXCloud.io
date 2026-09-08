@@ -77,6 +77,7 @@ export interface UsageLogsResult {
 export interface UsageStore {
   recordUsage(input: RecordUsageInput): Promise<string | null>;
   getUsage(apiKeyId: string): Promise<KeyUsageStats | null>;
+  getUsageForKeys(apiKeyIds: string[]): Promise<Map<string, KeyUsageStats>>;
   getUsageHistory(apiKeyIds: string[], days: number): Promise<UsageDayBucket[]>;
   getUsageLogs(apiKeyIds: string[], query: UsageLogsQuery): Promise<UsageLogsResult>;
 }
@@ -226,6 +227,16 @@ export class FileUsageStore implements UsageStore {
   async getUsage(apiKeyId: string): Promise<KeyUsageStats | null> {
     await this.ensureLoaded();
     return this.stats.get(apiKeyId) ?? null;
+  }
+
+  async getUsageForKeys(apiKeyIds: string[]): Promise<Map<string, KeyUsageStats>> {
+    await this.ensureLoaded();
+    const usage = new Map<string, KeyUsageStats>();
+    for (const id of apiKeyIds) {
+      const stats = this.stats.get(id);
+      if (stats) usage.set(id, stats);
+    }
+    return usage;
   }
 
   async getUsageHistory(apiKeyIds: string[], days: number): Promise<UsageDayBucket[]> {

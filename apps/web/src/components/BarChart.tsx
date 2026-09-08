@@ -1,8 +1,8 @@
-import { BarChart3 } from "lucide-react";
 import { useMemo } from "react";
+import { cn } from "../lib/cn";
 import { Card } from "./ui/Card";
 
-const CHART_HEIGHT_PX = 160;
+const CHART_HEIGHT_PX = 112;
 
 interface BarChartProps {
   title: string;
@@ -12,6 +12,7 @@ interface BarChartProps {
   color?: string;
   /** Fill the last N UTC days with zeros for missing dates. */
   spanDays?: number;
+  className?: string;
 }
 
 function fillDailySeries(
@@ -47,8 +48,9 @@ export function BarChart({
   labels,
   values,
   valueLabel = String,
-  color = "var(--color-primary)",
+  color = "var(--color-info)",
   spanDays,
+  className,
 }: BarChartProps) {
   const series = useMemo(() => {
     if (spanDays && spanDays > 0) {
@@ -62,12 +64,9 @@ export function BarChart({
 
   if (series.labels.length === 0) {
     return (
-      <Card accent="primary">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-primary" strokeWidth={1.75} />
-          <h3 className="text-title-md text-on-surface">{title}</h3>
-        </div>
-        <p className="mt-4 text-body-sm text-on-surface-muted">
+      <Card className={cn("h-full", className)}>
+        <h3 className="text-body-sm font-semibold text-on-surface">{title}</h3>
+        <p className="mt-3 text-body-sm text-on-surface-muted">
           No usage data yet. Send inference requests to see activity here.
         </p>
       </Card>
@@ -75,28 +74,27 @@ export function BarChart({
   }
 
   return (
-    <Card accent="primary">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-primary" strokeWidth={1.75} />
-          <h3 className="text-title-md text-on-surface">{title}</h3>
-        </div>
+    <Card className={cn("h-full", className)}>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-body-sm font-semibold text-on-surface">{title}</h3>
         {hasActivity && (
-          <span className="text-mono-sm text-on-surface-faint">max {valueLabel(max)}</span>
+          <span className="text-body-sm tabular-nums text-on-surface-faint">
+            max {valueLabel(max)}
+          </span>
         )}
       </div>
 
       {!hasActivity ? (
         <div
-          className="flex items-center justify-center rounded-md border border-dashed border-border bg-elevated/30 text-body-sm text-on-surface-muted"
+          className="mt-4 flex items-center justify-center rounded-md border border-dashed border-border text-body-sm text-on-surface-muted"
           style={{ height: CHART_HEIGHT_PX }}
         >
           No activity in this period
         </div>
       ) : (
-        <div>
+        <div className="mt-4">
           <div
-            className="relative flex items-end gap-px sm:gap-1"
+            className="relative flex items-end gap-1"
             style={{ height: CHART_HEIGHT_PX }}
           >
             <div
@@ -114,7 +112,7 @@ export function BarChart({
                   className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                 >
                   <span
-                    className={`mb-1 text-mono-sm tabular-nums ${
+                    className={`mb-1 text-body-sm tabular-nums ${
                       value > 0 ? "text-on-surface-muted" : "text-transparent"
                     }`}
                   >
@@ -124,12 +122,8 @@ export function BarChart({
                     className="w-full max-w-10 rounded-t-sm transition-all duration-slow ease-standard sm:max-w-none"
                     style={{
                       height: displayHeight,
-                      background: `linear-gradient(to top, ${color}, color-mix(in srgb, ${color} 60%, transparent))`,
+                      background: color,
                       opacity: value > 0 ? 1 : 0,
-                      boxShadow:
-                        value > 0
-                          ? `0 0 14px color-mix(in srgb, ${color} 30%, transparent)`
-                          : undefined,
                     }}
                     title={`${series.labels[index]}: ${valueLabel(value)}`}
                   />
@@ -138,10 +132,10 @@ export function BarChart({
             })}
           </div>
 
-          <div className="mt-2 flex gap-px sm:gap-1">
+          <div className="mt-2 flex gap-1">
             {series.labels.map((label) => (
               <div key={label} className="min-w-0 flex-1 text-center">
-                <span className="text-mono-sm text-on-surface-faint">
+                <span className="text-body-sm tabular-nums text-on-surface-faint">
                   {formatAxisDate(label)}
                 </span>
               </div>

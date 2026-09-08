@@ -203,6 +203,85 @@ const MIGRATIONS = [
     SET note = 'Account balance was $0.00 at the 2026-08-22 seed — historical snapshot, not a live alarm'
     WHERE id = 'a1000000-0000-4000-8000-000000000004'
       AND note ILIKE '%needs funding%'`,
+  `ALTER TABLE api_keys
+    ADD COLUMN IF NOT EXISTS environment TEXT NOT NULL DEFAULT 'development'`,
+  `UPDATE api_keys
+    SET environment = 'development'
+    WHERE environment IS NULL
+       OR environment NOT IN ('development', 'staging', 'production')`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'api_keys_environment_check'
+  ) THEN
+    ALTER TABLE api_keys
+      ADD CONSTRAINT api_keys_environment_check
+      CHECK (environment IN ('development', 'staging', 'production'));
+  END IF;
+END $$`,
+  `CREATE TABLE IF NOT EXISTS projects (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT,
+    wallet TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_projects_email
+    ON projects (email) WHERE email IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_projects_wallet
+    ON projects (wallet) WHERE wallet IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default_email
+    ON projects (LOWER(email)) WHERE is_default AND email IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default_wallet
+    ON projects (LOWER(wallet)) WHERE is_default AND wallet IS NOT NULL`,
+  `ALTER TABLE api_keys
+    ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id)`,
+  `CREATE INDEX IF NOT EXISTS idx_api_keys_project
+    ON api_keys (project_id) WHERE project_id IS NOT NULL`,
+  // One Default project per email account; copy a representative wallet if present.
+  `INSERT INTO projects (id, name, email, wallet, is_default, created_at)
+   SELECT gen_random_uuid(),
+          'Default',
+          MIN(email),
+          MIN(wallet) FILTER (WHERE wallet IS NOT NULL),
+          true,
+          MIN(created_at)
+   FROM api_keys
+   WHERE email IS NOT NULL
+   GROUP BY LOWER(email)
+   ON CONFLICT DO NOTHING`,
+  // Wallet-only accounts (no email) get their own Default project.
+  `INSERT INTO projects (id, name, email, wallet, is_default, created_at)
+   SELECT gen_random_uuid(),
+          'Default',
+          NULL,
+          MIN(wallet),
+          true,
+          MIN(created_at)
+   FROM api_keys
+   WHERE email IS NULL AND wallet IS NOT NULL
+   GROUP BY LOWER(wallet)
+   ON CONFLICT DO NOTHING`,
+  `UPDATE api_keys k
+   SET project_id = p.id
+   FROM projects p
+   WHERE k.project_id IS NULL
+     AND p.is_default
+     AND k.email IS NOT NULL
+     AND p.email IS NOT NULL
+     AND LOWER(k.email) = LOWER(p.email)`,
+  `UPDATE api_keys k
+   SET project_id = p.id
+   FROM projects p
+   WHERE k.project_id IS NULL
+     AND p.is_default
+     AND k.email IS NULL
+     AND k.wallet IS NOT NULL
+     AND p.wallet IS NOT NULL
+     AND LOWER(k.wallet) = LOWER(p.wallet)`,
+  `ALTER TABLE api_keys
+    ADD COLUMN IF NOT EXISTS name TEXT`,
 ]
 
 export async function runMigrations(): Promise<void> {

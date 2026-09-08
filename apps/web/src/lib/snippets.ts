@@ -64,3 +64,28 @@ export function mcpConfig(apiKey: string, mcpUrl: string): string {
 export function verifyReceiptCli(logId: string): string {
   return `pnpm verify:receipt --log-id ${logId}`;
 }
+
+export function agentEnvLine(apiKey: string): string {
+  return `LMX_API_KEY=${apiKey}`;
+}
+
+export const AGENT_TEMPLATE_REPO = "LMXCloud/lmx-agent-template";
+export const AGENT_TEMPLATE_GITHUB = `https://github.com/${AGENT_TEMPLATE_REPO}`;
+export const AGENT_TEMPLATE_DIR = "my-agent";
+export const AGENT_DEV_QUESTION = "some question";
+export const AGENT_WALLET_KEY_PLACEHOLDER = "0xYOUR_PRIVATE_KEY";
+
+/** Scaffold command shown in console onboarding and docs — keep these in sync. */
+export function agentCloneCommand(dir = AGENT_TEMPLATE_DIR): string {
+  return `npx degit ${AGENT_TEMPLATE_REPO} ${dir}`;
+}
+
+export function agentRunCommand(question = AGENT_DEV_QUESTION): string {
+  return `pnpm install && pnpm dev ${JSON.stringify(question)}`;
+}
+
+export function agentWalletEnvLine(
+  privateKey = AGENT_WALLET_KEY_PLACEHOLDER,
+): string {
+  return `LMX_WALLET_PRIVATE_KEY=${privateKey}`;
+}
