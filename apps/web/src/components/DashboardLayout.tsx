@@ -88,19 +88,18 @@ export function DashboardLayout() {
 
   return (
     <div className="min-h-dvh bg-background p-2 lg:h-dvh lg:overflow-hidden">
-      <div className="flex min-h-[calc(100dvh-1rem)] flex-col gap-2 lg:h-full lg:min-h-0 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="flex min-h-[calc(100dvh-1rem)] flex-col gap-2 lg:h-full lg:min-h-0 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface lg:min-h-0 lg:overflow-y-auto lg:scrollbar-none">
-        <div className="flex h-12 shrink-0 items-center px-4">
-          <Link to="/console/overview" className="flex min-w-0 items-center gap-3">
-            <BrandMark size="sm" />
-            <div className="min-w-0">
-              <p className="text-body-sm font-semibold text-on-surface leading-tight">LMX Cloud</p>
-              <p className="text-body-sm text-on-surface-faint leading-tight">Developer console</p>
-            </div>
+        <div className="flex h-11 shrink-0 items-center px-3">
+          <Link to="/console/overview" className="flex min-w-0 items-center gap-2">
+            <BrandMark size="sm" className="h-8 w-8" />
+            <p className="truncate text-body-sm font-semibold text-on-surface leading-tight">
+              LMX Cloud
+            </p>
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-x-auto px-4 py-6 lg:overflow-visible">
+        <nav className="flex-1 overflow-x-auto px-2 py-2 lg:overflow-visible">
           {NAV.map((group) => {
             const isAccount = group.section === "Account";
             return (
@@ -108,12 +107,12 @@ export function DashboardLayout() {
                 key={group.section}
                 className={cn(
                   isAccount
-                    ? "-mx-4 mt-6 border-t border-border px-4 pt-6"
-                    : "mt-6 first:mt-0",
+                    ? "-mx-2 mt-3 border-t border-border px-2 pt-3"
+                    : "mt-3 first:mt-0",
                 )}
               >
-                <p className="mb-3 pl-3 text-label-sm text-on-surface-faint">{group.section}</p>
-                <div className="flex gap-2 lg:flex-col">
+                <p className="mb-1 px-2.5 text-label-sm text-on-surface-faint">{group.section}</p>
+                <div className="flex gap-1 lg:flex-col lg:gap-0.5">
                   {group.items.map((item) => (
                     <NavLink
                       key={item.to}
@@ -121,17 +120,18 @@ export function DashboardLayout() {
                       end={"end" in item ? item.end : false}
                       className={({ isActive }) =>
                         cn(
-                          "relative flex items-center gap-2 py-2 pr-2 pl-3 text-body-sm whitespace-nowrap transition-colors duration-base ease-standard outline-none focus-visible:shadow-focus",
+                          "glow-hover flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-body-sm whitespace-nowrap outline-none",
+                          "transition-colors duration-base ease-standard focus-visible:shadow-focus",
                           isActive
-                            ? "font-semibold text-on-surface before:absolute before:top-2 before:bottom-2 before:left-0 before:w-0.5 before:bg-primary"
-                            : "text-on-surface-muted hover:text-on-surface",
+                            ? "bg-elevated font-semibold text-on-surface"
+                            : "text-on-surface-muted hover:bg-elevated/70 hover:text-on-surface",
                         )
                       }
                     >
                       <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                       {item.label}
                       {item.to === "/console/notifications" && unreadCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-background tabular-nums">
+                        <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-background tabular-nums">
                           {unreadCount > 9 ? "9+" : unreadCount}
                         </span>
                       )}
@@ -143,7 +143,7 @@ export function DashboardLayout() {
           })}
         </nav>
 
-        <div className="hidden shrink-0 border-t border-border px-4 py-6 lg:block">
+        <div className="hidden shrink-0 border-t border-border px-3 py-3 lg:block">
           <p className="truncate text-body-sm font-semibold text-on-surface">{identityLabel}</p>
           {authMode === "wallet" && (
             <p className="mt-1 text-body-sm text-on-surface-faint">Wallet account</p>
@@ -158,13 +158,13 @@ export function DashboardLayout() {
               {maskKey(apiKey)}
             </p>
           )}
-          <div className="mt-3">
+          <div className="mt-2">
             <Chip className="gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-on-surface-faint" />
               Active
             </Chip>
           </div>
-          <div className="mt-6 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-0.5">
             <Button
               to="/"
               variant="tertiary"
