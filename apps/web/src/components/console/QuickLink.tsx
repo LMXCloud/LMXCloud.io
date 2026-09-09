@@ -13,7 +13,7 @@ interface QuickLinkProps {
 export function QuickLink({ to, icon: Icon, title, description }: QuickLinkProps) {
   return (
     <Link to={to} className="group block h-full">
-      <Card className="h-full transition-colors duration-base ease-standard hover:border-border-strong">
+      <Card className="glow-hover h-full">
         <div className="flex items-start gap-3">
           <Icon
             className="mt-0.5 h-4 w-4 shrink-0 text-on-surface-faint"

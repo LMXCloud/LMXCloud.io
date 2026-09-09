@@ -154,42 +154,63 @@ body {
   }
 }
 
-/* Compact gradient stroke used by console nav — a simpler cousin of GlowingCard. */
-@utility glow-hover {
+/*
+ * Gradient hover stroke. The inner fill snaps on/off so the ring can fade
+ * without a full-color flash (both layers fading used to uncover the fill).
+ */
+.glow-hover {
   position: relative;
+  isolation: isolate;
+}
 
-  &::after {
-    content: "";
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(
-      135deg,
-      var(--color-primary) 0%,
-      var(--color-secondary) 45%,
-      var(--color-success) 100%
-    );
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    opacity: 0;
-    transition: opacity var(--duration-base) var(--ease-standard);
-  }
+.glow-hover::before,
+.glow-hover::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  z-index: -1;
+}
 
-  &:hover::after,
-  &:focus-visible::after {
-    opacity: 1;
-  }
+.glow-hover::before {
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 45%,
+    var(--color-success) 100%
+  );
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+
+.glow-hover::after {
+  inset: 1px;
+  background: var(--glow-fill, var(--color-surface));
+  transition: opacity 0s linear var(--duration-slow);
+}
+
+.glow-hover:hover,
+.glow-hover:focus-visible,
+.glow-hover[aria-current="page"] {
+  border-color: transparent;
+}
+
+.glow-hover:hover::before,
+.glow-hover:focus-visible::before,
+.glow-hover[aria-current="page"]::before {
+  opacity: 1;
+}
+
+.glow-hover:hover::after,
+.glow-hover:focus-visible::after,
+.glow-hover[aria-current="page"]::after {
+  opacity: 1;
+  transition-delay: 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .glow-hover::before,
   .glow-hover::after {
     transition: none;
   }

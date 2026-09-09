@@ -123,8 +123,8 @@ export function DashboardLayout() {
                           "glow-hover flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-body-sm whitespace-nowrap outline-none",
                           "transition-colors duration-base ease-standard focus-visible:shadow-focus",
                           isActive
-                            ? "bg-elevated font-semibold text-on-surface"
-                            : "text-on-surface-muted hover:bg-elevated/70 hover:text-on-surface",
+                            ? "bg-elevated font-semibold text-on-surface [--glow-fill:var(--color-elevated)]"
+                            : "text-on-surface-muted hover:text-on-surface",
                         )
                       }
                     >

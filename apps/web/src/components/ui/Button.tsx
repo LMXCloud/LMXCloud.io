@@ -9,9 +9,9 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary:
     "bg-primary text-background hover:bg-primary-hover active:bg-primary-pressed disabled:opacity-50",
   secondary:
-    "border border-border-strong bg-surface text-on-surface hover:bg-elevated active:bg-elevated disabled:opacity-50",
+    "glow-hover border border-border-strong bg-surface text-on-surface hover:bg-elevated active:bg-elevated disabled:opacity-50 hover:[--glow-fill:var(--color-elevated)]",
   tertiary:
-    "bg-transparent text-on-surface-muted hover:bg-surface hover:text-on-surface active:bg-elevated disabled:opacity-50",
+    "glow-hover bg-transparent text-on-surface-muted hover:bg-surface hover:text-on-surface active:bg-elevated disabled:opacity-50",
   danger:
     "bg-error text-white hover:bg-error/90 active:bg-error/80 disabled:opacity-50",
 };
