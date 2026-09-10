@@ -26,7 +26,7 @@
     "deploy:anchor:mainnet": "pnpm --filter @lmxcloud/api deploy:anchor:mainnet",
     "verify:receipt": "pnpm --filter @lmxcloud/api verify:receipt",
     "dev:ops": "pnpm --filter @lmxcloud/ops dev",
-    "build:ops": "pnpm --filter @lmxcloud/ops build"
+    "build:ops": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/ops build"
   },
   "engines": {
     "node": ">=20"

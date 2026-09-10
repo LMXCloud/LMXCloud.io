@@ -1,6 +1,6 @@
 {
   "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm --filter @lmxcloud/ops build",
+  "buildCommand": "cd ../.. && pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/ops build",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
