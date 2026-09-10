@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/node";
 import { AllProvidersDownError, ModelNotSupportedError, ProviderError } from "../providers/types.js";
 import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
-import { requireAuthenticatedKey } from "../auth/optional-auth.js";
+import { hasBearerAuth, requireAuthenticatedKey } from "../auth/optional-auth.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
 import type { InferenceRouter } from "../routing/router.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
@@ -236,6 +236,15 @@ export async function registerChatRoutes(
     request.log.info({ isX402, isBalance, phase: "chat_handler_start" }, "x402 chat handler");
 
     if (!isX402 && !isBalance) {
+      if (hasBearerAuth(request)) {
+        return reply.status(401).send({
+          error: {
+            message:
+              "Invalid or expired credentials. Use a funded lmx_ API key issued by this API.",
+            type: "authentication_error",
+          },
+        });
+      }
       if (!deps.x402Enabled) {
         return reply.status(401).send({
           error: {
@@ -244,6 +253,7 @@ export async function registerChatRoutes(
           },
         });
       }
+      // x402 middleware should already have sent 402 Payment Required.
       return;
     }
 

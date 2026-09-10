@@ -1,10 +1,10 @@
-import { fetchKeys, fetchStatus } from "../../api";
-import {
-  deriveKeyExpiringNotifications,
-  deriveLowBalanceNotifications,
-  deriveProviderHealthNotifications,
-} from "./derive";
-import type { NotificationCollectContext, NotificationEvent, NotificationSource } from "./types";
+import { fetchNotifications } from "../../api";
+import type {
+  NotificationCollectContext,
+  NotificationEvent,
+  NotificationItem,
+  NotificationSource,
+} from "./types";
 
 /**
  * Register a source to add event types. The panel, read-state store, and hook
@@ -40,22 +40,32 @@ export async function collectNotificationEvents(
   return batches.flat();
 }
 
-registerNotificationSource({
-  id: "provider-health",
-  async collect(ctx) {
-    const status = await fetchStatus().catch(() => null);
-    return deriveProviderHealthNotifications(status, ctx.now);
-  },
-});
+function toNotificationEvent(item: NotificationItem): NotificationEvent {
+  const href = item.href?.trim();
+  const event: NotificationEvent & { unread: boolean; readAt: string | null } = {
+    id: item.id,
+    kind: item.kind,
+    severity: item.severity,
+    title: item.title,
+    body: item.body,
+    fingerprint: item.fingerprint,
+    observedAt: item.observedAt,
+    unread: item.unread,
+    readAt: item.readAt,
+  };
+  if (href) event.href = href;
+  const hrefLabel = item.hrefLabel?.trim();
+  if (hrefLabel) event.hrefLabel = hrefLabel;
+  if (item.visibleAt) event.visibleAt = item.visibleAt;
+  if (item.expiresAt) event.expiresAt = item.expiresAt;
+  return event;
+}
 
 registerNotificationSource({
-  id: "account-keys",
+  id: "lmx-ops-feed",
   async collect(ctx) {
     if (!ctx.apiKey) return [];
-    const keys = await fetchKeys(ctx.apiKey);
-    return [
-      ...deriveLowBalanceNotifications(keys.data, ctx.now),
-      ...deriveKeyExpiringNotifications(keys.data, ctx.now),
-    ];
+    const items = await fetchNotifications(ctx.apiKey);
+    return items.map(toNotificationEvent);
   },
 });

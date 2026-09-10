@@ -13,13 +13,14 @@ export {
 export {
   hydrateNotificationItems,
   loadNotificationStore,
+  markNotificationsDismissed,
   markNotificationsRead,
   mergeNotificationReads,
   notificationStorageKey,
   notificationUserId,
   saveNotificationStore,
 } from "./store";
-export { NOTIFICATION_KINDS } from "./types";
+export { NOTIFICATION_KINDS, isPersistedNotificationKind, notificationHrefLabel } from "./types";
 export type {
   KnownNotificationKind,
   NotificationCollectContext,

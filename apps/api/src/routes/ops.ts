@@ -7,7 +7,7 @@ import type { ProviderBalanceStore } from "../providers/balance/types.js";
 import type { ApiKeyStore } from "../auth/store.js";
 import type { CreditStore } from "../credits/store.js";
 import { requireOpsAuth } from "../ops/auth.js";
-import { grantOpsCredits, parseGrantCreditsBody } from "../ops/grant-credits.js";
+import { grantOpsCredits, parseGrantCreditsBody, resolveGrantTarget } from "../ops/grant-credits.js";
 import { runSentryTest } from "../ops/sentry-test.js";
 import {
   getMcpToolEventById,
@@ -43,6 +43,17 @@ import {
   insertInfraSpendEntry,
   parseInfraSpendInsert,
 } from "../ops/infra-spend-store.js";
+import { notificationAccountId } from "../notifications/account-id.js";
+import {
+  parseOpsNotificationBody,
+  parseWelcomeTemplateBody,
+} from "../notifications/parse.js";
+import {
+  getWelcomeTemplate,
+  insertNotification,
+  listOpsNotifications,
+  updateWelcomeTemplate,
+} from "../notifications/store.js";
 
 interface OpsRouteDeps {
   providers: ProviderAdapter[];
@@ -220,6 +231,110 @@ export async function registerOpsRoutes(
       }
       const entry = await insertInfraSpendEntry(parsed.value);
       return { object: "ops_infra_spend_entry", ...entry };
+    });
+
+    ops.get("/v1/ops/notifications", async (request) => {
+      const query = request.query as Record<string, unknown>;
+      const limit = parseLimit(query.limit, 100);
+      const [data, welcome] = await Promise.all([
+        listOpsNotifications(limit),
+        getWelcomeTemplate(),
+      ]);
+      return {
+        object: "ops_notifications",
+        welcome,
+        data,
+      };
+    });
+
+    ops.post("/v1/ops/notifications", async (request, reply) => {
+      if (!hasPostgres()) {
+        return reply.status(503).send({
+          error: {
+            message: "DATABASE_URL is required to send notifications",
+            type: "service_unavailable",
+          },
+        });
+      }
+      const parsed = parseOpsNotificationBody(request.body);
+      if (!parsed.ok) {
+        return reply.status(400).send({
+          error: {
+            message: parsed.message,
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      let target: string | null = parsed.value.target;
+      if (target) {
+        const resolved = await resolveGrantTarget(deps.apiKeyStore, target);
+        if (!resolved.ok) {
+          return reply.status(resolved.status).send({
+            error: {
+              message: resolved.message,
+              type: "invalid_request_error",
+            },
+          });
+        }
+        target = notificationAccountId(resolved.record);
+      }
+
+      try {
+        const row = await insertNotification({
+          kind: parsed.value.kind,
+          title: parsed.value.title,
+          body: parsed.value.body,
+          href: parsed.value.href,
+          hrefLabel: parsed.value.hrefLabel,
+          createdBy: "ops",
+          target,
+          visibleAt: parsed.value.visibleAt,
+          expiresAt: parsed.value.expiresAt,
+        });
+        return { object: "ops_notification", ...row };
+      } catch (err) {
+        const code =
+          err && typeof err === "object" && "code" in err
+            ? String((err as { code: unknown }).code)
+            : "";
+        if (code === "23505") {
+          return reply.status(409).send({
+            error: {
+              message: "A welcome notification already exists for that account",
+              type: "invalid_request_error",
+            },
+          });
+        }
+        throw err;
+      }
+    });
+
+    ops.put("/v1/ops/notifications/welcome", async (request, reply) => {
+      if (!hasPostgres()) {
+        return reply.status(503).send({
+          error: {
+            message: "DATABASE_URL is required to edit notification copy",
+            type: "service_unavailable",
+          },
+        });
+      }
+      const parsed = parseWelcomeTemplateBody(request.body);
+      if (!parsed.ok) {
+        return reply.status(400).send({
+          error: {
+            message: parsed.message,
+            type: "invalid_request_error",
+          },
+        });
+      }
+      const welcome = await updateWelcomeTemplate({
+        title: parsed.value.title,
+        body: parsed.value.body,
+        href: parsed.value.href,
+        updatedBy: "ops",
+      });
+      return { object: "ops_notification_template", ...welcome };
     });
 
     ops.get("/v1/ops/reliability", async (request) => {

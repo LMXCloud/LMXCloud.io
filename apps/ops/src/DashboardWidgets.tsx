@@ -179,7 +179,7 @@ export function QuickLinks({
   const groups: OpsLinkGroup[] = ["vendors", "stack", "product", "distribution"];
 
   return (
-    <section className="mb-3 rounded-md border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2.5">
+    <section className="mb-3 rounded-md border border-border bg-surface px-3 py-2.5">
       <h2 className="text-[10px] uppercase tracking-[0.14em] text-[var(--color-faint)]">
         Quick links
       </h2>
@@ -197,10 +197,10 @@ export function QuickLinks({
                   href={link.href}
                   target="_blank"
                   rel="noreferrer"
-                  className={`rounded border px-2 py-0.5 text-[11px] transition hover:border-[var(--color-accent)] ${
+                  className={`glow-hover rounded-md border px-2 py-0.5 text-[11px] ${
                     dry
                       ? "border-[var(--color-danger)]/40 text-[var(--color-danger)]"
-                      : "border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                      : "border-border text-on-surface-muted hover:text-on-surface"
                   }`}
                 >
                   {link.label}
@@ -288,10 +288,10 @@ export function SpendServiceStrip({ spend }: { spend: InfraSpendSnapshot }) {
               href={service.consoleUrl}
               target="_blank"
               rel="noreferrer"
-              className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-[11px] transition hover:border-[var(--color-accent)] ${
+              className={`glow-hover flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-[11px] ${
                 service.needsFunding
                   ? "border-[var(--color-danger)]/40 text-[var(--color-danger)]"
-                  : "border-[var(--color-line)]/80 text-[var(--color-muted)]"
+                  : "border-border text-on-surface-muted"
               }`}
             >
               <span className="truncate font-medium text-[var(--color-ink)]">{service.name}</span>

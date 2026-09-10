@@ -17,6 +17,7 @@ import type {
   WalletLinkResponse,
   WalletNonceResponse,
 } from "./types";
+import type { NotificationItem } from "./lib/notifications/types";
 
 
 
@@ -794,5 +795,51 @@ export async function streamChatCompletion(
     reader.releaseLock();
   }
 }
+
+export async function fetchNotifications(
+  token: string,
+): Promise<NotificationItem[]> {
+  const res = await fetch(`${API_BASE}/v1/notifications`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  const body = (await res.json()) as { data?: NotificationItem[] };
+  return Array.isArray(body.data) ? body.data : [];
+}
+
+export async function markNotificationsRead(
+  token: string,
+  ids: string[],
+): Promise<NotificationItem[]> {
+  const res = await fetch(`${API_BASE}/v1/notifications/read`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  const body = (await res.json()) as { data?: NotificationItem[] };
+  return Array.isArray(body.data) ? body.data : [];
+}
+
+export async function dismissNotifications(
+  token: string,
+  ids: string[],
+): Promise<NotificationItem[]> {
+  const res = await fetch(`${API_BASE}/v1/notifications/dismiss`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  const body = (await res.json()) as { data?: NotificationItem[] };
+  return Array.isArray(body.data) ? body.data : [];
+}
+
 
 

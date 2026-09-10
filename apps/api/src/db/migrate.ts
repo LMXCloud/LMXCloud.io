@@ -282,6 +282,69 @@ END $$`,
      AND LOWER(k.wallet) = LOWER(p.wallet)`,
   `ALTER TABLE api_keys
     ADD COLUMN IF NOT EXISTS name TEXT`,
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind TEXT NOT NULL
+      CHECK (kind IN ('welcome', 'product_update', 'company_update')),
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    href TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by TEXT NOT NULL,
+    target TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_created
+    ON notifications (created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_target
+    ON notifications (target) WHERE target IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_welcome_target
+    ON notifications (target)
+    WHERE kind = 'welcome' AND target IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS notification_reads (
+    notification_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    read_at TIMESTAMPTZ,
+    seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    fingerprint TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (notification_id, user_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notification_reads_user
+    ON notification_reads (user_id)`,
+  `CREATE TABLE IF NOT EXISTS notification_templates (
+    kind TEXT PRIMARY KEY
+      CHECK (kind IN ('welcome', 'product_update', 'company_update')),
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    href TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by TEXT
+  )`,
+  `INSERT INTO notification_templates (kind, title, body, href, updated_by)
+   VALUES (
+     'welcome',
+     'Welcome to LMX Cloud',
+     'Your account is ready. Open the console to create an API key, add credits, and start routing inference.',
+     '/console/overview',
+     'system'
+   )
+   ON CONFLICT (kind) DO NOTHING`,
+  `ALTER TABLE notifications
+    ADD COLUMN IF NOT EXISTS visible_at TIMESTAMPTZ`,
+  `UPDATE notifications
+    SET visible_at = created_at
+    WHERE visible_at IS NULL`,
+  `ALTER TABLE notifications
+    ALTER COLUMN visible_at SET DEFAULT NOW()`,
+  `ALTER TABLE notifications
+    ALTER COLUMN visible_at SET NOT NULL`,
+  `ALTER TABLE notifications
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+  `ALTER TABLE notification_reads
+    ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ`,
+  `ALTER TABLE notifications
+    ADD COLUMN IF NOT EXISTS href_label TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_visible
+    ON notifications (visible_at DESC)`,
 ]
 
 export async function runMigrations(): Promise<void> {

@@ -4,17 +4,12 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "../../hooks/useNotifications";
 import { cn } from "../../lib/cn";
-import { formatRelativeTime } from "../../lib/format";
-import type { NotificationItem } from "../../lib/notifications";
-import {
-  notificationIcon,
-  NOTIFICATION_SEVERITY_CLASS,
-} from "./notification-appearance";
+import { NotificationRow } from "./notification-appearance";
 
 type FilterTab = "all" | "unread";
 
 export function NotificationCenter() {
-  const { items, loading, unreadCount, markRead, markAllRead } = useNotifications();
+  const { items, loading, unreadCount, markRead, markAllRead, dismiss } = useNotifications();
   const navigate = useNavigate();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -83,12 +78,6 @@ export function NotificationCenter() {
   useEffect(() => {
     if (!open) setTab("all");
   }, [open]);
-
-  function openItem(item: NotificationItem) {
-    markRead([item.id]);
-    setOpen(false);
-    if (item.href) navigate(item.href);
-  }
 
   function viewAll() {
     setOpen(false);
@@ -168,7 +157,7 @@ export function NotificationCenter() {
 
             <div className="max-h-[min(22rem,50vh)] overflow-y-auto">
               {visible.length === 0 ? (
-                <p className="px-4 py-8 text-center text-body-sm text-on-surface-muted">
+                <p className="px-4 py-10 text-center text-body-sm text-on-surface-muted">
                   {loading
                     ? "Checking for alerts…"
                     : tab === "unread"
@@ -176,50 +165,16 @@ export function NotificationCenter() {
                       : "You're all caught up."}
                 </p>
               ) : (
-                visible.map((item) => {
-                  const Icon = notificationIcon(item.kind, item.severity);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => openItem(item)}
-                      className={cn(
-                        "flex w-full items-start gap-3 border-b border-border px-3 py-3 text-left last:border-b-0 outline-none transition-colors duration-base ease-standard hover:bg-surface focus-visible:bg-surface",
-                        item.unread ? "text-on-surface" : "text-on-surface-muted",
-                      )}
-                    >
-                      <Icon
-                        className={cn(
-                          "mt-0.5 h-4 w-4 shrink-0",
-                          NOTIFICATION_SEVERITY_CLASS[item.severity],
-                        )}
-                        strokeWidth={1.75}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={cn(
-                            "block text-body-sm",
-                            item.unread ? "font-semibold text-on-surface" : "text-on-surface",
-                          )}
-                        >
-                          {item.title}
-                        </span>
-                        <span className="mt-0.5 block text-body-sm font-normal text-on-surface-faint">
-                          {item.body}
-                        </span>
-                        <span className="mt-1 block text-body-sm font-normal text-on-surface-faint">
-                          {formatRelativeTime(item.observedAt)}
-                        </span>
-                      </span>
-                      {item.unread && (
-                        <span
-                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary"
-                          aria-hidden
-                        />
-                      )}
-                    </button>
-                  );
-                })
+                visible.map((item) => (
+                  <div key={item.id} className="border-b border-border last:border-b-0">
+                    <NotificationRow
+                      item={item}
+                      compact
+                      onOpen={() => markRead([item.id])}
+                      onDismiss={() => dismiss([item.id])}
+                    />
+                  </div>
+                ))
               )}
             </div>
 

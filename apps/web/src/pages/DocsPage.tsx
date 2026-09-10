@@ -1868,6 +1868,18 @@ data: {
                       <DataTableCell>Create a named project to group API keys and budgets</DataTableCell>
                     </DataTableRow>
                     <DataTableRow>
+                      <DataTableCell mono>GET /v1/notifications</DataTableCell>
+                      <DataTableCell>
+                        Merged console feed: authored LMX Ops notices plus live account alerts
+                      </DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>POST /v1/notifications/read</DataTableCell>
+                      <DataTableCell>
+                        Mark notification ids read for the signed-in account
+                      </DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
                       <DataTableCell mono>GET /v1/auth/keys</DataTableCell>
                       <DataTableCell>
                         List account keys; optional <code className="text-mono-sm">?project_id=</code> filter

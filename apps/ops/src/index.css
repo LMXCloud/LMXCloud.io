@@ -1,24 +1,95 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
-  --color-bg: #0c1118;
-  --color-panel: #121a24;
-  --color-panel-raised: #182231;
-  --color-line: #243041;
-  --color-ink: #e8eef6;
-  --color-muted: #8b9bb0;
-  --color-faint: #5a6b80;
-  --color-accent: #3ecf8e;
-  --color-accent-dim: rgba(62, 207, 142, 0.14);
-  --color-warn: #e6b84d;
-  --color-danger: #e85d6c;
-  --color-info: #5b9fd4;
+  --color-background: #0a0b0f;
+  --color-surface: #14151c;
+  --color-elevated: #1e2029;
+  --color-border: #2a2d38;
+  --color-border-strong: #3a3d4a;
+  --color-on-surface: #f2f4f8;
+  --color-on-surface-muted: #9aa0ae;
+  --color-on-surface-faint: #5c6170;
+  --color-primary: #3dd7e5;
+  --color-primary-hover: #62e0ea;
+  --color-primary-pressed: #2ab8c4;
+  --color-secondary: #5b6bff;
+  --color-tertiary: #f5d547;
+  --color-success: #2be08c;
+  --color-warning: #f5d547;
+  --color-info: #5b6bff;
+  --color-error: #ff3a5c;
+  --color-focus: rgba(61, 215, 229, 0.35);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-focus: 0 0 0 3px rgba(61, 215, 229, 0.35);
+
+  --text-headline-md: 1.5rem;
+  --text-headline-md--line-height: 1.2;
+  --text-headline-md--letter-spacing: -0.015em;
+  --text-headline-md--font-weight: 600;
+
+  --text-title-md: 1.125rem;
+  --text-title-md--line-height: 1.3;
+  --text-title-md--letter-spacing: -0.01em;
+  --text-title-md--font-weight: 600;
+
+  --text-body-md: 0.9375rem;
+  --text-body-md--line-height: 1.55;
+  --text-body-md--letter-spacing: -0.005em;
+  --text-body-md--font-weight: 400;
+
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.5;
+  --text-body-sm--letter-spacing: 0;
+  --text-body-sm--font-weight: 400;
+
+  --text-label-sm: 0.75rem;
+  --text-label-sm--line-height: 1.2;
+  --text-label-sm--letter-spacing: 0.08em;
+  --text-label-sm--font-weight: 400;
+
+  --text-mono-sm: 0.8125rem;
+  --text-mono-sm--line-height: 1.4;
+  --text-mono-sm--letter-spacing: 0;
+  --text-mono-sm--font-weight: 500;
+
+  --text-metric: 1.5rem;
+  --text-metric--line-height: 1;
+  --text-metric--letter-spacing: -0.02em;
+  --text-metric--font-weight: 600;
+
+  --ease-standard: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-base: 150ms;
+  --duration-slow: 240ms;
+}
+
+:root {
+  --color-bg: var(--color-background);
+  --color-panel: var(--color-surface);
+  --color-panel-raised: var(--color-elevated);
+  --color-line: var(--color-border);
+  --color-ink: var(--color-on-surface);
+  --color-muted: var(--color-on-surface-muted);
+  --color-faint: var(--color-on-surface-faint);
+  --color-accent: var(--color-success);
+  --color-accent-dim: color-mix(in srgb, var(--color-success) 14%, transparent);
+  --color-warn: var(--color-warning);
+  --color-danger: var(--color-error);
   --color-x402: #5b9fd4;
   --color-balance: #9b8cff;
-  --color-mcp: #3ecf8e;
+  --color-mcp: var(--color-success);
 }
 
 * {
@@ -33,15 +104,107 @@ body,
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: var(--color-background);
+  color: var(--color-on-surface);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(62, 207, 142, 0.08), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(91, 159, 212, 0.07), transparent 50%),
-    var(--color-bg);
-  color: var(--color-ink);
+  font-size: var(--text-body-md);
+  line-height: var(--text-body-md--line-height);
+  letter-spacing: var(--text-body-md--letter-spacing);
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgba(62, 207, 142, 0.3);
+  background: rgba(61, 215, 229, 0.3);
+}
+
+@utility text-label-sm {
+  font-size: var(--text-label-sm);
+  line-height: var(--text-label-sm--line-height);
+  letter-spacing: var(--text-label-sm--letter-spacing);
+  font-weight: var(--text-label-sm--font-weight);
+  text-transform: uppercase;
+}
+
+@utility text-mono-sm {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono-sm);
+  line-height: var(--text-mono-sm--line-height);
+  letter-spacing: var(--text-mono-sm--letter-spacing);
+  font-weight: var(--text-mono-sm--font-weight);
+}
+
+@utility text-metric {
+  font-family: var(--font-sans);
+  font-size: var(--text-metric);
+  line-height: var(--text-metric--line-height);
+  letter-spacing: var(--text-metric--letter-spacing);
+  font-weight: var(--text-metric--font-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.glow-hover {
+  position: relative;
+  isolation: isolate;
+}
+
+.glow-hover::before,
+.glow-hover::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  z-index: -1;
+}
+
+.glow-hover::before {
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 45%,
+    var(--color-success) 100%
+  );
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+
+.glow-hover::after {
+  inset: 1px;
+  background: var(--glow-fill, var(--color-surface));
+  transition: opacity 0s linear var(--duration-slow);
+}
+
+.glow-hover:hover,
+.glow-hover:focus-visible,
+.glow-hover[aria-current="page"] {
+  border-color: transparent;
+}
+
+.glow-hover:hover::before,
+.glow-hover:focus-visible::before,
+.glow-hover[aria-current="page"]::before {
+  opacity: 1;
+}
+
+.glow-hover:hover::after,
+.glow-hover:focus-visible::after,
+.glow-hover[aria-current="page"]::after {
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow-hover::before,
+  .glow-hover::after {
+    transition: none;
+  }
 }

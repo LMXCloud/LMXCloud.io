@@ -1,7 +1,8 @@
-import type {
-  NotificationEvent,
-  NotificationIdentity,
-  NotificationItem,
+import {
+  isPersistedNotificationKind,
+  type NotificationEvent,
+  type NotificationIdentity,
+  type NotificationItem,
 } from "./types";
 
 const STORAGE_PREFIX = "lmxcloud_console_notification_state";
@@ -20,10 +21,11 @@ export interface NotificationStoreV1 {
   version: 1;
   reads: Record<string, NotificationReadRecord>;
   seen: Record<string, NotificationSeenRecord>;
+  dismissals: Record<string, NotificationReadRecord>;
 }
 
 function emptyStore(): NotificationStoreV1 {
-  return { version: 1, reads: {}, seen: {} };
+  return { version: 1, reads: {}, seen: {}, dismissals: {} };
 }
 
 export function notificationUserId(identity: NotificationIdentity): string {
@@ -51,6 +53,7 @@ export function loadNotificationStore(userId: string): NotificationStoreV1 {
       version: 1,
       reads: parsed.reads ?? {},
       seen: parsed.seen ?? {},
+      dismissals: parsed.dismissals ?? {},
     };
   } catch {
     return emptyStore();
@@ -73,25 +76,49 @@ export function hydrateNotificationItems(
     version: 1,
     reads: {},
     seen: {},
+    dismissals: {},
   };
 
-  const items: NotificationItem[] = events.map((event) => {
+  const now = Date.now();
+  const items: NotificationItem[] = [];
+  for (const event of events) {
+    if (event.expiresAt) {
+      const expires = new Date(event.expiresAt).getTime();
+      if (Number.isFinite(expires) && expires <= now) continue;
+    }
+
+    const dismissed = store.dismissals[event.id];
+    if (dismissed && dismissed.fingerprint === event.fingerprint) {
+      next.dismissals[event.id] = dismissed;
+      continue;
+    }
+
     const seen = store.seen[event.id];
     const firstSeenAt =
       seen && seen.fingerprint === event.fingerprint ? seen.firstSeenAt : event.observedAt;
     next.seen[event.id] = { fingerprint: event.fingerprint, firstSeenAt };
 
+    const serverTracked = isPersistedNotificationKind(event.kind);
+    const serverState = serverTracked ? persistedReadState(event) : null;
     const read = store.reads[event.id];
-    const stillRead = Boolean(read && read.fingerprint === event.fingerprint);
-    if (stillRead && read) next.reads[event.id] = read;
+    const localRead = Boolean(read && read.fingerprint === event.fingerprint);
+    const stillRead = serverState ? serverState.read || localRead : localRead;
+    if (stillRead && (read || serverState?.readAt)) {
+      next.reads[event.id] = read ?? {
+        fingerprint: event.fingerprint,
+        readAt: serverState?.readAt ?? event.observedAt,
+      };
+    }
 
-    return {
+    items.push({
       ...event,
       observedAt: firstSeenAt,
       unread: !stillRead,
-      readAt: stillRead && read ? read.readAt : null,
-    };
-  });
+      readAt: stillRead
+        ? (read?.readAt ?? serverState?.readAt ?? null)
+        : null,
+    });
+  }
 
   items.sort(compareNotificationItems);
   return { items, store: next };
@@ -105,6 +132,7 @@ export function mergeNotificationReads(
 ): { items: NotificationItem[]; store: NotificationStoreV1 } {
   const fingerprints = new Map(items.map((item) => [item.id, item.fingerprint]));
   const reads = { ...store.reads };
+  const dismissals = { ...store.dismissals, ...(incoming.dismissals ?? {}) };
 
   for (const [id, record] of Object.entries(incoming.reads)) {
     if (fingerprints.get(id) === record.fingerprint) {
@@ -112,15 +140,22 @@ export function mergeNotificationReads(
     }
   }
 
-  const nextStore = { ...store, reads };
+  const nextStore = { ...store, reads, dismissals };
   const nextItems = items
+    .filter((item) => {
+      const dismissed = dismissals[item.id];
+      return !(dismissed && dismissed.fingerprint === item.fingerprint);
+    })
     .map((item) => {
       const read = reads[item.id];
-      const stillRead = Boolean(read && read.fingerprint === item.fingerprint);
+      const localRead = Boolean(read && read.fingerprint === item.fingerprint);
+      const stillRead = isPersistedNotificationKind(item.kind)
+        ? !item.unread || localRead
+        : localRead;
       return {
         ...item,
         unread: !stillRead,
-        readAt: stillRead && read ? read.readAt : null,
+        readAt: stillRead ? (read?.readAt ?? item.readAt) : null,
       };
     })
     .sort(compareNotificationItems);
@@ -141,6 +176,33 @@ export function markNotificationsRead(
     reads[item.id] = { fingerprint: item.fingerprint, readAt };
   }
   return { ...store, reads };
+}
+
+export function markNotificationsDismissed(
+  store: NotificationStoreV1,
+  items: NotificationItem[],
+  ids: string[],
+  dismissedAt: string,
+): NotificationStoreV1 {
+  const idSet = new Set(ids);
+  const dismissals = { ...store.dismissals };
+  const reads = { ...store.reads };
+  for (const item of items) {
+    if (!idSet.has(item.id)) continue;
+    dismissals[item.id] = { fingerprint: item.fingerprint, readAt: dismissedAt };
+    reads[item.id] = { fingerprint: item.fingerprint, readAt: dismissedAt };
+  }
+  return { ...store, dismissals, reads };
+}
+
+function persistedReadState(
+  event: NotificationEvent,
+): { read: boolean; readAt: string | null } {
+  const rec = event as NotificationEvent & { unread?: boolean; readAt?: string | null };
+  if (typeof rec.unread === "boolean") {
+    return { read: !rec.unread, readAt: rec.readAt ?? null };
+  }
+  return { read: false, readAt: null };
 }
 
 function compareNotificationItems(a: NotificationItem, b: NotificationItem): number {

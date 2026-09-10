@@ -451,3 +451,36 @@ export type InfraSpendSnapshot = {
   entries: InfraSpendEntry[];
 };
 
+export type OpsNotificationKind = "welcome" | "product_update" | "company_update";
+
+export type OpsNotification = {
+  id: string;
+  kind: OpsNotificationKind;
+  title: string;
+  body: string;
+  href: string | null;
+  hrefLabel?: string | null;
+  createdAt: string;
+  createdBy: string;
+  target: string | null;
+  visibleAt: string;
+  expiresAt: string | null;
+  readCount?: number;
+};
+
+export type OpsWelcomeTemplate = {
+  kind: "welcome";
+  title: string;
+  body: string;
+  href: string | null;
+  updatedAt: string;
+  updatedBy: string | null;
+};
+
+export type OpsNotificationsResponse = {
+  object: "ops_notifications";
+  welcome: OpsWelcomeTemplate | null;
+  data: OpsNotification[];
+};
+
+

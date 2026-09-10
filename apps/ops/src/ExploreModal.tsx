@@ -715,7 +715,7 @@ export function ExploreButton({
         event.stopPropagation();
         onClick();
       }}
-      className="shrink-0 rounded border border-[var(--color-line)] px-2 py-0.5 font-mono text-[10px] text-[var(--color-accent)] transition hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-accent-dim)]"
+      className="glow-hover shrink-0 rounded-md border border-border px-2 py-0.5 font-mono text-[10px] text-[var(--color-accent)]"
     >
       {label}
     </button>

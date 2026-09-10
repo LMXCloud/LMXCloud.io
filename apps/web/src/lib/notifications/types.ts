@@ -1,38 +1,19 @@
-export const NOTIFICATION_KINDS = {
-  PROVIDER_HEALTH: "provider_health",
-  LOW_BALANCE: "low_balance",
-  KEY_EXPIRING: "key_expiring",
-} as const;
+import {
+  AUTHORED_NOTIFICATION_KINDS,
+  type NotificationEvent,
+} from "@lmxcloud/shared";
 
-export type KnownNotificationKind =
-  (typeof NOTIFICATION_KINDS)[keyof typeof NOTIFICATION_KINDS];
-
-/** Open string so new event types can ship without changing this union. */
-export type NotificationKind = KnownNotificationKind | (string & {});
-
-export type NotificationSeverity = "info" | "warning" | "error";
-
-export interface NotificationEvent {
-  /** Stable while the condition persists. Used as the read-state key. */
-  id: string;
-  kind: NotificationKind;
-  severity: NotificationSeverity;
-  title: string;
-  body: string;
-  href?: string;
-  /**
-   * Snapshot of the underlying signal. A previously-read item becomes unread
-   * again when this changes (e.g. a different set of providers is down).
-   */
-  fingerprint: string;
-  /** ISO time the condition was first observed in this browser, when known. */
-  observedAt: string;
-}
-
-export interface NotificationItem extends NotificationEvent {
-  unread: boolean;
-  readAt: string | null;
-}
+export {
+  AUTHORED_NOTIFICATION_KINDS,
+  NOTIFICATION_KINDS,
+  notificationHrefLabel,
+  type AuthoredNotificationKind,
+  type KnownNotificationKind,
+  type NotificationEvent,
+  type NotificationItem,
+  type NotificationKind,
+  type NotificationSeverity,
+} from "@lmxcloud/shared";
 
 export interface NotificationCollectContext {
   apiKey: string | null;
@@ -52,4 +33,8 @@ export interface NotificationIdentity {
   email?: string;
   wallet?: string | null;
   authMode?: string | null;
+}
+
+export function isPersistedNotificationKind(kind: string): boolean {
+  return (AUTHORED_NOTIFICATION_KINDS as readonly string[]).includes(kind);
 }

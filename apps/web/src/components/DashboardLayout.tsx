@@ -25,6 +25,7 @@ import { useCommandPalette } from "../hooks/useCommandPalette";
 import { BrandMark } from "./BrandMark";
 import { GithubIcon, XIcon } from "./BrandIcons";
 import { CommandPalette, CommandPaletteTrigger } from "./console/CommandPalette";
+import { ConsoleFooter } from "./console/ConsoleFooter";
 import { NotificationCenter } from "./console/NotificationCenter";
 import { Button } from "./ui/Button";
 import { Chip } from "./ui/Chip";
@@ -88,7 +89,8 @@ export function DashboardLayout() {
 
   return (
     <div className="min-h-dvh bg-background p-2 lg:h-dvh lg:overflow-hidden">
-      <div className="flex min-h-[calc(100dvh-1rem)] flex-col gap-2 lg:h-full lg:min-h-0 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <div className="flex min-h-[calc(100dvh-1rem)] flex-col gap-2 lg:h-full lg:min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface lg:min-h-0 lg:overflow-y-auto lg:scrollbar-none">
         <div className="flex h-11 shrink-0 items-center px-3">
           <Link to="/console/overview" className="flex min-w-0 items-center gap-2">
@@ -256,6 +258,8 @@ export function DashboardLayout() {
           </div>
         </main>
         </div>
+        </div>
+        <ConsoleFooter />
       </div>
       <CommandPalette open={searchOpen} onClose={closeSearch} />
     </div>

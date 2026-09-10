@@ -33,6 +33,7 @@ import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerPricingRoutes } from "./routes/pricing.js";
 import { IrregularityMonitor } from "./ops/irregularity-monitor.js";
 import { registerOpsRoutes } from "./routes/ops.js";
+import { registerNotificationRoutes } from "./routes/notifications.js";
 import { createPaymentStore } from "./payments/store.js";
 import { registerX402ChatPayments } from "./payments/x402-server.js";
 import { createReconciliationStore } from "./payments/reconciliation/store.js";
@@ -515,6 +516,15 @@ export async function buildServer() {
           maxDepositUsdc: 0,
         }
       : undefined);
+
+  await registerNotificationRoutes(app, {
+    authenticate,
+    apiKeyStore,
+    creditStore,
+    healthStore,
+    providers,
+    routingSignalStore,
+  });
 
   await registerOpsRoutes(app, {
     providers,

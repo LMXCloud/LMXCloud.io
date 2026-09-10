@@ -22,6 +22,7 @@ Internal visibility for x402 / MCP / usage / provider health. Deploy like `apps/
 | `LMX_OPS_API_KEY` | Railway API (+ MCP) | Long random secret; required for `/v1/ops/*` |
 | `VITE_API_URL` | Vercel ops | e.g. `https://api.lmxcloud.io` |
 | Ops key in UI | Browser | Paste `LMX_OPS_API_KEY` in the ops UI (localStorage); do not bake into public Vercel builds |
+| `VITE_OPS_GRID_API_KEY` | Vercel ops / `apps/ops/.env` | Funded ops-owned `lmx_` key for Notification Center drafts. Prefer paste in the UI for production builds (same as the ops key). |
 
 MCP forwards tool log events to `POST /v1/ops/mcp-events` when `LMX_OPS_API_KEY` and `LMX_API_BASE_URL` are set (plus `LMX_ORIGIN_SECRET` if origin lock is enabled).
 

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { Button } from "./components/Button";
+import { PageHeader } from "./components/PageHeader";
 import { SpendServiceStrip } from "./DashboardWidgets";
 import { fetchInfraSpend, logInfraSpend } from "./api";
 import { formatSpendUsd, formatTime } from "./format";
@@ -13,28 +15,6 @@ import type {
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-export function OpsNav({ current }: { current: "overview" | "infra" }) {
-  const item = (to: string, id: "overview" | "infra", label: string) => (
-    <Link
-      to={to}
-      className={`font-mono text-[11px] uppercase tracking-wider ${
-        current === id
-          ? "text-[var(--color-accent)]"
-          : "text-[var(--color-faint)] hover:text-[var(--color-muted)]"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-  return (
-    <nav className="mt-2 flex items-center gap-3">
-      {item("/", "overview", "Overview")}
-      <span className="text-[var(--color-line)]">/</span>
-      {item("/infra", "infra", "Vendor spend")}
-    </nav>
-  );
 }
 
 function SourceBadge({ observability }: { observability: InfraObservability }) {
@@ -179,7 +159,7 @@ export function InfraSpendOverviewPanel({
   const dry = data?.services.filter((s) => s.needsFunding) ?? [];
 
   return (
-    <section className="mt-2 rounded-md border border-[var(--color-line)] bg-[var(--color-panel)]">
+    <section className="glow-hover mt-2 rounded-md border border-border bg-surface">
       <div className="flex items-start justify-between gap-2 border-b border-[var(--color-line)] px-3 py-2">
         <Link to="/infra" className="min-w-0 flex-1 text-left transition hover:text-[var(--color-accent)]">
           <h2 className="text-xs font-semibold tracking-tight">Vendor spend</h2>
@@ -422,45 +402,37 @@ export function InfraSpendPage({ opsKey }: { opsKey: string }) {
 
   return (
     <>
-      <header className="mb-4 flex flex-col gap-3 border-b border-[var(--color-line)] pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
-            LMX Cloud
-          </p>
-          <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">
-            Vendor spend
-          </h1>
-          <OpsNav current="infra" />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-muted)]">
-          <label>
-            Window
-            <select
-              value={months}
-              onChange={(e) => setMonths(Number(e.target.value))}
-              className="ml-2 rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1 font-mono text-xs text-[var(--color-ink)]"
+      <PageHeader
+        eyebrow="Ops"
+        title="Vendor spend"
+        description="Hosting, database, observability, and inference vendors LMX pays — separate from customer-usage cost on Overview. Green bars are live API figures; amber bars are invoices or balances logged by hand."
+        className="mb-4"
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-body-sm text-on-surface-muted">
+              Window
+              <select
+                value={months}
+                onChange={(e) => setMonths(Number(e.target.value))}
+                className="rounded-md border border-border bg-background px-2 py-1 font-mono text-body-sm text-on-surface outline-none focus-visible:shadow-focus"
+              >
+                <option value={6}>6m</option>
+                <option value={12}>12m</option>
+                <option value={24}>24m</option>
+              </select>
+            </label>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void load()}
+              disabled={loading || !opsKey}
             >
-              <option value={6}>6m</option>
-              <option value={12}>12m</option>
-              <option value={24}>24m</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading || !opsKey}
-            className="rounded border border-[var(--color-line)] bg-[var(--color-panel-raised)] px-2.5 py-1 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-accent)] disabled:opacity-40"
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </header>
-
-      <p className="mb-4 max-w-2xl text-sm text-[var(--color-muted)]">
-        Hosting, database, observability, and inference vendors LMX pays — separate from
-        the customer-usage cost on Overview. Green bars are live API figures; amber bars
-        are invoices or balances someone logged by hand.
-      </p>
+              {loading ? "Refreshing…" : "Refresh"}
+            </Button>
+          </>
+        }
+      />
 
       {!opsKey ? (
         <p className="rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2 text-sm text-[var(--color-muted)]">

@@ -186,6 +186,12 @@ importers:
 
   apps/ops:
     dependencies:
+      '@lmxcloud/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      lucide-react:
+        specifier: ^1.23.0
+        version: 1.23.0(react@19.2.7)
       react:
         specifier: ^19.2.6
         version: 19.2.7

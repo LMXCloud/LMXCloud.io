@@ -7,11 +7,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { markNotificationsRead as persistServerNotificationReads, dismissNotifications as persistServerNotificationDismissals } from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
   collectNotificationEvents,
   hydrateNotificationItems,
+  isPersistedNotificationKind,
   loadNotificationStore,
+  markNotificationsDismissed,
   markNotificationsRead,
   mergeNotificationReads,
   notificationUserId,
@@ -27,6 +30,7 @@ export interface NotificationsValue {
   unreadCount: number;
   markRead: (ids: string[]) => void;
   markAllRead: () => void;
+  dismiss: (ids: string[]) => void;
   refresh: () => Promise<void>;
 }
 
@@ -81,8 +85,39 @@ function useNotificationsState(): NotificationsValue {
           ids.includes(item.id) ? { ...item, unread: false, readAt } : item,
         );
       });
+      if (!apiKey) return;
+      const persistedIds = items
+        .filter((item) => ids.includes(item.id) && isPersistedNotificationKind(item.kind))
+        .map((item) => item.id);
+      if (persistedIds.length > 0) {
+        void persistServerNotificationReads(apiKey, persistedIds).catch(() => {
+          /* local read state already applied; next poll reconciles */
+        });
+      }
     },
-    [userId],
+    [apiKey, items, userId],
+  );
+
+  const dismiss = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      setItems((current) => {
+        const dismissedAt = new Date().toISOString();
+        const store = markNotificationsDismissed(
+          loadNotificationStore(userId),
+          current,
+          ids,
+          dismissedAt,
+        );
+        saveNotificationStore(userId, store);
+        return current.filter((item) => !ids.includes(item.id));
+      });
+      if (!apiKey) return;
+      void persistServerNotificationDismissals(apiKey, ids).catch(() => {
+        /* local dismiss already applied; next poll reconciles */
+      });
+    },
+    [apiKey, userId],
   );
 
   const markAllRead = useCallback(() => {
@@ -97,6 +132,7 @@ function useNotificationsState(): NotificationsValue {
     unreadCount,
     markRead,
     markAllRead,
+    dismiss,
     refresh,
   };
 }

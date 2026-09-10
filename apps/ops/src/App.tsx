@@ -21,12 +21,15 @@ import {
   PaymentDetailPage,
   UsageDetailPage,
 } from "./DetailPages";
+import { Button } from "./components/Button";
+import { PageHeader } from "./components/PageHeader";
 import {
   InfraSpendOverviewPanel,
   InfraSpendPage,
-  OpsNav,
   useInfraSpend,
 } from "./InfraSpendPage";
+import { NotificationsPage } from "./NotificationsPage";
+import { OpsChromeProvider, OpsLayout } from "./OpsLayout";
 import {
   DecisionBar,
   QuickLinks,
@@ -431,7 +434,7 @@ function Stat({
           : "text-[var(--color-ink)]";
 
   return (
-    <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2.5">
+    <div className="glow-hover rounded-md border border-border bg-surface px-3 py-2.5">
       <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--color-faint)]">
         {label}
       </div>
@@ -538,7 +541,7 @@ function TreasuryStrip({
       <button
         type="button"
         onClick={onExplore}
-        className="mb-3 w-full rounded-md border border-[var(--color-danger)]/30 bg-[rgba(232,93,108,0.08)] px-3 py-2.5 text-left transition hover:border-[var(--color-danger)]/50"
+        className="glow-hover mb-3 w-full rounded-md border border-[var(--color-danger)]/30 bg-[rgba(232,93,108,0.08)] px-3 py-2.5 text-left"
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -559,7 +562,7 @@ function TreasuryStrip({
     <button
       type="button"
       onClick={onExplore}
-      className="mb-3 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-panel-raised)]/40"
+      className="glow-hover mb-3 w-full rounded-md border border-border bg-surface px-3 py-2.5 text-left"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -609,7 +612,7 @@ function Panel({
   onExplore?: () => void;
 }) {
   return (
-    <section className="rounded-md border border-[var(--color-line)] bg-[var(--color-panel)]">
+    <section className="rounded-md border border-border bg-surface">
       <div className="flex items-start justify-between gap-2 border-b border-[var(--color-line)] px-3 py-2">
         <button
           type="button"
@@ -713,7 +716,7 @@ function ActivityRow({ item }: { item: OpsActivityItem }) {
   return (
     <Link
       to={href}
-      className="flex gap-2 py-1.5 transition hover:bg-[var(--color-panel-raised)]/60"
+      className="glow-hover flex gap-2 py-1.5"
     >
       {inner}
     </Link>
@@ -821,13 +824,9 @@ function GrantCreditsForm({
             className="mt-1 w-full rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-xs text-[var(--color-ink)]"
           />
         </label>
-        <button
-          type="submit"
-          disabled={busy || !identifier.trim()}
-          className="rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[#06110c] disabled:opacity-40"
-        >
+        <Button type="submit" size="sm" disabled={busy || !identifier.trim()}>
           {busy ? "Granting…" : "Grant"}
-        </button>
+        </Button>
       </form>
       {error ? (
         <p className="mt-2 text-[11px] text-[var(--color-danger)]">{error}</p>
@@ -848,12 +847,8 @@ function OverviewPage({
   data,
   error,
   loading,
-  lastUpdated,
-  apiBase,
   load,
   saveKey,
-  clearKey,
-  hasEnvKey,
 }: {
   opsKey: string;
   keyDraft: string;
@@ -863,12 +858,8 @@ function OverviewPage({
   data: OpsOverview | null;
   error: string | null;
   loading: boolean;
-  lastUpdated: Date | null;
-  apiBase: string;
   load: (manual?: boolean) => Promise<void>;
   saveKey: (e: FormEvent) => void;
-  clearKey: () => void;
-  hasEnvKey: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const exploreParam = searchParams.get("view");
@@ -885,44 +876,53 @@ function OverviewPage({
 
   return (
     <>
-      <header className="mb-4 flex flex-col gap-3 border-b border-[var(--color-line)] pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
-            LMX Cloud
-          </p>
-          <h1 className="mt-0.5 text-xl font-semibold tracking-tight sm:text-2xl">
-            Operations
-          </h1>
-          <OpsNav current="overview" />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-muted)]">
-          <span className="font-mono">{apiBase || "VITE_API_URL unset"}</span>
-          {lastUpdated ? (
-            <span>Updated {lastUpdated.toLocaleTimeString()}</span>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={loading || !opsKey}
-            className="rounded border border-[var(--color-line)] bg-[var(--color-panel-raised)] px-2.5 py-1 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-accent)] disabled:opacity-40"
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Ops"
+        title="Overview"
+        description="Live reliability, payments, treasury, and vendor health."
+        className="mb-4"
+        actions={
+          opsKey ? (
+            <>
+              <label className="flex items-center gap-2 text-body-sm text-on-surface-muted">
+                Window
+                <select
+                  value={days}
+                  onChange={(e) => setDays(Number(e.target.value))}
+                  className="rounded-md border border-border bg-background px-2 py-1 font-mono text-body-sm text-on-surface outline-none focus-visible:shadow-focus"
+                >
+                  <option value={1}>1d</option>
+                  <option value={7}>7d</option>
+                  <option value={14}>14d</option>
+                  <option value={30}>30d</option>
+                </select>
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void load(true)}
+                disabled={loading}
+              >
+                {loading ? "Refreshing…" : "Refresh"}
+              </Button>
+            </>
+          ) : null
+        }
+      />
 
       {!opsKey ? (
         <form
           onSubmit={saveKey}
-          className="mb-6 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4"
+          className="rounded-md border border-border bg-elevated p-4"
         >
-          <label className="block text-sm font-medium">Ops API key</label>
-          <p className="mt-1 text-xs text-[var(--color-muted)]">
+          <label className="block text-body-sm font-semibold text-on-surface">Ops API key</label>
+          <p className="mt-1 text-body-sm text-on-surface-muted">
             Uses{" "}
-            <code className="font-mono text-[var(--color-ink)]">LMX_OPS_API_KEY</code>{" "}
+            <code className="font-mono text-on-surface">LMX_OPS_API_KEY</code>{" "}
             from the API. For local, set{" "}
-            <code className="font-mono text-[var(--color-ink)]">VITE_OPS_API_KEY</code>{" "}
-            in <code className="font-mono text-[var(--color-ink)]">apps/ops/.env</code>{" "}
+            <code className="font-mono text-on-surface">VITE_OPS_API_KEY</code>{" "}
+            in <code className="font-mono text-on-surface">apps/ops/.env</code>{" "}
             to auto-connect.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -931,47 +931,13 @@ function OverviewPage({
               value={keyDraft}
               onChange={(e) => setKeyDraft(e.target.value)}
               placeholder="ops key"
-              className="min-w-0 flex-1 rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-body-sm text-on-surface outline-none focus-visible:shadow-focus"
             />
-            <button
-              type="submit"
-              className="rounded bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[#06110c]"
-            >
+            <Button type="submit" size="sm">
               Connect
-            </button>
+            </Button>
           </div>
         </form>
-      ) : null}
-
-      {opsKey ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <label className="text-xs text-[var(--color-muted)]">
-            Window
-            <select
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              className="ml-2 rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1 font-mono text-xs text-[var(--color-ink)]"
-            >
-              <option value={1}>1d</option>
-              <option value={7}>7d</option>
-              <option value={14}>14d</option>
-              <option value={30}>30d</option>
-            </select>
-          </label>
-          {hasEnvKey ? (
-            <span className="font-mono text-[10px] text-[var(--color-faint)]">
-              auto-connected via VITE_OPS_API_KEY
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={clearKey}
-              className="text-xs text-[var(--color-faint)] underline-offset-2 hover:text-[var(--color-muted)] hover:underline"
-            >
-              Disconnect key
-            </button>
-          )}
-        </div>
       ) : null}
 
       {error ? (
@@ -1413,71 +1379,43 @@ function OpsShell() {
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+    <OpsChromeProvider
+      value={{
+        opsKey,
+        hasEnvKey,
+        apiBase,
+        lastUpdated,
+        clearKey,
+      }}
+    >
       <Routes>
-        <Route
-          path="/"
-          element={
-            <OverviewPage
-              opsKey={opsKey}
-              keyDraft={keyDraft}
-              setKeyDraft={setKeyDraft}
-              days={days}
-              setDays={setDays}
-              data={data}
-              error={error}
-              loading={loading}
-              lastUpdated={lastUpdated}
-              apiBase={apiBase}
-              load={load}
-              saveKey={saveKey}
-              clearKey={clearKey}
-              hasEnvKey={hasEnvKey}
-            />
-          }
-        />
-        <Route path="/infra" element={<InfraSpendPage opsKey={opsKey} />} />
-        <Route
-          path="/payments/:id"
-          element={
-            <DetailLayout>
-              <PaymentDetailPage />
-            </DetailLayout>
-          }
-        />
-        <Route
-          path="/usage/:id"
-          element={
-            <DetailLayout>
-              <UsageDetailPage />
-            </DetailLayout>
-          }
-        />
-        <Route
-          path="/mcp/:id"
-          element={
-            <DetailLayout>
-              <McpDetailPage />
-            </DetailLayout>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route element={<OpsLayout />}>
+          <Route
+            path="/"
+            element={
+              <OverviewPage
+                opsKey={opsKey}
+                keyDraft={keyDraft}
+                setKeyDraft={setKeyDraft}
+                days={days}
+                setDays={setDays}
+                data={data}
+                error={error}
+                loading={loading}
+                load={load}
+                saveKey={saveKey}
+              />
+            }
+          />
+          <Route path="/infra" element={<InfraSpendPage opsKey={opsKey} />} />
+          <Route path="/notifications" element={<NotificationsPage opsKey={opsKey} />} />
+          <Route path="/payments/:id" element={<PaymentDetailPage />} />
+          <Route path="/usage/:id" element={<UsageDetailPage />} />
+          <Route path="/mcp/:id" element={<McpDetailPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Routes>
-    </div>
-  );
-}
-
-function DetailLayout({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <header className="mb-6 border-b border-[var(--color-line)] pb-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent)]">
-          LMX Cloud
-        </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Operations</h1>
-      </header>
-      {children}
-    </>
+    </OpsChromeProvider>
   );
 }
 
