@@ -1,5 +1,4 @@
 import type { UsageStore } from "../usage/store.js";
-import { queueWelcomeNotification } from "../notifications/welcome.js";
 import { notifyTelegram } from "./telegram.js";
 
 export type AccountCreatedSource =
@@ -42,13 +41,6 @@ export function notifyAccountCreated(input: {
     `Source: ${input.source}`,
   ];
   notifyTelegram(lines.join("\n"));
-  if (input.isNewAccount) {
-    queueWelcomeNotification({
-      apiKeyId: input.apiKeyId,
-      email: input.email,
-      wallet: input.wallet,
-    });
-  }
 }
 
 export function notifyCreditsAdded(input: {

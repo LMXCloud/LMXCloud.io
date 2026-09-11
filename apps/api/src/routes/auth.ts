@@ -23,6 +23,7 @@ import type { WalletNonceStore } from "../auth/wallet-nonce.js";
 import type { CreditStore } from "../credits/store.js";
 import { roundCredits } from "../credits/pricing.js";
 import { notifyAccountCreated } from "../notify/events.js";
+import { queueWelcomeNotification } from "../notifications/welcome.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
@@ -402,6 +403,11 @@ export async function registerAuthRoutes(
         email: clerkUser.email,
         isNewAccount: true,
       });
+      queueWelcomeNotification({
+        apiKeyId: record.id,
+        email: record.email ?? clerkUser.email,
+        wallet: record.wallet,
+      });
     }
 
     const sessionToken = createSessionToken(
@@ -533,6 +539,11 @@ export async function registerAuthRoutes(
         wallet: address,
         isNewAccount: true,
       });
+      queueWelcomeNotification({
+        apiKeyId: record.id,
+        email: record.email,
+        wallet: record.wallet ?? address,
+      });
     }
 
     const sessionToken = createSessionTokenForIdentity(
@@ -598,6 +609,11 @@ export async function registerAuthRoutes(
       email: record.email,
       wallet: record.wallet,
       isNewAccount: true,
+    });
+    queueWelcomeNotification({
+      apiKeyId: record.id,
+      email: record.email,
+      wallet: record.wallet,
     });
 
     return reply.status(201).send({
