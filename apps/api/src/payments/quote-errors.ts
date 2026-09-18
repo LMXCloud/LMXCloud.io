@@ -44,12 +44,24 @@ export class ModelUnavailableError extends ChatQuoteError {
 
 export type ChatQuoteFailure = ChatQuoteError | ModelNotSupportedError;
 
+const QUOTE_FAILURE_NAMES = new Set([
+  "ChatQuoteError",
+  "InvalidChatRequestError",
+  "ModelUnavailableError",
+  "ModelNotSupportedError",
+]);
+
 export function isChatQuoteFailure(value: unknown): value is ChatQuoteFailure {
-  return value instanceof ChatQuoteError || value instanceof ModelNotSupportedError;
+  if (value instanceof ChatQuoteError || value instanceof ModelNotSupportedError) {
+    return true;
+  }
+  if (typeof value !== "object" || value === null) return false;
+  const name = (value as { name?: unknown }).name;
+  return typeof name === "string" && QUOTE_FAILURE_NAMES.has(name);
 }
 
 export function quoteFailureStatusCode(error: ChatQuoteFailure): number {
-  return error instanceof ChatQuoteError ? error.statusCode : 400;
+  return typeof error.statusCode === "number" ? error.statusCode : 400;
 }
 
 export function quoteFailurePayload(error: ChatQuoteFailure): {
@@ -58,18 +70,10 @@ export function quoteFailurePayload(error: ChatQuoteFailure): {
   code: string;
   param?: string;
 } {
-  if (error instanceof ChatQuoteError) {
-    return {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      ...(error.param ? { param: error.param } : {}),
-    };
-  }
   return {
     message: error.message,
-    type: "invalid_request_error",
-    code: "model_not_supported",
-    param: "model",
+    type: error.type || "invalid_request_error",
+    code: error.code || "invalid_request",
+    ...(error.param ? { param: error.param } : {}),
   };
 }

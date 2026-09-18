@@ -25,6 +25,7 @@ import {
   InvalidChatRequestError,
   ModelUnavailableError,
   isChatQuoteFailure,
+  ChatQuoteError,
   type ChatQuoteFailure,
 } from "./quote-errors.js";
 
@@ -243,13 +244,32 @@ export function buildChatQuoteFromHttpContext(
 }
 
 /** x402 `price()` must throw a typed error — never `new Error(string)`. */
-export function assertSuccessfulChatQuote(
-  result: ChatQuoteContext | ChatQuoteFailure,
-): ChatQuoteContext {
+export function assertSuccessfulChatQuote(result: unknown): ChatQuoteContext {
+  if (typeof result === "string") {
+    throw new InvalidChatRequestError(result, "invalid_request");
+  }
   if (isChatQuoteFailure(result)) {
     throw result;
   }
+  if (!isChatQuoteContext(result)) {
+    throw new ChatQuoteError(
+      "Unable to build a USDC quote for this chat request",
+      "quote_failed",
+    );
+  }
   return result;
+}
+
+function isChatQuoteContext(value: unknown): value is ChatQuoteContext {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<ChatQuoteContext>;
+  return (
+    typeof candidate.model === "string" &&
+    candidate.model.length > 0 &&
+    typeof candidate.quote === "object" &&
+    candidate.quote !== null &&
+    typeof candidate.quote.quotedAmount === "number"
+  );
 }
 
 export { formatUsdPrice } from "@lmxcloud/x402";

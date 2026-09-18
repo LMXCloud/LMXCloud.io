@@ -54,6 +54,15 @@ export const OPENAI_PROPRIETARY_MODEL_IDS = [
   "chatgpt-4o-latest",
 ] as const;
 
+const OPENAI_PROPRIETARY_MODEL_ID_SET: ReadonlySet<string> = new Set(
+  OPENAI_PROPRIETARY_MODEL_IDS,
+);
+
+/** True for OpenAI-hosted IDs that must never appear in LMX catalogs or maps. */
+export function isOpenAiProprietaryModelId(modelId: string): boolean {
+  return OPENAI_PROPRIETARY_MODEL_ID_SET.has(modelId);
+}
+
 /**
  * Verified via chat completions against io.net + AkashML catalogs (2026-07).
  * Aethir Mesh overlap verified live GET /v1/models (2026-07-21); mesh uses

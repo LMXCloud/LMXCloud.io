@@ -36,8 +36,12 @@ export const OPERATOR_ATTRIBUTION_HEALTH_SQL = `(
   OR error_detail ILIKE '%add more credits%'
 )`;
 
-/** SQL boolean: usage_events.error_code is an operator credential/funding fault. */
-export const OPERATOR_ATTRIBUTION_USAGE_SQL = `(error_code IN ('${OPERATOR_ATTRIBUTION_USAGE_ERROR_CODES.join("', '")}'))`;
+/**
+ * SQL boolean: usage_events.error_code is an operator credential/funding fault.
+ * `IS NOT NULL` is required so `NOT (...)` stays true for successful rows
+ * (`error_code IS NULL`); otherwise `NULL IN (...)` is NULL and WHERE drops them.
+ */
+export const OPERATOR_ATTRIBUTION_USAGE_SQL = `(error_code IS NOT NULL AND error_code IN ('${OPERATOR_ATTRIBUTION_USAGE_ERROR_CODES.join("', '")}'))`;
 
 export function isProviderAuthInvalidError(
   statusCode: number | undefined,

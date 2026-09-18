@@ -40,6 +40,17 @@ You are responsible for outputs generated from your prompts. Review outputs befo
 
 We enforce rate limits per key, IP, and (for x402) per payer wallet. Excessive automated traffic that degrades the Service for others may be throttled or blocked. Beta capacity is limited; we do not guarantee unlimited throughput.
 
+Limits are applied in two layers. Defaults currently disclosed:
+
+| Layer | Scope | Default |
+|-------|--------|---------|
+| **Cloudflare edge** | Per IP, `POST /v1/auth/key` only (the unauthenticated key-mint route) | **10 requests/hour**, then blocked for **1 hour** |
+| **Application** | Per IP, key mint and SIWE nonce/verify | **5 requests/hour** (`KEY_GEN_RATE_LIMIT_MAX`) |
+| **Application** | Per API key, balance-funded chat | **30 requests/minute** (`CHAT_RATE_LIMIT_MAX`) |
+| **Application** | Per x402 payer wallet (or IP if the payer is unknown) | **10 requests/minute** (`X402_ANON_RATE_LIMIT_MAX`) |
+
+Exceeded application limits return HTTP **429** with a `Retry-After` header. The application limiter is **in-memory and per process**: it resets on deploy and does not share counters across multiple API instances. The Cloudflare edge rule survives redeploys and still applies if the API scales past a single instance; it covers only the unauthenticated key-mint path. See the [Security](https://lmxcloud.io/legal/security) page for the same disclosed limits. x402 payment does not exempt callers from these rules.
+
 ## 5. Autonomous agents and x402
 
 Agents calling the Service without a human operator must still comply with this AUP. Payment via x402 or USDC does not exempt callers from these rules. We may block wallets, IPs, or payment payloads associated with abuse.

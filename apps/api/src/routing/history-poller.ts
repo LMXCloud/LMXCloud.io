@@ -1,12 +1,15 @@
 import { getPool } from "../db/pool.js";
 import type { ProviderHistoryRates } from "./score.js";
-import type { RoutingSignalStore } from "./signal-store.js";
+import {
+  ROUTING_HISTORY_WINDOW_HOURS,
+  type RoutingSignalStore,
+} from "./signal-store.js";
 
 function hasPostgres(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
-export const ROUTING_HISTORY_WINDOW_HOURS = 6;
+export { ROUTING_HISTORY_WINDOW_HOURS };
 export const ROUTING_HISTORY_POLL_INTERVAL_MS = 60_000;
 
 export type RoutingHistoryRow = { provider: string } & ProviderHistoryRates;

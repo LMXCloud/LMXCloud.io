@@ -10,7 +10,7 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { BillingPage } from "./pages/BillingPage";
 import { CreditsPage } from "./pages/CreditsPage";
 import { KeysPage } from "./pages/KeysPage";
-import { DocsPage } from "./pages/DocsPage";
+import { DocsIndexRedirect, DocsPage } from "./pages/DocsPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LegalPage } from "./pages/LegalPage";
 import { StatusPage } from "./pages/StatusPage";
@@ -64,10 +64,13 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/status" element={<StatusPage />} />
-      <Route path="/docs" element={<DocsPage />} />
+      <Route path="/docs" element={<DocsIndexRedirect />} />
+      <Route path="/docs/:slug" element={<DocsPage />} />
       <Route path="/new-agent" element={<PublicNewAgentPage />} />
       <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
       <Route path="/legal/:doc" element={<LegalPage />} />
+      <Route path="/security" element={<Navigate to="/legal/security" replace />} />
+      <Route path="/trust" element={<Navigate to="/legal/security" replace />} />
       <Route
         path="/auth/callback"
         element={

@@ -149,7 +149,7 @@ const CONSOLE_PAGES: SearchItem[] = [
 const DOC_ITEMS: SearchItem[] = DOC_SECTIONS.map((section) => ({
   id: `docs-${section.id}`,
   title: section.heading,
-  href: `/docs#${section.id}`,
+  href: `/docs/${section.id}`,
   group: "Docs",
   icon: "docs",
   description: `Docs · ${section.label}`,

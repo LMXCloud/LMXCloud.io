@@ -1,4 +1,4 @@
-import type { ChatCompletionRequest } from "@lmxcloud/shared";
+import { isOpenAiProprietaryModelId, type ChatCompletionRequest } from "@lmxcloud/shared";
 import { classifyProviderTelemetryErrorCode } from "./billing-errors.js";
 import { ProviderError, type ProviderAdapter, type ProviderHealthResult } from "./types.js";
 
@@ -107,16 +107,17 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
   const timeoutMs = config.timeoutMs ?? 30_000;
   const healthUrls =
     config.healthBaseUrls ?? (config.baseUrl ? [config.baseUrl] : []);
+  const aliases = config.aliases.filter((alias) => !isOpenAiProprietaryModelId(alias));
 
   return {
     name: config.name,
     tier: config.tier,
     costPer1kTokens: config.costPer1kTokens,
     isDepin: config.isDepin,
-    aliases: config.aliases,
+    aliases,
 
     supportsModel(model: string): boolean {
-      return config.aliases.includes(model);
+      return aliases.includes(model);
     },
 
     async healthCheck(): Promise<ProviderHealthResult> {

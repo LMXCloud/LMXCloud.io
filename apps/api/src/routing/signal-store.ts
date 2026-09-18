@@ -14,6 +14,9 @@ import {
 
 export type { ProviderHistoryRates, ProviderScoreResult };
 
+/** Rolling window used for routing history polls and public real-traffic status. */
+export const ROUTING_HISTORY_WINDOW_HOURS = 6;
+
 export interface RoutingSignalSnapshot {
   provider: string;
   circuit: CircuitState;
@@ -29,15 +32,27 @@ export interface RoutingSignalSnapshot {
   gatewayHealthy: boolean;
 }
 
+export interface RealTrafficSnapshot {
+  attempts: number;
+  successes: number;
+  successRate: number | null;
+  windowHours: number;
+}
+
 /**
  * Combines rolling DB history + live circuit breaker for routing decisions.
  */
 export class RoutingSignalStore {
   private readonly history = new Map<string, ProviderHistoryRates>();
   readonly circuitBreaker: CircuitBreaker;
+  readonly historyWindowHours: number;
 
-  constructor(circuitConfig?: CircuitBreakerConfig) {
+  constructor(
+    circuitConfig?: CircuitBreakerConfig,
+    historyWindowHours: number = ROUTING_HISTORY_WINDOW_HOURS,
+  ) {
     this.circuitBreaker = new CircuitBreaker(circuitConfig);
+    this.historyWindowHours = historyWindowHours;
   }
 
   applyHistory(rows: Array<{ provider: string } & ProviderHistoryRates>): void {
@@ -54,6 +69,39 @@ export class RoutingSignalStore {
 
   getHistory(provider: string): ProviderHistoryRates | null {
     return this.history.get(provider) ?? null;
+  }
+
+  /**
+   * Real chat outcomes for public status: 6h DB history when present,
+   * otherwise the in-process circuit-breaker ring (process lifetime).
+   */
+  getReportedRealTraffic(provider: string): RealTrafficSnapshot {
+    const hist = this.history.get(provider);
+    if (hist && hist.realAttempts > 0) {
+      return {
+        attempts: hist.realAttempts,
+        successes: hist.realSuccesses,
+        successRate: hist.realSuccesses / hist.realAttempts,
+        windowHours: this.historyWindowHours,
+      };
+    }
+
+    const live = this.circuitBreaker.snapshot(provider);
+    if (live.recentAttempts > 0) {
+      return {
+        attempts: live.recentAttempts,
+        successes: live.recentSuccesses,
+        successRate: live.recentSuccesses / live.recentAttempts,
+        windowHours: this.historyWindowHours,
+      };
+    }
+
+    return {
+      attempts: 0,
+      successes: 0,
+      successRate: null,
+      windowHours: this.historyWindowHours,
+    };
   }
 
   recordAttempt(

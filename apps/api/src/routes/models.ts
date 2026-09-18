@@ -1,3 +1,4 @@
+import { isOpenAiProprietaryModelId } from "@lmxcloud/shared";
 import type { FastifyInstance } from "fastify";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
@@ -20,6 +21,7 @@ export async function registerModelsRoutes(
       if (!status?.healthy) continue;
 
       for (const alias of provider.aliases) {
+        if (isOpenAiProprietaryModelId(alias)) continue;
         const existing = models.get(alias);
         if (!existing || provider.tier < existing.tier) {
           models.set(alias, {

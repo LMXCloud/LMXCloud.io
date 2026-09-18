@@ -309,7 +309,7 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
 
   server.tool(
     "get_status",
-    "Fetch LMX Cloud provider health, fallback chain, and anchoring status.",
+    "Fetch LMX Cloud provider health from recent real chat success (rolling window, with attempt counts), plus gateway ping, fallback chain, and anchoring status.",
     {
       api_key: optionalApiKeySchema,
     },

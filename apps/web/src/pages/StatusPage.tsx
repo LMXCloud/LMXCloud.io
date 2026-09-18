@@ -199,7 +199,11 @@ export function StatusPage() {
   const healthyCount = providers.filter(([, p]) => p.healthy).length;
   const allHealthy = providers.length > 0 && healthyCount === providers.length;
   const noneHealthy = providers.length > 0 && healthyCount === 0;
-  const overall = status?.reliability?.overall;
+  const realTraffic = status?.real_traffic;
+  const realWindowHours =
+    realTraffic?.window_hours ??
+    providers.find(([, p]) => p.real_window_hours != null)?.[1].real_window_hours ??
+    6;
   const routingChain =
     status?.effective_routing_chain ?? status?.fallback_chain ?? [];
 
@@ -230,7 +234,7 @@ export function StatusPage() {
         <PageHeader
           eyebrow="Infrastructure"
           title="Provider status"
-          description="Live gateway health plus real chat success rates. The router weights gateway, synthetic probes, and real traffic — and circuit-breaks providers that crater."
+          description="Live real-chat success over a rolling window, with gateway ping as a secondary signal. The router weights gateway, synthetic probes, and real traffic — and circuit-breaks providers that crater."
           actions={
             <Button
               type="button"
@@ -270,38 +274,38 @@ export function StatusPage() {
             hint={
               loading
                 ? "Checking providers…"
-                : `${healthyCount} of ${providers.length} providers reachable`
+                : `${healthyCount} of ${providers.length} providers healthy on real chat`
             }
           />
           <StatCard
-            label="Chat success (7d)"
+            label={`Chat success (${realWindowHours}h)`}
             value={
-              loading || !overall
+              loading || !realTraffic
                 ? "—"
-                : overall.attempts === 0
+                : realTraffic.attempts === 0
                   ? "—"
-                  : `${(overall.success_rate * 100).toFixed(1)}%`
+                  : `${((realTraffic.success_rate ?? 0) * 100).toFixed(1)}%`
             }
             tone={
-              !overall || overall.attempts === 0
+              !realTraffic || realTraffic.attempts === 0
                 ? "info"
-                : overall.success_rate >= 0.8
+                : (realTraffic.success_rate ?? 0) >= 0.8
                   ? "success"
-                  : overall.success_rate >= 0.4
+                  : (realTraffic.success_rate ?? 0) >= 0.4
                     ? "warning"
                     : "error"
             }
             hint={
-              overall && overall.attempts > 0
-                ? `${overall.successes}/${overall.attempts} real chat attempts`
-                : "No chat samples in window"
+              realTraffic && realTraffic.attempts > 0
+                ? `${realTraffic.successes}/${realTraffic.attempts} real chat attempts`
+                : `No chat samples in the last ${realWindowHours}h`
             }
           />
           <StatCard
             label="Healthy providers"
             value={loading ? "—" : String(healthyCount)}
             tone="primary"
-            hint="Gateway reachable (excludes our key/funding faults)"
+            hint={`Real traffic in the last ${realWindowHours}h; ping only if the window is empty`}
           />
           <StatCard
             label="Last updated"
@@ -503,8 +507,8 @@ export function StatusPage() {
             <DataTableHead>
               <tr>
                 <DataTableTh>Provider</DataTableTh>
-                <DataTableTh>Gateway</DataTableTh>
-                <DataTableTh>Real success (7d)</DataTableTh>
+                <DataTableTh>Gateway ping</DataTableTh>
+                <DataTableTh>Real success ({realWindowHours}h)</DataTableTh>
                 <DataTableTh>Routing</DataTableTh>
                 <DataTableTh>Tier</DataTableTh>
                 <DataTableTh>Type</DataTableTh>
@@ -522,23 +526,24 @@ export function StatusPage() {
                   const attempts = provider.real_attempts ?? 0;
                   const successes = provider.real_successes ?? 0;
                   const rate = provider.real_success_rate;
+                  const gatewayUp = provider.gateway_healthy ?? provider.healthy;
                   const circuit = provider.routing?.circuit ?? "closed";
                   const demoted = provider.routing?.demoted ?? false;
                   return (
                     <DataTableRow key={name}>
                       <DataTableCell mono>{name}</DataTableCell>
                       <DataTableCell>
-                        <Chip tone={provider.healthy ? "success" : "error"} className="gap-1.5">
+                        <Chip tone={gatewayUp ? "success" : "error"} className="gap-1.5">
                           <span
-                            className={`h-1.5 w-1.5 rounded-full ${provider.healthy ? "bg-success" : "bg-error"}`}
+                            className={`h-1.5 w-1.5 rounded-full ${gatewayUp ? "bg-success" : "bg-error"}`}
                           />
-                          {provider.healthy ? "Healthy" : "Unhealthy"}
+                          {gatewayUp ? "Up" : "Down"}
                         </Chip>
                       </DataTableCell>
                       <DataTableCell mono>
                         {attempts > 0 && rate != null
                           ? `${successes}/${attempts} · ${(rate * 100).toFixed(1)}%`
-                          : "—"}
+                          : `0 attempts (${realWindowHours}h)`}
                       </DataTableCell>
                       <DataTableCell>
                         <Chip

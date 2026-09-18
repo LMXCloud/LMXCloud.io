@@ -1,5 +1,5 @@
 import { createOpenAiCompatibleAdapter } from "./openai-compatible.js";
-import { aliasKeys, TOGETHER_MODEL_MAP } from "./model-maps.js";
+import { aliasKeys, resolveProviderModel, TOGETHER_MODEL_MAP } from "./model-maps.js";
 
 const ALIASES = aliasKeys(TOGETHER_MODEL_MAP);
 
@@ -16,7 +16,7 @@ export function createTogetherAdapter(config: TogetherConfig) {
     isDepin: false,
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
-    resolveModel: (model) => TOGETHER_MODEL_MAP[model] ?? model,
+    resolveModel: (model) => resolveProviderModel(TOGETHER_MODEL_MAP, "together", model),
     aliases: ALIASES,
   });
 }

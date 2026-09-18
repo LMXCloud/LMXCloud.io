@@ -1,3 +1,4 @@
+import { isOpenAiProprietaryModelId } from "@lmxcloud/shared";
 import type { ProviderAdapter } from "../providers/types.js";
 import { PRICING_MARGIN_PCT, roundListPrice } from "./constants.js";
 
@@ -18,6 +19,7 @@ export function buildPricingCatalog(
 
   for (const provider of providers) {
     for (const alias of provider.aliases) {
+      if (isOpenAiProprietaryModelId(alias)) continue;
       const existing = models.get(alias);
       if (!existing || provider.costPer1kTokens < existing.costPer1kTokens) {
         models.set(alias, {

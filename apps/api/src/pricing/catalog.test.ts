@@ -40,4 +40,16 @@ describe("buildPricingCatalog", () => {
     assert.ok(qwen);
     assert.equal(qwen.provider, "ionet");
   });
+
+  it("never lists OpenAI proprietary IDs even if a provider advertises them", () => {
+    const catalog = buildPricingCatalog([
+      mockProvider("ionet", 1, 0.0002, ["llama-3-70b", "gpt-4o-mini", "gpt-4o"]),
+    ]);
+
+    assert.ok(catalog.some((entry) => entry.id === "llama-3-70b"));
+    assert.equal(
+      catalog.some((entry) => entry.id === "gpt-4o-mini" || entry.id === "gpt-4o"),
+      false,
+    );
+  });
 });

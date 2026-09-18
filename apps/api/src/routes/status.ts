@@ -9,7 +9,15 @@ import { getReliabilityTelemetry } from "../ops/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import { providerUpForStatus, type HealthStore } from "../health/store.js";
-import type { RoutingSignalStore } from "../routing/signal-store.js";
+import {
+  aggregateRealTraffic,
+  emptyRealTraffic,
+  providerHealthyForPublicStatus,
+} from "../routing/public-status.js";
+import {
+  ROUTING_HISTORY_WINDOW_HOURS,
+  type RoutingSignalStore,
+} from "../routing/signal-store.js";
 
 interface StatusRouteDeps {
   providers: ProviderAdapter[];
@@ -109,50 +117,72 @@ export async function registerStatusRoutes(
       gatewayHealthy,
     );
 
-    const reliabilityByProvider = new Map(
-      reliability.byProvider.map((row) => [row.provider, row]),
-    );
-
     const staticChain = getFallbackChain(deps.providers);
     const effectiveChain = routing?.effectiveChain ?? staticChain;
+    const windowHours =
+      deps.routingSignalStore?.historyWindowHours ?? ROUTING_HISTORY_WINDOW_HOURS;
+
+    const providerRows = deps.providers.map((provider) => {
+      const status = statuses[provider.name];
+      const route = routing?.byProvider[provider.name];
+      const traffic =
+        deps.routingSignalStore?.getReportedRealTraffic(provider.name) ??
+        emptyRealTraffic(windowHours);
+      const gatewayUp = providerUpForStatus(status);
+      return {
+        name: provider.name,
+        traffic,
+        payload: {
+          healthy: providerHealthyForPublicStatus({
+            gatewayUp,
+            realAttempts: traffic.attempts,
+            realSuccesses: traffic.successes,
+            circuit: route?.circuit,
+          }),
+          gateway_healthy: gatewayUp,
+          latency: status?.latencyMs ?? null,
+          tier: provider.tier,
+          is_depin: provider.isDepin,
+          last_check: status?.lastCheck ?? null,
+          real_success_rate: roundRate(traffic.successRate),
+          real_attempts: traffic.attempts,
+          real_successes: traffic.successes,
+          real_window_hours: traffic.windowHours,
+          routing: route
+            ? {
+                circuit: route.circuit,
+                demoted: route.demoted,
+                score: roundRate(route.score),
+                effective_priority: route.effectivePriority,
+              }
+            : {
+                circuit: "closed" as const,
+                demoted: false,
+                score: null,
+                effective_priority: staticChain.indexOf(provider.name),
+              },
+        },
+      };
+    });
+
+    const realTraffic = aggregateRealTraffic(
+      providerRows.map((row) => row.traffic),
+      windowHours,
+    );
 
     return {
       object: "status",
       providers: Object.fromEntries(
-        deps.providers.map((provider) => {
-          const status = statuses[provider.name];
-          const rel = reliabilityByProvider.get(provider.name);
-          const route = routing?.byProvider[provider.name];
-          return [
-            provider.name,
-            {
-              healthy: providerUpForStatus(status),
-              latency: status?.latencyMs ?? null,
-              tier: provider.tier,
-              is_depin: provider.isDepin,
-              last_check: status?.lastCheck ?? null,
-              real_success_rate: rel ? rel.successRate : null,
-              real_attempts: rel ? rel.attempts : 0,
-              real_successes: rel ? rel.successes : 0,
-              routing: route
-                ? {
-                    circuit: route.circuit,
-                    demoted: route.demoted,
-                    score: roundRate(route.score),
-                    effective_priority: route.effectivePriority,
-                  }
-                : {
-                    circuit: "closed" as const,
-                    demoted: false,
-                    score: null,
-                    effective_priority: staticChain.indexOf(provider.name),
-                  },
-            },
-          ];
-        }),
+        providerRows.map((row) => [row.name, row.payload]),
       ),
       fallback_chain: staticChain,
       effective_routing_chain: effectiveChain,
+      real_traffic: {
+        window_hours: realTraffic.windowHours,
+        attempts: realTraffic.attempts,
+        successes: realTraffic.successes,
+        success_rate: roundRate(realTraffic.successRate),
+      },
       anchoring,
       reliability: {
         window_days: reliability.windowDays,

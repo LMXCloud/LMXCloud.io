@@ -18,14 +18,14 @@ External/reference summary of how production traffic is protected today. For the
 
 ## Rate limiting
 
-Two layers:
+Two layers. Exceeded application limits return HTTP **429** with a `Retry-After` header.
 
 | Layer | Where | What |
 |-------|--------|------|
 | Edge | Cloudflare rule `auth-key-limit` | Blocks an IP after **10 requests/hour** to `POST /v1/auth/key` (the one unauthenticated route), for **1 hour** |
-| App | `apps/api/src/rate-limit.ts` | In-memory limits via `KEY_GEN_RATE_LIMIT_MAX` and `CHAT_RATE_LIMIT_MAX` |
+| App | In-memory limiter (`apps/api/src/rate-limit.ts`) | Defaults: **5 requests/hour per IP** on key mint and SIWE (`KEY_GEN_RATE_LIMIT_MAX`); **30 requests/minute per API key** on balance-funded chat (`CHAT_RATE_LIMIT_MAX`); **10 requests/minute per x402 payer wallet** (or IP if the payer is unknown; `X402_ANON_RATE_LIMIT_MAX`) |
 
-The Cloudflare rule is a second layer on top of the app limiter. Edge rules survive Railway redeploys and still apply if the API scales past a single instance; the in-memory app limiter does not.
+The Cloudflare rule is a second layer on top of the app limiter. Edge rules survive Railway redeploys and still apply if the API scales past a single instance; the in-memory app limiter does not (it resets on deploy and is not shared across instances).
 
 ---
 

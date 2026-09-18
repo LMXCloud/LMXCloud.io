@@ -39,7 +39,7 @@ export function LandingFaq() {
   const [openId, setOpenId] = useState<string | null>(FAQ_ITEMS[0]?.id ?? null);
 
   return (
-    <section id="faq" className="border-t border-border py-16 sm:py-20">
+    <section id="faq" className="scroll-mt-20 border-t border-border py-16 sm:py-20">
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-label-sm text-primary">FAQ</p>
@@ -56,14 +56,14 @@ export function LandingFaq() {
               <div key={item.id}>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-elevated/60"
+                  className="flex min-h-11 w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors duration-base ease-standard hover:bg-elevated/60"
                   aria-expanded={open}
                   onClick={() => setOpenId(open ? null : item.id)}
                 >
                   <span className="text-body-md font-medium text-on-surface">{item.question}</span>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 shrink-0 text-on-surface-muted transition-transform duration-200",
+                      "h-4 w-4 shrink-0 text-on-surface-muted transition-transform duration-slow ease-standard",
                       open && "rotate-180",
                     )}
                     strokeWidth={1.75}
@@ -71,7 +71,7 @@ export function LandingFaq() {
                 </button>
                 <div
                   className={cn(
-                    "grid transition-[grid-template-rows] duration-200 ease-out",
+                    "grid transition-[grid-template-rows] duration-slow ease-standard",
                     open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                   )}
                 >

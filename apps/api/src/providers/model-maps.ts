@@ -1,4 +1,4 @@
-import { aliasKeys, buildProviderModelMap } from "@lmxcloud/shared";
+import { aliasKeys, buildProviderModelMap, isOpenAiProprietaryModelId } from "@lmxcloud/shared";
 import { ProviderError } from "./types.js";
 
 export const IONET_MODEL_MAP = buildProviderModelMap("ionet");
@@ -41,7 +41,7 @@ export function resolveProviderModel(
   model: string,
 ): string {
   const upstream = map[model];
-  if (!upstream) {
+  if (!upstream || isOpenAiProprietaryModelId(model)) {
     throw new ProviderError(
       `Model "${model}" is not supported by ${provider}`,
       provider,

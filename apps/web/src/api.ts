@@ -470,6 +470,8 @@ export async function fetchUsageLogProof(
 
 export interface ProviderStatusInfo {
   healthy: boolean;
+  /** Shallow /models ping — secondary to `healthy` / real traffic. */
+  gateway_healthy?: boolean;
   latency: number | null;
   tier: number;
   is_depin: boolean;
@@ -477,6 +479,7 @@ export interface ProviderStatusInfo {
   real_success_rate?: number | null;
   real_attempts?: number;
   real_successes?: number;
+  real_window_hours?: number;
   routing?: {
     circuit: "closed" | "open" | "half_open";
     demoted: boolean;
@@ -519,12 +522,21 @@ export interface StatusReliabilityInfo {
   }>;
 }
 
+export interface StatusRealTrafficInfo {
+  window_hours: number;
+  attempts: number;
+  successes: number;
+  success_rate: number | null;
+}
+
 export interface StatusResponse {
   object: "status";
   providers: Record<string, ProviderStatusInfo>;
   fallback_chain: string[];
   /** Live score/circuit order the router uses (may differ from static tier chain). */
   effective_routing_chain?: string[];
+  /** Rolling-window real chat outcomes (same window as routing history). */
+  real_traffic?: StatusRealTrafficInfo;
   anchoring: StatusAnchoringInfo;
   reliability?: StatusReliabilityInfo;
 }

@@ -8,6 +8,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: CardVariant;
   accent?: CardAccent;
   media?: ReactNode;
+  interactive?: boolean;
 }
 
 const accentColors: Record<CardAccent, string> = {
@@ -22,6 +23,7 @@ export function Card({
   variant = "base",
   accent,
   media,
+  interactive = false,
   className,
   children,
   ...props
@@ -30,10 +32,11 @@ export function Card({
     <div
       data-accent={accent}
       className={cn(
-        "relative overflow-hidden rounded-md border border-border",
+        "relative overflow-hidden rounded-md border border-border transition-colors duration-base ease-standard",
         variant === "base" && "bg-surface p-4",
         variant === "elevated" && "border-border-strong bg-elevated p-4 shadow-md",
         variant === "media" && "bg-surface p-0",
+        interactive && "hover:border-border-strong",
         className,
       )}
       {...props}

@@ -58,14 +58,17 @@ We use third-party providers that process data on our behalf, including:
 
 - **Clerk** — email authentication
 - **Hosting and database providers** (e.g., Railway, Vercel, Neon) — infrastructure and stored account, usage, and payment records
-- **Inference providers** (e.g., io.net, Akash) — your API requests (including prompts and parameters needed to run inference) are sent to route inference
+- **Inference providers** — your API requests (including prompts and parameters needed to run inference) are sent to the provider that serves the call. Current compute providers:
+  - **io.net** — [Privacy Policy](https://io.net/privacy). LMX routes through io.net's standard inference API. io.net documents [90-day standard audit-log retention](https://io.net/p/faq-does-io-net-provide-audit-trails-and-logging-for-gpu-workloads) for GPU/API activity (enterprise plans configurable up to seven years). A separate [Confidential Inference](https://io.net/docs/guides/confidential-inference/overview) product documents zero retention of prompts and responses; LMX does not currently route through that product.
+  - **AkashML** — [Privacy Policy](https://akashml.com/privacy). AkashML states it does not retain text prompts or transient API inputs after the request has been processed, except transient error logs deleted within **30 days** and server/security logs that may remain up to **90 days**.
+  - **Aethir Mesh** — [Privacy Policy](https://docs.aethir.com/terms-of-service/privacy-policy). Aethir states it retains technical usage information and data on use of its services for **12 months**. Aethir Mesh's public product materials state that every request is logged (latency, token usage, cost, provider); they do not separately publish a prompt-content retention period.
 - **Coinbase Developer Platform (CDP)** — x402 payment verification, settlement, and know-your-transaction screening when enabled
 - **Brave Search** — when you use web search, your **search query** and result-count parameters are sent to Brave's Search API (`api.search.brave.com`) to retrieve results; LMX meters and bills the call separately
 - **Sentry** — when `SENTRY_DSN` is configured on our API servers, error and performance monitoring for unhandled exceptions and certain provider or route failures. We do not intentionally send prompts or completions to Sentry, but **error reports may include stack traces, request paths, provider error messages, and other diagnostic context that could incidentally contain portions of request content** if those appear in an error message. Counsel should review our Sentry data-scrubbing configuration before production reliance.
 - **Telegram** — when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured, **internal operator notifications only** (not user-facing messages). Notifications may include truncated API key identifiers, account email or wallet address, credit amounts and balances, deposit or refund source labels, and first-call routing metadata (provider, model, resource type). Prompt text, completion text, and full API secrets are not included in these notifications.
 - **Blockchain networks** — receipt Merkle roots, payment transactions, and refund transactions are recorded on-chain and are public (see Sections 5 and 9)
 
-Each provider is used under their own terms and privacy policies.
+Those inference providers process prompts under their own published terms. We do not control their retention clocks; the linked policies may change. Other processors listed above (Clerk, hosting, CDP, Brave, Sentry, Telegram, blockchains) operate under their own terms as well.
 
 ## 5. Public blockchain data
 
@@ -83,16 +86,17 @@ Off-chain records (for example, dashboard account data, API key metadata, usage 
 
 We use industry-standard measures including TLS, access controls, and hashed credentials where applicable. No system is perfectly secure; you are responsible for protecting API keys and wallet keys.
 
-<!-- ATTORNEY REVIEW NEEDED: Automated decision-making — confirm disclosure scope for rate limits, compliance blocks, and whether human review / appeal process is required -->
 ## 8. Automated decision-making
 
-We use automated systems that can affect your access to the Service **without a human reviewer in the loop**, including:
+We use automated systems that can affect your access to the Service **without a human reviewer in the loop before the decision**. Today those systems are:
 
-- **Rate limiting** — per API key, IP address, and (for x402) payer wallet, using in-memory counters; exceeded limits return HTTP `429` with a retry interval.
-- **Credit and payment checks** — automated refusal of requests when balance is insufficient or x402 payment verification or settlement fails.
-- **Compliance and abuse controls** — automated refusal or cancellation of payments that fail facilitator know-your-transaction screening, and blocking or throttling of wallets, IPs, or payloads associated with suspected abuse (see our [Acceptable Use Policy](./acceptable-use.md) and [Terms of Service](./terms-of-service.md), Section 8).
+- **Rate limiting** — per API key (balance-funded chat), per IP (key mint and SIWE), and per x402 payer wallet (or IP if the payer is unknown), using in-memory counters on each API instance. Exceeded limits return HTTP `429` with a `Retry-After` header. A Cloudflare edge rule separately blocks an IP after 10 requests/hour to `POST /v1/auth/key`. See our [Acceptable Use Policy](./acceptable-use.md) and [Security](https://lmxcloud.io/legal/security) page for the disclosed defaults.
+- **Credit and payment checks** — automated refusal of requests when prepaid balance is insufficient or x402 payment verification or settlement fails.
+- **Facilitator compliance screening** — when x402 is enabled, the Coinbase Developer Platform facilitator may automatically refuse settlement after know-your-transaction screening. A failed screen prevents payment and inference.
 
-These measures are intended to protect the Service and comply with law; they are not used to make legal or similarly significant decisions about you beyond access and billing. If you believe an automated block was in error, contact **support@lmxcloud.io** with subject `Automated block appeal` and relevant identifiers (account email, wallet address, API key ID, or transaction hash — never send full API key secrets).
+We may also block or throttle wallets, IPs, or payloads associated with suspected abuse (see our [Acceptable Use Policy](./acceptable-use.md) and [Terms of Service](./terms-of-service.md), Section 8). That enforcement can be automated (for example rate limits) or applied by an operator; it is not a separate automated profiling system that scores individuals for legal or similarly significant decisions beyond access and billing.
+
+If you believe an automated block was in error, contact **support@lmxcloud.io** with subject `Automated block appeal` and relevant identifiers (account email, wallet address, API key ID, or transaction hash — never send full API key secrets). We review appeals when we receive them; there is no guaranteed human review before a rate limit, payment refusal, or facilitator screen takes effect.
 
 ## 9. Your choices and rights
 

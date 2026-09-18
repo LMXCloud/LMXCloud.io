@@ -7,7 +7,7 @@ import {
   buildChatQuote,
   parseChatBody,
 } from "./quote-context.js";
-import { InvalidChatRequestError, ModelUnavailableError } from "./quote-errors.js";
+import { ChatQuoteError, InvalidChatRequestError, ModelUnavailableError } from "./quote-errors.js";
 
 function mockProvider(
   name: string,
@@ -162,6 +162,33 @@ describe("buildChatQuote model availability", () => {
     } catch (err) {
       assert.equal(err instanceof Error && err.constructor === Error, false);
       assert.ok(err instanceof InvalidChatRequestError);
+    }
+  });
+
+  it("promotes a raw quoteResult string into InvalidChatRequestError, not Error", () => {
+    try {
+      assertSuccessfulChatQuote("Model \"gpt-4o-mini\" is not supported by any configured provider");
+      assert.fail("expected throw");
+    } catch (err) {
+      assert.equal(err instanceof Error && err.constructor === Error, false);
+      assert.ok(err instanceof InvalidChatRequestError);
+      assert.equal(err.name, "InvalidChatRequestError");
+      assert.equal(err.code, "invalid_request");
+      assert.equal(err.statusCode, 400);
+      assert.match(err.message, /gpt-4o-mini/);
+    }
+  });
+
+  it("throws ChatQuoteError for malformed quote results instead of a generic TypeError", () => {
+    try {
+      assertSuccessfulChatQuote({ model: "llama-3-70b" });
+      assert.fail("expected throw");
+    } catch (err) {
+      assert.equal(err instanceof Error && err.constructor === Error, false);
+      assert.ok(err instanceof ChatQuoteError);
+      assert.equal(err.name, "ChatQuoteError");
+      assert.equal(err.code, "quote_failed");
+      assert.equal(err.statusCode, 400);
     }
   });
 });

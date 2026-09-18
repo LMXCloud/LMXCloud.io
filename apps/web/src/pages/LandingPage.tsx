@@ -9,6 +9,7 @@ import {
   Archive,
   ArrowRight,
   Bot,
+  ChevronDown,
   Code2,
   FileCheck,
   GitFork,
@@ -19,12 +20,18 @@ import {
   Store,
   Wallet,
 } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { LandingFaq } from "../components/LandingFaq";
 import { BrandMark } from "../components/BrandMark";
 import { GithubStarButton } from "../components/GithubStarButton";
 import { PartnerMarquee } from "../components/PartnerMarquee";
+import {
+  FooterLinkGroup,
+  PUBLIC_FOOTER_LINK_CLASS,
+  PUBLIC_NAV_ITEM_CLASS,
+  PublicMobileNav,
+} from "../components/PublicLayout";
 import { SeoHead } from "../components/SeoHead";
 import { SocialLinks } from "../components/SocialLinks";
 import { Button } from "../components/ui/Button";
@@ -72,6 +79,24 @@ const HIGHLIGHTED_MODEL_ALIASES = [
   "qwen-3.6-35b",
   "kimi-k2.5",
 ].filter((alias) => SUPPORTED_MODEL_LIST.some((model) => model.alias === alias));
+
+const X402_DOCS = { label: "x402 docs", to: "/docs/pricing" } as const;
+
+const LANDING_SECTION_NAV = [
+  { href: "#features", label: "Features" },
+  { href: "#for-agents", label: "For agents" },
+  { href: "#models", label: "Models" },
+  { href: "#how-it-works", label: "How it works" },
+] as const;
+
+const LANDING_HEADER_PAGES = [{ to: "/docs", label: "Docs" }] as const;
+
+const LANDING_MOBILE_PAGES = [
+  { to: "/docs", label: "Docs" },
+  { to: "/demo", label: "Live demo" },
+  { to: "/new-agent", label: "New agent" },
+  { to: "/status", label: "Status" },
+] as const;
 
 const FEATURES = [
   {
@@ -131,12 +156,14 @@ const AUDIENCES = [
     title: "Developers",
     body: "Sign in with email or wallet, fund with USDC on Base, and manage keys, usage, and billing from the console. $1.00 in credits to start.",
     cta: { label: "Open console", to: "/sign-up" as const },
+    accent: "primary" as const,
   },
   {
     icon: Bot,
     title: "Autonomous agents",
     body: "Call the API with no prior relationship. Receive HTTP 402 with per-model pricing, pay in USDC via x402, and get routed DePIN inference back — no account setup.",
-    cta: { label: "View x402 docs", to: "/docs#pricing" as const },
+    cta: X402_DOCS,
+    accent: "warning" as const,
   },
 ];
 
@@ -145,19 +172,19 @@ const AGENT_CHANNELS = [
     icon: Store,
     title: "x402 Bazaar",
     body: "Discoverable on Coinbase's x402 Bazaar — Agentic.Market is the search UI over that index. Agents find and pay for inference after a settled call.",
-    cta: { label: "x402 pricing", to: "/docs#pricing" as const },
+    cta: X402_DOCS,
   },
   {
     icon: Plug,
     title: "MCP server",
     body: "Hosted at mcp.lmxcloud.io with balance or x402 on chat completion. Listed in the official MCP Registry as io.lmxcloud/mcp-server.",
-    cta: { label: "MCP quickstart", to: "/docs#mcp" as const },
+    cta: { label: "MCP quickstart", to: "/docs/mcp" as const },
   },
   {
     icon: Package,
     title: "ElizaOS plugin",
     body: "@lmxcloud/plugin-lmxcloud on npm. Wallet pays USDC per call — no API key, no signup, no pre-funded balance.",
-    cta: { label: "ElizaOS docs", to: "/docs#eliza" as const },
+    cta: { label: "ElizaOS docs", to: "/docs/eliza" as const },
   },
   {
     icon: GitFork,
@@ -207,6 +234,9 @@ const PLATFORM_KPIS = [
   },
 ] as const;
 
+const KPI_PREVIEW_COUNT = 3;
+const CHANNEL_PREVIEW_COUNT = 2;
+
 const STEPS = [
   {
     step: "01",
@@ -249,7 +279,7 @@ export function LandingPage() {
       <SeoHead title={DEFAULT_TITLE} description={DEFAULT_DESCRIPTION} path="/" />
       <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-[clamp(20px,4vw,48px)]">
-          <Link to="/" className="group flex items-center gap-3">
+          <Link to="/" className="group flex min-h-11 items-center gap-3">
             <BrandMark />
             <div>
               <p className="text-title-md text-on-surface leading-tight">LMX Cloud</p>
@@ -257,62 +287,70 @@ export function LandingPage() {
             </div>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            {(
-              [
-                { href: "#features", label: "Features" },
-                { href: "#for-agents", label: "For agents" },
-                { href: "#models", label: "Models" },
-                { href: "#how-it-works", label: "How it works" },
-              ] as const
-            ).map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="rounded-md px-3 py-2 text-body-sm text-on-surface-muted transition-colors duration-base ease-standard hover:bg-surface hover:text-on-surface"
-              >
+          <nav className="hidden items-center gap-1 md:flex" aria-label="Page">
+            {LANDING_SECTION_NAV.map((item) => (
+              <a key={item.href} href={item.href} className={PUBLIC_NAV_ITEM_CLASS}>
                 {item.label}
               </a>
             ))}
-            {(
-              [
-                { to: "/demo", label: "Live demo" },
-                { to: "/new-agent", label: "New agent" },
-                { to: "/docs", label: "Docs" },
-                { to: "/status", label: "Status" },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="rounded-md px-3 py-2 text-body-sm text-on-surface-muted transition-colors duration-base ease-standard hover:bg-surface hover:text-on-surface"
-              >
+            {LANDING_HEADER_PAGES.map((item) => (
+              <Link key={item.to} to={item.to} className={PUBLIC_NAV_ITEM_CLASS}>
                 {item.label}
               </Link>
             ))}
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <GithubStarButton />
+            <span className="hidden md:inline-flex">
+              <GithubStarButton />
+            </span>
             <SignedOut>
-              <Button to="/sign-in" variant="tertiary" size="sm">
+              <Button to="/sign-in" variant="tertiary" size="sm" className="hidden min-h-11 md:inline-flex">
                 Sign in
               </Button>
-              <Button to="/sign-up" size="sm">
+              <Button to="/sign-up" size="sm" className="min-h-11">
                 Get started
               </Button>
             </SignedOut>
             <SignedIn>
-              <Button to="/console/overview" size="sm">
+              <Button to="/console/overview" size="sm" className="min-h-11">
                 Open console
               </Button>
             </SignedIn>
+            <PublicMobileNav>
+              {({ close }) => (
+                <>
+                  {LANDING_SECTION_NAV.map((item) => (
+                    <a key={item.href} href={item.href} className={PUBLIC_NAV_ITEM_CLASS} onClick={close}>
+                      {item.label}
+                    </a>
+                  ))}
+                  <a href="#faq" className={PUBLIC_NAV_ITEM_CLASS} onClick={close}>
+                    FAQ
+                  </a>
+                  {LANDING_MOBILE_PAGES.map((item) => (
+                    <Link key={item.to} to={item.to} className={PUBLIC_NAV_ITEM_CLASS} onClick={close}>
+                      {item.label}
+                    </Link>
+                  ))}
+                  <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
+                    <div className="[&_a]:min-h-11">
+                      <GithubStarButton />
+                    </div>
+                    <SignedOut>
+                      <Button to="/sign-in" variant="tertiary" className="min-h-11 justify-start" onClick={close}>
+                        Sign in
+                      </Button>
+                    </SignedOut>
+                  </div>
+                </>
+              )}
+            </PublicMobileNav>
           </div>
         </div>
       </header>
 
       <main>
-        {/* Hero — copy left, full globe right */}
         <section className="relative min-h-[calc(100dvh-4rem)] overflow-hidden">
           <div
             className="pointer-events-none absolute inset-0 opacity-40"
@@ -346,13 +384,13 @@ export function LandingPage() {
                 Neutral multi-network routing across decentralized compute — measured failover,
                 wallet auth, and x402 pay-per-call for agents.
               </p>
-              <div className="mt-7 flex flex-wrap gap-3">
+              <div className="mt-7 flex flex-wrap items-center gap-3">
                 <Button to="/sign-up" size="lg">
                   Get started free
                   <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
                 </Button>
-                <Button to="/docs#pricing" variant="secondary" size="lg">
-                  Agent payments (x402)
+                <Button to={X402_DOCS.to} variant="tertiary" size="lg">
+                  {X402_DOCS.label}
                 </Button>
               </div>
             </div>
@@ -372,7 +410,6 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* KPI strip */}
         <section
           className="border-y border-border-strong bg-surface"
           aria-label="Platform metrics"
@@ -384,8 +421,7 @@ export function LandingPage() {
 
         <PartnerMarquee />
 
-        {/* Features */}
-        <section id="features" className="border-b border-border bg-surface py-16 sm:py-20">
+        <section id="features" className="scroll-mt-20 border-b border-border bg-surface py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <SectionHeader
               eyebrow="Platform"
@@ -397,11 +433,19 @@ export function LandingPage() {
                 <FeatureCard key={feature.title} {...feature} />
               ))}
             </div>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <Button to="/sign-up">
+                Get started free
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+              <Button to="/docs" variant="tertiary">
+                Read the docs
+              </Button>
+            </div>
           </div>
         </section>
 
-        {/* For agents / developers */}
-        <section id="for-agents" className="border-b border-border py-16 sm:py-20">
+        <section id="for-agents" className="scroll-mt-20 border-b border-border py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <SectionHeader
               eyebrow="Two ways in"
@@ -413,8 +457,8 @@ export function LandingPage() {
                 <AudienceCard key={audience.title} {...audience} />
               ))}
             </div>
-            <div className="mt-14">
-              <p className="text-label-sm text-primary">Agent distribution</p>
+            <div className="mt-14 border-t border-border pt-10">
+              <p className="text-label-sm text-on-surface-faint">Agent distribution</p>
               <h3 className="mt-2 text-headline-md text-on-surface">
                 Find inference, or start from a kit
               </h3>
@@ -422,17 +466,12 @@ export function LandingPage() {
                 x402 Bazaar, MCP, ElizaOS, and a forkable agent template are live — agents can find
                 and pay for routed inference, or start from a kit that already talks to Grid and Vault.
               </p>
-              <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {AGENT_CHANNELS.map((channel) => (
-                  <AudienceCard key={channel.title} {...channel} />
-                ))}
-              </div>
+              <AgentChannelGrid />
             </div>
           </div>
         </section>
 
-        {/* Models */}
-        <section id="models" className="border-b border-border py-12 sm:py-16">
+        <section id="models" className="scroll-mt-20 border-b border-border py-12 sm:py-16">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl">
@@ -443,7 +482,7 @@ export function LandingPage() {
                 />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                <Button to="/docs#models" variant="secondary" size="sm">
+                <Button to="/docs/models" variant="secondary" size="sm">
                   Full reference
                 </Button>
                 <Button to="/status" variant="tertiary" size="sm">
@@ -471,7 +510,6 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* Code snippet */}
         <section className="py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
@@ -515,8 +553,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* How it works — identity/payment, then MCP as a distinct integration path */}
-        <section id="how-it-works" className="border-y border-border bg-surface py-16 sm:py-20">
+        <section id="how-it-works" className="scroll-mt-20 border-y border-border bg-surface py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <SectionHeader
               eyebrow="Workflow"
@@ -524,24 +561,18 @@ export function LandingPage() {
               description="Identity and payment first — then routed inference. MCP is a separate integration path into that same endpoint, not a different product."
               centered
             />
-            <p className="mt-12 text-center text-label-sm text-primary">Identity and payment</p>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              {STEPS.map((step, index) => (
-                <GlowingCard key={step.step} accent="primary" className="relative">
-                  {index < STEPS.length - 1 && (
-                    <div
-                      className="pointer-events-none absolute top-1/2 -right-2 z-10 hidden h-px w-4 bg-border-strong md:block lg:-right-3 lg:w-6"
-                      aria-hidden
-                    />
-                  )}
-                  <p className="text-metric text-primary/30">{step.step}</p>
-                  <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
-                  <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
-                </GlowingCard>
-              ))}
+
+            <div className="mt-12">
+              <p className="text-center text-label-sm text-primary">Identity and payment</p>
+              <StepSequence
+                steps={STEPS}
+                tone="primary"
+                completeAccent="success"
+                card="glow"
+              />
             </div>
 
-            <div className="mt-14">
+            <div className="mt-16 border-t border-border pt-14">
               <p className="text-center text-label-sm text-info">MCP integration</p>
               <h3 className="mt-2 text-center text-headline-md text-on-surface">
                 Same inference, as tools
@@ -550,17 +581,14 @@ export function LandingPage() {
                 Hosted MCP is how agent clients call LMX without hand-writing REST. Configure the
                 endpoint, then quote and complete — the billing path is still a key or x402.
               </p>
-              <div className="mt-8 grid gap-4 md:grid-cols-3">
-                {MCP_ONBOARDING_STEPS.map((step) => (
-                  <Card key={step.step}>
-                    <p className="text-mono-sm text-info">{step.step}</p>
-                    <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
-                    <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
-                  </Card>
-                ))}
-              </div>
+              <StepSequence
+                steps={MCP_ONBOARDING_STEPS}
+                tone="info"
+                completeAccent="info"
+                card="plain"
+              />
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Button to="/docs#mcp" size="lg">
+                <Button to="/docs/mcp" size="lg">
                   MCP quickstart
                 </Button>
                 <Button to="/console/keys" variant="secondary" size="lg">
@@ -571,7 +599,6 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* CTA band */}
         <section className="py-16 sm:py-20">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
             <GlowingCard accent="success" className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
@@ -589,8 +616,8 @@ export function LandingPage() {
                 <Button to="/sign-up" size="lg">
                   Get started free
                 </Button>
-                <Button to="/docs#pricing" variant="secondary" size="lg">
-                  x402 for agents
+                <Button to={X402_DOCS.to} variant="tertiary" size="lg">
+                  {X402_DOCS.label}
                 </Button>
               </div>
             </GlowingCard>
@@ -601,7 +628,7 @@ export function LandingPage() {
       </main>
 
       <footer className="border-t border-border bg-surface">
-        <div className="mx-auto flex max-w-[1200px] flex-col gap-6 px-[clamp(20px,4vw,48px)] py-10 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-8 px-[clamp(20px,4vw,48px)] py-10 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3">
             <BrandMark size="sm" />
             <div>
@@ -609,45 +636,41 @@ export function LandingPage() {
               <p className="text-body-sm text-on-surface-faint">Web3-native inference infrastructure</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-body-sm text-on-surface-muted">
-            <a href="#features" className="hover:text-on-surface">
-              Features
-            </a>
-            <a href="#for-agents" className="hover:text-on-surface">
-              For agents
-            </a>
-            <a href="#models" className="hover:text-on-surface">
-              Models
-            </a>
-            <a href="#how-it-works" className="hover:text-on-surface">
-              How it works
-            </a>
-            <a href="#faq" className="hover:text-on-surface">
-              FAQ
-            </a>
-            <Link to="/demo" className="hover:text-on-surface">
-              Live demo
-            </Link>
-            <Link to="/new-agent" className="hover:text-on-surface">
-              New agent
-            </Link>
-            <Link to="/docs" className="hover:text-on-surface">
-              Docs
-            </Link>
-            <Link to="/status" className="hover:text-on-surface">
-              Status
-            </Link>
-            <Link to="/legal/terms" className="hover:text-on-surface">
-              Terms
-            </Link>
-            <Link to="/legal/privacy" className="hover:text-on-surface">
-              Privacy
-            </Link>
-            <Link to="/sign-up" className="hover:text-on-surface">
-              Console
-            </Link>
-            <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
-            <SocialLinks />
+          <div className="grid grid-cols-2 gap-x-10 gap-y-6 sm:grid-cols-3">
+            <FooterLinkGroup label="Product">
+              <Link to="/docs" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Docs
+              </Link>
+              <Link to="/demo" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Live demo
+              </Link>
+              <Link to="/new-agent" className={PUBLIC_FOOTER_LINK_CLASS}>
+                New agent
+              </Link>
+              <Link to="/status" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Status
+              </Link>
+            </FooterLinkGroup>
+            <FooterLinkGroup label="Legal">
+              <Link to="/legal/terms" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Terms
+              </Link>
+              <Link to="/legal/privacy" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Privacy
+              </Link>
+              <Link to="/legal/security" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Security
+              </Link>
+            </FooterLinkGroup>
+            <FooterLinkGroup label="Account">
+              <Link to="/sign-up" className={PUBLIC_FOOTER_LINK_CLASS}>
+                Console
+              </Link>
+              <a href="#faq" className={PUBLIC_FOOTER_LINK_CLASS}>
+                FAQ
+              </a>
+              <SocialLinks />
+            </FooterLinkGroup>
           </div>
         </div>
       </footer>
@@ -688,22 +711,50 @@ function SectionHeader({
 }
 
 function PlatformMetricsStrip() {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? PLATFORM_KPIS : PLATFORM_KPIS.slice(0, KPI_PREVIEW_COUNT);
+  const hiddenCount = PLATFORM_KPIS.length - KPI_PREVIEW_COUNT;
+
   return (
-    <ul className="grid w-full grid-cols-3 sm:grid-cols-6">
-      {PLATFORM_KPIS.map((stat, index) => (
-        <li
-          key={stat.label}
-          className={cn(
-            "flex min-w-0 flex-col items-center px-2 py-1 text-center sm:px-3",
-            index % 3 !== 0 && "border-l border-border-strong",
-            index > 0 && "sm:border-l sm:border-border-strong",
-            index >= 3 && "max-sm:border-t max-sm:border-border-strong max-sm:pt-4",
-          )}
+    <div>
+      <ul
+        className={cn(
+          "grid w-full grid-cols-3",
+          expanded && "sm:grid-cols-6",
+        )}
+      >
+        {visible.map((stat, index) => (
+          <li
+            key={stat.label}
+            className={cn(
+              "flex min-w-0 flex-col items-center px-2 py-1 text-center sm:px-3",
+              index % 3 !== 0 && "border-l border-border-strong",
+              expanded && index > 0 && "sm:border-l sm:border-border-strong",
+              expanded && index >= 3 && "max-sm:border-t max-sm:border-border-strong max-sm:pt-4",
+            )}
+          >
+            <PlatformKpiInline {...stat} />
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex justify-center">
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center gap-1 rounded-md px-3 text-body-sm text-on-surface-muted outline-none transition-colors duration-base ease-standard hover:bg-surface hover:text-on-surface focus-visible:shadow-focus"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
         >
-          <PlatformKpiInline {...stat} />
-        </li>
-      ))}
-    </ul>
+          {expanded ? "Show fewer metrics" : `+${hiddenCount} more`}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform duration-slow ease-standard",
+              expanded && "rotate-180",
+            )}
+            strokeWidth={1.75}
+          />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -741,7 +792,91 @@ function PlatformKpiInline({
   );
 }
 
+function AgentChannelGrid() {
+  const [expanded, setExpanded] = useState(false);
+  const hiddenCount = AGENT_CHANNELS.length - CHANNEL_PREVIEW_COUNT;
+
+  return (
+    <div className="mt-8">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {AGENT_CHANNELS.slice(0, CHANNEL_PREVIEW_COUNT).map((channel) => (
+          <ChannelCard key={channel.title} {...channel} />
+        ))}
+      </div>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-slow ease-standard",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden" inert={!expanded}>
+          <div className="grid gap-4 pt-4 sm:grid-cols-2">
+            {AGENT_CHANNELS.slice(CHANNEL_PREVIEW_COUNT).map((channel) => (
+              <ChannelCard key={channel.title} {...channel} />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 flex justify-start">
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center gap-1 rounded-md px-3 text-body-sm text-on-surface-muted outline-none transition-colors duration-base ease-standard hover:bg-surface hover:text-on-surface focus-visible:shadow-focus"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Show fewer channels" : `+${hiddenCount} more`}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform duration-slow ease-standard",
+              expanded && "rotate-180",
+            )}
+            strokeWidth={1.75}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AudienceCard({
+  icon: Icon,
+  title,
+  body,
+  cta,
+  accent,
+}: {
+  icon: typeof Code2;
+  title: string;
+  body: string;
+  cta: { label: string; to: string };
+  accent: "primary" | "warning";
+}) {
+  const iconTone = {
+    primary: "text-primary border-primary/30 bg-primary/10",
+    warning: "text-warning border-warning/30 bg-warning/10",
+  }[accent];
+
+  return (
+    <GlowingCard accent={accent} className="flex h-full flex-col">
+      <span className={cn("mb-4 inline-flex h-10 w-10 items-center justify-center rounded-md border", iconTone)}>
+        <Icon className="h-5 w-5" strokeWidth={1.75} />
+      </span>
+      <h3 className="text-title-md text-on-surface">{title}</h3>
+      <p className="mt-2 flex-1 text-body-sm text-on-surface-muted">{body}</p>
+      <Button
+        to={cta.to}
+        variant={accent === "primary" ? "primary" : "secondary"}
+        size="sm"
+        className="mt-6 w-fit"
+      >
+        {cta.label}
+        <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+      </Button>
+    </GlowingCard>
+  );
+}
+
+function ChannelCard({
   icon: Icon,
   title,
   body,
@@ -753,17 +888,72 @@ function AudienceCard({
   cta: { label: string; to: string };
 }) {
   return (
-    <GlowingCard accent="primary" className="flex h-full flex-col">
-      <span className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-md border border-primary/30 bg-primary/10">
-        <Icon className="h-5 w-5 text-primary" strokeWidth={1.75} />
+    <Card interactive className="flex h-full flex-col p-5">
+      <span className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-on-surface-muted">
+        <Icon className="h-4 w-4" strokeWidth={1.75} />
       </span>
       <h3 className="text-title-md text-on-surface">{title}</h3>
       <p className="mt-2 flex-1 text-body-sm text-on-surface-muted">{body}</p>
-      <Button to={cta.to} variant="secondary" size="sm" className="mt-6 w-fit">
+      <Button to={cta.to} variant="tertiary" size="sm" className="mt-5 w-fit">
         {cta.label}
         <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
       </Button>
-    </GlowingCard>
+    </Card>
+  );
+}
+
+function StepSequence({
+  steps,
+  tone,
+  completeAccent,
+  card,
+}: {
+  steps: readonly { step: string; title: string; body: string }[];
+  tone: "primary" | "info";
+  completeAccent: "success" | "info";
+  card: "glow" | "plain";
+}) {
+  const numberClass = tone === "primary" ? "text-primary/30" : "text-info/50";
+
+  return (
+    <ol className="mt-8 grid gap-0 md:mt-4 md:grid-cols-3 md:gap-4">
+      {steps.map((step, index) => {
+        const isLast = index === steps.length - 1;
+        const accent = isLast ? completeAccent : tone;
+        const body = (
+          <>
+            <p className={cn("text-metric", isLast ? (completeAccent === "success" ? "text-success/40" : "text-info/40") : numberClass)}>
+              {step.step}
+            </p>
+            <h3 className="mt-3 text-title-md text-on-surface">{step.title}</h3>
+            <p className="mt-2 text-body-sm text-on-surface-muted">{step.body}</p>
+          </>
+        );
+
+        return (
+          <li key={`${tone}-${step.step}`} className="relative">
+            {index > 0 ? (
+              <div className="flex justify-center py-1 md:hidden" aria-hidden>
+                <span className="h-6 w-px bg-border-strong" />
+              </div>
+            ) : null}
+            <div className="relative">
+              {!isLast ? (
+                <div
+                  className="pointer-events-none absolute top-1/2 -right-2 z-10 hidden h-px w-4 bg-border-strong md:block lg:-right-3 lg:w-6"
+                  aria-hidden
+                />
+              ) : null}
+              {card === "glow" ? (
+                <GlowingCard accent={accent}>{body}</GlowingCard>
+              ) : (
+                <Card accent={accent}>{body}</Card>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

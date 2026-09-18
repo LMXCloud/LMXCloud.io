@@ -12,6 +12,7 @@ import type { ApiKeyRecord, ApiKeyStore } from "../auth/store.js";
 import type { CreditStore } from "../credits/store.js";
 import { providerUpForStatus, type HealthStore } from "../health/store.js";
 import type { ProviderAdapter } from "../providers/types.js";
+import { providerHealthyForPublicStatus } from "../routing/public-status.js";
 import type { RoutingSignalStore } from "../routing/signal-store.js";
 import { notificationAccountId, notificationAccountIds } from "./account-id.js";
 import {
@@ -87,10 +88,18 @@ export function statusHealthSnapshot(
       deps.providers.map((provider) => {
         const status = statuses[provider.name];
         const route = routing?.byProvider[provider.name];
+        const traffic = deps.routingSignalStore?.getReportedRealTraffic(
+          provider.name,
+        );
         return [
           provider.name,
           {
-            healthy: providerUpForStatus(status),
+            healthy: providerHealthyForPublicStatus({
+              gatewayUp: providerUpForStatus(status),
+              realAttempts: traffic?.attempts ?? 0,
+              realSuccesses: traffic?.successes ?? 0,
+              circuit: route?.circuit,
+            }),
             routing: { circuit: route?.circuit ?? "closed" },
           },
         ];

@@ -7,6 +7,7 @@ Draft legal content for the free beta. **Not legal advice.** Have a qualified at
 | [Terms of Service](./terms-of-service.md) | [/legal/terms](https://lmxcloud.io/legal/terms) | Draft 2026-07-08 |
 | [Privacy Policy](./privacy-policy.md) | [/legal/privacy](https://lmxcloud.io/legal/privacy) | Draft 2026-07-08 |
 | [Acceptable Use](./acceptable-use.md) | [/legal/acceptable-use](https://lmxcloud.io/legal/acceptable-use) | Draft 2026-07-08 |
+| [Security](../SECURITY.md) | [/legal/security](https://lmxcloud.io/legal/security) (also [/security](https://lmxcloud.io/security)) | Current production posture |
 
 ## Feedback & support
 

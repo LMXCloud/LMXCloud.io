@@ -1,12 +1,10 @@
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { listUniqueModelAliases, listVisionModelAliases } from "@lmxcloud/shared";
+import { Menu, Plug, Rocket, X } from "lucide-react";
 import { API_BASE, fetchModels, type ModelsResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
 import { SeoHead } from "../components/SeoHead";
-import { PageHeader } from "../components/console/PageHeader";
 import {
   DataTable,
   DataTableBody,
@@ -17,11 +15,18 @@ import {
   DataTableTh,
 } from "../components/console/DataTable";
 import { CodeBlock } from "../components/docs/CodeBlock";
+import { CopyPageButton, DocsPager } from "../components/docs/DocsChrome";
+import { DocsNav } from "../components/docs/DocsNav";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
-import { DOC_SECTIONS } from "../content/docs/sections";
-import { cn } from "../lib/cn";
+import {
+  docPath,
+  getAdjacentDocPages,
+  getDocPage,
+  isDocPageId,
+  type DocPageId,
+} from "../content/docs/sections";
 import {
   AGENT_TEMPLATE_DIR,
   AGENT_TEMPLATE_GITHUB,
@@ -29,7 +34,14 @@ import {
   agentRunCommand,
 } from "../lib/snippets";
 
-const SECTIONS = DOC_SECTIONS;
+const DOC_LINK = "text-primary hover:text-primary-hover";
+
+export function DocsIndexRedirect() {
+  const { hash } = useLocation();
+  const id = hash.replace(/^#/, "");
+  if (isDocPageId(id)) return <Navigate to={docPath(id)} replace />;
+  return <Navigate to={docPath("overview")} replace />;
+}
 
 const EXAMPLE_BASE = API_BASE;
 const MCP_HOSTED_BASE = "https://mcp.lmxcloud.io/mcp";
@@ -38,70 +50,113 @@ const CATALOG_MODELS = listUniqueModelAliases();
 const VISION_ALIASES = listVisionModelAliases();
 
 export function DocsPage() {
+  const { slug } = useParams<{ slug?: string }>();
   const [models, setModels] = useState<ModelsResponse | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const location = useLocation();
+  const [navOpen, setNavOpen] = useState(false);
+  const invalidSlug = !isDocPageId(slug);
+  const activeId: DocPageId = isDocPageId(slug) ? slug : "overview";
+  const page = getDocPage(activeId);
+  const { prev, next } = getAdjacentDocPages(activeId);
+  const path = docPath(activeId);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    setNavOpen(false);
+  }, [activeId]);
+
+  useEffect(() => {
+    if (activeId !== "models") return;
     void fetchModels()
       .then(setModels)
       .catch((err) =>
         setModelsError(err instanceof Error ? err.message : "Failed to load models"),
       );
-  }, []);
+  }, [activeId]);
 
   useEffect(() => {
-    if (!location.hash) return;
-    const targetId = location.hash.slice(1);
-    if (!targetId) return;
+    if (!navOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [navOpen]);
 
-    // React Router hash navigation can miss in-app transitions; scroll explicitly.
-    window.requestAnimationFrame(() => {
-      const element = document.getElementById(targetId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  }, [location.hash]);
+  if (invalidSlug) {
+    return <Navigate to={docPath("overview")} replace />;
+  }
 
   return (
     <PublicLayout>
       <SeoHead
-        title="API Docs — LMX Cloud OpenAI-compatible inference"
-        description="Developer docs for LMX Cloud: OpenAI-compatible chat completions (vision), web search, x402 USDC payments, MCP, ElizaOS plugin, self-hosted Vault, agent template, wallet auth, DePIN routing, and verifiable logs."
-        path="/docs"
+        title={`${page.heading} — LMX Cloud Docs`}
+        description={page.description}
+        path={path}
       />
-      <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
-        <PageHeader
-          eyebrow="Developers"
-          title="API documentation"
-          description="OpenAI-compatible inference routed through decentralized compute — Web3-native rails for developers and autonomous agents."
-          actions={
-            <Button to="/sign-up" size="sm">
-              Get API key
-            </Button>
-          }
-        />
+      <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-8 sm:py-12">
+        <div className="mb-6 lg:hidden">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setNavOpen(true)}
+          >
+            <Menu className="h-4 w-4" strokeWidth={1.75} />
+            Browse docs
+          </Button>
+        </div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[220px_1fr]">
-          <nav className="hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
-            <p className="text-label-sm text-on-surface-faint">On this page</p>
-            <ul className="mt-3 space-y-1">
-              {SECTIONS.map((section) => (
-                <li key={section.id}>
-                  <a
-                    href={`#${section.id}`}
-                    className="block rounded-md px-3 py-1.5 text-body-sm text-on-surface-muted transition-colors hover:bg-surface hover:text-on-surface"
-                  >
-                    {section.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+        {navOpen ? (
+          <div className="lg:hidden">
+            <button
+              type="button"
+              className="fixed inset-0 z-40 bg-background/70"
+              aria-label="Close docs menu"
+              onClick={() => setNavOpen(false)}
+            />
+            <div className="fixed inset-y-0 left-0 z-50 w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto border-r border-border bg-background p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-label-sm text-on-surface-faint">Docs</p>
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-md text-on-surface-muted outline-none hover:bg-surface hover:text-on-surface focus-visible:shadow-focus"
+                  aria-label="Close docs menu"
+                  onClick={() => setNavOpen(false)}
+                >
+                  <X className="h-5 w-5" strokeWidth={1.75} />
+                </button>
+              </div>
+              <DocsNav activeId={activeId} onNavigate={() => setNavOpen(false)} />
+            </div>
+          </div>
+        ) : null}
 
-          <div className="min-w-0 space-y-14">
-            <DocSection id="overview" title="What is LMX Cloud?">
+        <div className="grid gap-10 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
+            <DocsNav activeId={activeId} />
+          </aside>
+
+          <article className="min-w-0">
+            <p className="text-label-sm text-on-surface-faint">{page.group}</p>
+            <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <h1 className="text-headline-lg text-on-surface">{page.heading}</h1>
+              <CopyPageButton path={path} />
+            </div>
+            <p className="mt-4 max-w-2xl text-body-md text-on-surface-muted">
+              {page.description}
+            </p>
+
+            {activeId === "overview" ? <OverviewProductCards /> : null}
+
+            <div className="mt-10">
+            {activeId === "overview" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 LMX Cloud is an OpenAI-compatible inference API that routes your requests through
                 decentralized compute networks — io.net, AkashML, and Aethir Mesh — with automatic
@@ -110,9 +165,9 @@ export function DocsPage() {
                 already use (including vision{" "}
                 <code className="text-mono-sm">image_url</code> content on supported models),
                 plus balance-billed{" "}
-                <a href="#web-search" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("web-search")} className={DOC_LINK}>
                   web search
-                </a>
+                </Link>
                 , backed by DePIN infrastructure instead of a single centralized vendor.
               </p>
               <p className="mt-4 text-body-md text-on-surface-muted">
@@ -128,36 +183,38 @@ export function DocsPage() {
                   x402
                 </a>
                 , and get routed DePIN inference back. Discover the same surface through{" "}
-                <a href="#mcp" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("mcp")} className={DOC_LINK}>
                   MCP
-                </a>
+                </Link>
                 , the{" "}
-                <a href="#eliza" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("eliza")} className={DOC_LINK}>
                   ElizaOS plugin
-                </a>
+                </Link>
                 , or x402 Bazaar / Agentic.Market after a settled payment. Self-host agent memory
                 with{" "}
-                <a href="#vault" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("vault")} className={DOC_LINK}>
                   Vault
-                </a>
+                </Link>
                 , or fork the{" "}
-                <a href="#agent-template" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("agent-template")} className={DOC_LINK}>
                   agent template
-                </a>{" "}
+                </Link>{" "}
                 to get Grid reasoning and a local Vault with zero configuration.
               </p>
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 Developers can still sign in with email (Clerk) or a wallet, fund a balance with
-                USDC on Base, and verify usage receipts anchored on-chain. The sections below are the
+                USDC on Base, and verify usage receipts anchored on-chain. Use the sidebar for the
                 technical reference; see{" "}
-                <a href="#roadmap" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("roadmap")} className={DOC_LINK}>
                   Roadmap
-                </a>{" "}
+                </Link>{" "}
                 for what is shipped versus what is next.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="quickstart" title="Quickstart">
+            {activeId === "quickstart" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 LMX Cloud exposes the same endpoints as OpenAI. Base URL:
               </p>
@@ -221,9 +278,11 @@ const response = await client.chat.completions.create({
 console.log(response.choices[0].message.content);`}
                 </CodeBlock>
               </div>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="mcp" title="MCP (Model Context Protocol)">
+            {activeId === "mcp" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 LMX Cloud ships a hosted MCP server (
                 <code className="text-mono-sm">@lmxcloud/mcp-server</code>) at{" "}
@@ -382,9 +441,11 @@ console.log(response.choices[0].message.content);`}
                 payment settles per call. <code className="text-mono-sm">web_search</code> is
                 balance-only today.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="eliza" title="ElizaOS plugin">
+            {activeId === "eliza" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Autonomously funded ElizaOS agents can use LMX Cloud as their LLM provider via{" "}
                 <a
@@ -516,14 +577,16 @@ elizaos plugins add @lmxcloud/plugin-lmxcloud`}
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 Pricing is dynamic per request (x402 <code className="text-mono-sm">upto</code>{" "}
                 scheme). See{" "}
-                <a href="#pricing" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("pricing")} className={DOC_LINK}>
                   Pricing
-                </a>{" "}
+                </Link>{" "}
                 for the public quote endpoint.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="vault" title="Vault (lmx-tool-storage)">
+            {activeId === "vault" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Vault is self-hostable agent memory — one operator, one instance, one database. It
                 is not an LMX-hosted service. Documents are namespaced markdown with YAML
@@ -807,17 +870,19 @@ EOF`}
                   </DataTableBody>
                 </DataTable>
               </div>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="agent-template" title="Agent template">
+            {activeId === "agent-template" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">lmx-agent-template</code> is an open-source, forkable
                 starter kit for any <code className="text-mono-sm">lmx.*</code> agent. Clone it,
                 rewrite one file (<code className="text-mono-sm">src/agent.ts</code>), and you have
                 an agent that reasons via LMX Grid and remembers across runs via its own{" "}
-                <a href="#vault" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("vault")} className={DOC_LINK}>
                   Vault
-                </a>{" "}
+                </Link>{" "}
                 — with zero configuration for either.
               </p>
               <p className="mt-4 text-body-sm text-on-surface-muted">
@@ -957,9 +1022,11 @@ ${agentRunCommand()}`}
                 instance, another host). When that variable is set, the template does not start
                 storage itself.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="authentication" title="Authentication">
+            {activeId === "authentication" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Inference endpoints require a bearer token. Keys use the format{" "}
                 <code className="text-mono-sm text-on-surface">lmx_[32-char-hex]</code>.
@@ -975,9 +1042,11 @@ ${agentRunCommand()}`}
                 project — existing accounts get an auto-created Default project. Create more
                 projects in the console to separate keys and budgets per integration.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="wallet-auth" title="Wallet authentication">
+            {activeId === "wallet-auth" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Wallet sign-in is a first-class alternative to email/Clerk. Accounts are keyed by a
                 verified Ethereum address via{" "}
@@ -1073,9 +1142,11 @@ ${agentRunCommand()}`}
                 — returns <code className="text-mono-sm">exists: true | false</code> for the given
                 wallet.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="usdc-funding" title="Funding with USDC">
+            {activeId === "usdc-funding" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Wallet-linked accounts can fund inference by sending USDC on Base (or Base Sepolia in
                 test configurations) to the LMX treasury. A background poller watches for ERC-20
@@ -1185,9 +1256,11 @@ ${agentRunCommand()}`}
   -d '{"amount": 10}'`}
                 </CodeBlock>
               </div>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="chat" title="Chat completions">
+            {activeId === "chat" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">POST /v1/chat/completions</code> accepts
                 OpenAI-compatible request bodies. LMX routes to the best available provider and
@@ -1213,9 +1286,11 @@ ${agentRunCommand()}`}
                 Optional routing preference via{" "}
                 <code className="text-mono-sm">x-lmx-prefer</code> header — see Routing below.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="vision" title="Vision">
+            {activeId === "vision" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Vision-capable models accept OpenAI-style multimodal user messages:{" "}
                 <code className="text-mono-sm">text</code> and{" "}
@@ -1257,9 +1332,11 @@ ${agentRunCommand()}`}
                 traffic is still <code className="text-mono-sm">resource_type=chat</code> and is
                 covered by existing reliability telemetry automatically.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="web-search" title="Web search">
+            {activeId === "web-search" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">POST /v1/web/search</code> is a Brave Search
                 passthrough behind LMX metering — not a DePIN{" "}
@@ -1295,9 +1372,11 @@ ${agentRunCommand()}`}
                 is not part of the DePIN multi-network reliability claim — see{" "}
                 <code className="text-mono-sm">docs/web-search.md</code>.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="streaming" title="Streaming">
+            {activeId === "streaming" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Set <code className="text-mono-sm">"stream": true</code> to receive Server-Sent
                 Events (SSE). Token deltas follow the OpenAI streaming format. After the stream
@@ -1335,9 +1414,11 @@ data: {
                 balance arrive in the <code className="text-mono-sm">lmx.meta</code> event after
                 usage is calculated.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="routing" title="Routing">
+            {activeId === "routing" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Control how requests are routed with the{" "}
                 <code className="text-mono-sm">x-lmx-prefer</code> request header. When a provider
@@ -1393,9 +1474,11 @@ data: {
                 <code className="text-mono-sm">x-lmx-fallback: true</code> is set — no silent
                 centralization.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="headers" title="Response headers">
+            {activeId === "headers" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Every successful chat completion includes LMX routing and billing metadata in
                 response headers (non-streaming) or the final SSE event (streaming).
@@ -1438,9 +1521,11 @@ data: {
                   </DataTableBody>
                 </DataTable>
               </div>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="verifiable-logs" title="Verifiable logs">
+            {activeId === "verifiable-logs" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 Each inference writes a deterministic metadata receipt (provider, model, tokens,
                 cost, latency, fallback flag, timestamp — never prompt or response content).
@@ -1538,9 +1623,11 @@ data: {
                 <code className="text-mono-sm">ANCHOR_BATCH_MIN_EVENTS</code> (see{" "}
                 <code className="text-mono-sm">.env.example</code>).
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="pricing" title="Pricing (x402)">
+            {activeId === "pricing" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">GET /v1/pricing</code> returns per-model list
                 prices for x402 per-call payments, plus fixed tool prices under{" "}
@@ -1582,18 +1669,20 @@ data: {
                 After a real mainnet settlement, the route is indexed on Coinbase&apos;s x402 Bazaar
                 (Agentic.Market is the search UI over that index) — no separate signup form. The same
                 dual path (balance key or x402) is available through{" "}
-                <a href="#mcp" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("mcp")} className={DOC_LINK}>
                   MCP
-                </a>{" "}
+                </Link>{" "}
                 and the{" "}
-                <a href="#eliza" className="text-primary hover:text-primary-hover">
+                <Link to={docPath("eliza")} className={DOC_LINK}>
                   ElizaOS plugin
-                </a>
+                </Link>
                 .
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="models" title="Models">
+            {activeId === "models" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">GET /v1/models</code> returns aliases available from
                 currently healthy providers. No authentication required. Vision-capable aliases:{" "}
@@ -1686,9 +1775,11 @@ data: {
                 </Link>{" "}
                 for labels grouped by family.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="roadmap" title="Roadmap">
+            {activeId === "roadmap" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 LMX Cloud is Web3-native infrastructure for developers and autonomous agents. Here is
                 what you can build on today and what is still in flight.
@@ -1786,9 +1877,13 @@ data: {
                   <Link to="/legal/privacy" className="text-primary hover:text-primary-hover">
                     Privacy
                   </Link>
-                  , and{" "}
+                  ,{" "}
                   <Link to="/legal/acceptable-use" className="text-primary hover:text-primary-hover">
                     Acceptable Use
+                  </Link>
+                  , and{" "}
+                  <Link to="/legal/security" className="text-primary hover:text-primary-hover">
+                    Security
                   </Link>{" "}
                   (beta drafts — attorney review still recommended for larger exposure).
                 </li>
@@ -1800,9 +1895,11 @@ data: {
                 distribution channels are findable; next work is reliability, trust, and traffic —
                 not the payment plumbing itself.
               </p>
-            </DocSection>
+            </>
+            ) : null}
 
-            <DocSection id="endpoints" title="Public endpoints">
+            {activeId === "endpoints" ? (
+              <>
               <p className="text-body-md text-on-surface-muted">
                 These endpoints require no authentication:
               </p>
@@ -1818,7 +1915,7 @@ data: {
                     <DataTableRow>
                       <DataTableCell mono>GET /v1/status</DataTableCell>
                       <DataTableCell>
-                        Live provider health and fallback chain — see{" "}
+                        Live real-chat success (rolling window), gateway ping, and fallback chain — see{" "}
                         <Link to="/status" className="text-primary hover:text-primary-hover">
                           status page
                         </Link>
@@ -1898,27 +1995,54 @@ data: {
                 <code className="text-mono-sm">POST /v1/web/search</code>. Chat also accepts
                 anonymous x402 payment; web search is balance-path only today.
               </p>
-            </DocSection>
-          </div>
+            </>
+            ) : null}
+            </div>
+            <DocsPager prev={prev} next={next} nextCta={page.id === "overview" ? page.nextCta : undefined} />
+          </article>
         </div>
       </div>
     </PublicLayout>
   );
 }
 
-function DocSection({
-  id,
-  title,
-  children,
-}: {
-  id: string;
-  title: string;
-  children: ReactNode;
-}) {
+function OverviewProductCards() {
   return (
-    <section id={id} className="scroll-mt-24">
-      <h2 className="text-headline-md text-on-surface">{title}</h2>
-      <div className={cn("mt-4")}>{children}</div>
-    </section>
+    <div className="mt-10">
+      <h2 className="text-title-md text-on-surface">Products</h2>
+      <p className="mt-2 text-body-sm text-on-surface-muted">
+        Choose the surface that fits how you build.
+      </p>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <Link to={docPath("chat")} className="group block rounded-xl outline-none focus-visible:shadow-focus">
+          <Card interactive className="h-full rounded-xl p-5">
+            <Rocket className="h-5 w-5 text-on-surface" strokeWidth={1.75} />
+            <p className="mt-4 text-title-md text-on-surface">Inference API</p>
+            <p className="mt-2 text-body-sm text-on-surface-muted">
+              OpenAI-compatible chat completions, vision, streaming, and DePIN routing. Pay with a
+              balance or per call via x402.
+            </p>
+          </Card>
+        </Link>
+        <Link to={docPath("mcp")} className="group block rounded-xl outline-none focus-visible:shadow-focus">
+          <Card interactive className="h-full rounded-xl p-5">
+            <Plug className="h-5 w-5 text-on-surface" strokeWidth={1.75} />
+            <p className="mt-4 text-title-md text-on-surface">MCP &amp; agent tools</p>
+            <p className="mt-2 text-body-sm text-on-surface-muted">
+              Hosted MCP server, ElizaOS plugin, Vault memory, and a forkable agent template.
+            </p>
+          </Card>
+        </Link>
+      </div>
+      <div className="mt-4 rounded-xl border border-primary/30 bg-primary/10 px-5 py-4">
+        <p className="text-body-sm text-primary">
+          Agents can skip signup entirely: omit an API key, pay USDC on Base via x402, and get
+          routed DePIN inference back.{" "}
+          <Link to={docPath("pricing")} className="font-medium underline underline-offset-2">
+            Learn more
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

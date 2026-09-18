@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import pg from "pg";
+import "../config.js";
 import { PROVIDER_BILLING_EXHAUSTED_CODE } from "../providers/billing-errors.js";
 import {
+  OPERATOR_ATTRIBUTION_USAGE_ERROR_CODES,
+  OPERATOR_ATTRIBUTION_USAGE_SQL,
   isOperatorAttributionError,
   isOperatorAttributionHealthDetail,
   isOperatorAttributionTelemetryCode,
@@ -115,5 +119,54 @@ describe("operator attribution vs provider outage", () => {
     assert.equal(isOperatorAttributionTelemetryCode("provider_http_402"), true);
     assert.equal(isOperatorAttributionTelemetryCode("provider_http_502"), false);
     assert.equal(isOperatorAttributionTelemetryCode("provider_http_429"), false);
+  });
+
+  it("USAGE SQL keeps NULL error_code rows when wrapped in NOT (successful traffic)", () => {
+    assert.equal(
+      OPERATOR_ATTRIBUTION_USAGE_SQL,
+      `(error_code IS NOT NULL AND error_code IN ('${OPERATOR_ATTRIBUTION_USAGE_ERROR_CODES.join("', '")}'))`,
+    );
+  });
+
+  it("successful NULL error_code rows count in real-traffic aggregates; billing-exhausted still excluded", async (t) => {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      t.skip("DATABASE_URL is required to evaluate the SQL fragment");
+      return;
+    }
+
+    const client = new pg.Client({
+      connectionString,
+      ssl: connectionString.includes("localhost")
+        ? undefined
+        : { rejectUnauthorized: false },
+    });
+    await client.connect();
+    try {
+      const result = await client.query<{
+        error_code: string | null;
+        success: boolean;
+      }>(
+        `SELECT error_code, success
+         FROM (VALUES
+           (NULL::text, true),
+           ('${PROVIDER_BILLING_EXHAUSTED_CODE}', false),
+           ('provider_http_502', false)
+         ) AS usage_events(error_code, success)
+         WHERE NOT ${OPERATOR_ATTRIBUTION_USAGE_SQL}`,
+      );
+
+      const included = result.rows.map((row) => row.error_code);
+      assert.equal(result.rows.length, 2);
+      assert.ok(included.includes(null));
+      assert.equal(
+        result.rows.find((row) => row.error_code === null)?.success,
+        true,
+      );
+      assert.ok(included.includes("provider_http_502"));
+      assert.ok(!included.includes(PROVIDER_BILLING_EXHAUSTED_CODE));
+    } finally {
+      await client.end();
+    }
   });
 });
