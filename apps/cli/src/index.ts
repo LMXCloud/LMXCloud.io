@@ -13,8 +13,9 @@ import { logout, persistAuth, resolveAuth } from "./auth.js";
 import type { CliAuth } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+// Later file wins. The repo .env overrides the CLI .env and any values already in the shell.
+dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
 
 const API_URL = process.env.LMX_API_URL ?? "http://localhost:3000";
 let model = process.env.LMX_MODEL ?? "llama-3-70b";

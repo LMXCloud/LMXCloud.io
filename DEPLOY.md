@@ -10,6 +10,7 @@ Ship the **API on Railway** and the **dashboard + demo on Vercel**.
 | Dashboard | Vercel | `apps/web` |
 | Demo (optional) | Vercel | `apps/demo` |
 | Ops dashboard | Vercel | `apps/ops` |
+| Receipt verifier | Vercel | `apps/verifier` |
 
 ---
 
@@ -25,6 +26,14 @@ Internal visibility for x402 / MCP / usage / provider health. Deploy like `apps/
 | `VITE_OPS_GRID_API_KEY` | Vercel ops / `apps/ops/.env` | Funded ops-owned `lmx_` key for Notification Center drafts. Prefer paste in the UI for production builds (same as the ops key). |
 
 MCP forwards tool log events to `POST /v1/ops/mcp-events` when `LMX_OPS_API_KEY` and `LMX_API_BASE_URL` are set (plus `LMX_ORIGIN_SECRET` if origin lock is enabled).
+
+## Receipt verifier (`apps/verifier`)
+
+Public page that checks a settlement receipt. No account and no database of its own — it calls `GET /v1/settlements/:id/proof` (settlement id or receipt hash). Deploy like `apps/web` (Vercel root `apps/verifier`).
+
+| Variable | Where | Notes |
+|----------|-------|-------|
+| `VITE_API_URL` | Vercel verifier | e.g. `https://api.lmxcloud.io`. Falls back to that host when unset. |
 
 ## Prerequisites
 

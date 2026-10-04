@@ -15,6 +15,7 @@ describe("estimatePromptTokens", () => {
       2,
     );
     assert.equal(estimatePromptTokens([{ content: "" }]), 1);
+    assert.equal(estimatePromptTokens([{ content: null }]), 1);
   });
 
   it("adds a per-image token floor for multimodal content", () => {

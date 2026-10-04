@@ -345,6 +345,33 @@ END $$`,
     ADD COLUMN IF NOT EXISTS href_label TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_notifications_visible
     ON notifications (visible_at DESC)`,
+  // Wallet-to-wallet x402 settlements Grid facilitated. Parallel to usage_events
+  // so the receipt payload stays free of provider/model/token fields, while
+  // sharing anchor_batches via receipt_hash + anchor_batch_id + leaf_index.
+  `CREATE TABLE IF NOT EXISTS settlement_receipts (
+    id UUID PRIMARY KEY,
+    reference_id TEXT NOT NULL,
+    payer_wallet TEXT NOT NULL,
+    payee_wallet TEXT NOT NULL,
+    amount NUMERIC(18, 8) NOT NULL,
+    asset TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    payload_json TEXT NOT NULL,
+    receipt_hash TEXT NOT NULL,
+    tx_hash TEXT,
+    chain_id INTEGER NOT NULL,
+    anchor_batch_id UUID REFERENCES anchor_batches(id),
+    leaf_index INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_settlement_receipts_unanchored
+    ON settlement_receipts (created_at)
+    WHERE receipt_hash IS NOT NULL AND anchor_batch_id IS NULL`,
+  // Contract the anchor transaction was sent to. Distinct from the live
+  // ANCHOR_CONTRACT_ADDRESS, which can change after a batch is already anchored.
+  `ALTER TABLE anchor_batches
+    ADD COLUMN IF NOT EXISTS contract_address TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_settlement_receipts_receipt_hash
+    ON settlement_receipts (receipt_hash)`,
 ]
 
 export async function runMigrations(): Promise<void> {

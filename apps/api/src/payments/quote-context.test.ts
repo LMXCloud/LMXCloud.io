@@ -179,6 +179,90 @@ describe("buildChatQuote model availability", () => {
     }
   });
 
+  it("keeps allowlisted tool and sampling fields and drops unknown ones", () => {
+    const parsed = parseChatBody({
+      model: "llama-3.3-70b",
+      messages: [
+        { role: "user", content: "What is the weather in Paris?" },
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "get_weather", arguments: "{\"city\":\"Paris\"}" },
+            },
+          ],
+        },
+        { role: "tool", tool_call_id: "call_1", content: "{\"temp\":18}" },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "get_weather",
+            description: "Look up weather",
+            parameters: { type: "object", properties: { city: { type: "string" } } },
+            extra: true,
+          },
+          extra: true,
+        },
+      ],
+      tool_choice: "auto",
+      response_format: { type: "json_object", extra: true },
+      reasoning_effort: "low",
+      chat_template_kwargs: { enable_thinking: false },
+      top_p: 0.9,
+      stop: ["\n"],
+      seed: 7,
+      stream_options: { include_usage: false, continuous_usage_stats: true, ignored: 1 },
+      user: "should-not-forward",
+      not_a_real_field: { nope: true },
+    });
+
+    assert.ok(
+      !(parsed instanceof InvalidChatRequestError),
+      parsed instanceof InvalidChatRequestError ? parsed.message : "ok",
+    );
+    assert.equal(parsed.tool_choice, "auto");
+    assert.deepEqual(parsed.response_format, { type: "json_object" });
+    assert.equal(parsed.reasoning_effort, "low");
+    assert.deepEqual(parsed.chat_template_kwargs, { enable_thinking: false });
+    assert.equal(parsed.top_p, 0.9);
+    assert.deepEqual(parsed.stop, ["\n"]);
+    assert.equal(parsed.seed, 7);
+    assert.deepEqual(parsed.stream_options, {
+      include_usage: false,
+      continuous_usage_stats: true,
+    });
+    assert.deepEqual(parsed.tools, [
+      {
+        type: "function",
+        function: {
+          name: "get_weather",
+          description: "Look up weather",
+          parameters: { type: "object", properties: { city: { type: "string" } } },
+        },
+      },
+    ]);
+    assert.equal(parsed.messages[1]?.content, null);
+    assert.equal(parsed.messages[1]?.tool_calls?.[0]?.id, "call_1");
+    assert.equal(parsed.messages[2]?.tool_call_id, "call_1");
+    assert.equal("user" in parsed, false);
+    assert.equal("not_a_real_field" in parsed, false);
+  });
+
+  it("rejects a response_format the provider would not understand", () => {
+    const parsed = parseChatBody({
+      model: "llama-3.3-70b",
+      messages: [{ role: "user", content: "hi" }],
+      response_format: { type: "xml" },
+    });
+    assert.ok(parsed instanceof InvalidChatRequestError);
+    assert.match(parsed.message, /response_format/);
+  });
+
   it("throws ChatQuoteError for malformed quote results instead of a generic TypeError", () => {
     try {
       assertSuccessfulChatQuote({ model: "llama-3-70b" });

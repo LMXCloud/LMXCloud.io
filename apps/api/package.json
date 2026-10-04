@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./anchors/receipt": "./src/anchors/receipt.ts",
+    "./anchors/merkle": "./src/anchors/merkle.ts",
+    "./anchors/lookup": "./src/anchors/lookup.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -b --force",
@@ -13,6 +18,7 @@
     "test:x402:soak": "tsx scripts/test-x402-chat.ts --repeat 10 --delay-ms 1000",
     "test:x402:burst": "tsx scripts/test-x402-burst.ts",
     "test:x402:mainnet-canary": "tsx scripts/test-x402-chat.ts --mainnet --pay",
+    "test:x402:settlement": "tsx scripts/test-x402-settlement.ts",
     "test:vision": "tsx scripts/test-vision-chat.ts",
     "check:mainnet-balance": "tsx scripts/check-mainnet-balance.ts --mainnet",
     "dev:mainnet": "tsx watch scripts/dev-mainnet.ts",

@@ -16,6 +16,7 @@ import {
   createLmxX402ResourceServer,
   formatUsdPrice,
 } from "@lmxcloud/x402";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
 import {
@@ -31,6 +32,9 @@ import {
 import { hashPaymentPayload } from "./idempotency.js";
 import type { PaymentStore } from "./store.js";
 import { roundCredits } from "../credits/pricing.js";
+import { persistSettledReceipt, registerSettlementRoutes } from "../settlements/http.js";
+import { SETTLEMENT_PATH, parseSettlementBody } from "../settlements/parse.js";
+import { createSettlementStore } from "../settlements/store.js";
 
 export interface X402ServerDeps {
   app: FastifyInstance;
@@ -44,6 +48,8 @@ export interface X402ServerDeps {
   marginPct: number;
   minCallUsdc: number;
   defaultMaxCompletionTokens: number;
+  /** USDC contract the exact-scheme facilitator settles on this network. */
+  usdcContractAddress: string;
 }
 
 function extractPayerWallet(
@@ -59,6 +65,13 @@ function extractPayerWallet(
   const fromPayload =
     payload.permit2Authorization?.from ?? payload.authorization?.from;
   return (fromPayload ?? "unknown").toLowerCase();
+}
+
+function transportPath(context: { transportContext?: unknown }): string {
+  const transport = context.transportContext as
+    | { request?: { path?: string } }
+    | undefined;
+  return transport?.request?.path?.split("?")[0] ?? "";
 }
 
 function quotedUsdFromRequirements(amountAtomic: string): number {
@@ -128,7 +141,7 @@ function registerEarlyJsonBodyParser(app: FastifyInstance): void {
   app.addHook("onRequest", async (request) => {
     if (request.method !== "POST") return;
     const path = request.url.split("?")[0];
-    if (path !== "/v1/chat/completions") return;
+    if (path !== "/v1/chat/completions" && path !== SETTLEMENT_PATH) return;
 
     const contentType = request.headers["content-type"] ?? "";
     if (!contentType.includes("application/json")) return;
@@ -182,15 +195,38 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
     cdpApiKeyId: deps.cdpApiKeyId,
     cdpApiKeySecret: deps.cdpApiKeySecret,
   });
+  resourceServer.register(deps.networkId, new ExactEvmScheme());
+
+  const settlementStore = createSettlementStore();
+  const settlementEnabled = Boolean(settlementStore && deps.usdcContractAddress);
+  if (settlementStore && deps.usdcContractAddress) {
+    const chainId = Number(deps.networkId.split(":")[1]);
+    resourceServer.onAfterSettle(async (context: SettleResultContext) => {
+      if (transportPath(context) !== SETTLEMENT_PATH) return;
+      await persistSettledReceipt(settlementStore, context, {
+        chainId,
+        usdcContractAddress: deps.usdcContractAddress,
+        log: (err, msg) => {
+          deps.app.log.error({ err }, msg);
+        },
+      });
+    });
+  } else {
+    deps.app.log.warn(
+      "x402 wallet settlement disabled — requires DATABASE_URL and a USDC contract address",
+    );
+  }
 
   if (deps.paymentStore) {
     resourceServer.onAfterVerify(async (context: VerifyResultContext) => {
+      if (transportPath(context) !== "/v1/chat/completions") return;
       deferPaymentStoreWork(deps.app, "verify", () =>
         recordVerifiedPayment(deps, context),
       );
     });
 
     resourceServer.onAfterSettle(async (context: SettleResultContext) => {
+      if (transportPath(context) !== "/v1/chat/completions") return;
       if (!context.result.success || !deps.paymentStore) return;
       deferPaymentStoreWork(deps.app, "settle", async () => {
         const payloadHash = hashPaymentPayload(JSON.stringify(context.paymentPayload));
@@ -236,6 +272,7 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
     });
 
     resourceServer.onVerifiedPaymentCanceled(async (context: VerifiedPaymentCanceledContext) => {
+      if (transportPath(context) !== "/v1/chat/completions") return;
       if (!deps.paymentStore) return;
       deferPaymentStoreWork(deps.app, "cancel", async () => {
         const payloadHash = hashPaymentPayload(JSON.stringify(context.paymentPayload));
@@ -250,7 +287,7 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
     });
   }
 
-  const httpServer = new x402HTTPResourceServer(resourceServer, {
+  const routes = {
     "POST /v1/chat/completions": {
       accepts: {
         scheme: "upto",
@@ -384,7 +421,7 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
           },
         }),
       },
-      unpaidResponseBody: (context) => {
+      unpaidResponseBody: (context: HTTPRequestContext) => {
         const quoteResult = buildChatQuoteFromHttpContext(
           context,
           deps.providers,
@@ -420,9 +457,50 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
         };
       },
     },
-  });
+    ...(settlementEnabled
+      ? {
+          [`POST ${SETTLEMENT_PATH}`]: {
+            accepts: {
+              scheme: "exact" as const,
+              payTo: (context: HTTPRequestContext) =>
+                parseSettlementBody(context.adapter.getBody?.()).payee,
+              price: (context: HTTPRequestContext) =>
+                formatUsdPrice(
+                  parseSettlementBody(context.adapter.getBody?.()).amount,
+                ),
+              network: deps.networkId,
+              maxTimeoutSeconds: 120,
+            },
+            description:
+              "Settle a USDC payment from the calling wallet to any destination wallet and return a Grid receipt of the payer, payee, amount, asset, and caller reference.",
+            mimeType: "application/json",
+            unpaidResponseBody: (context: HTTPRequestContext) => {
+              const intent = parseSettlementBody(context.adapter.getBody?.());
+              return {
+                contentType: "application/json" as const,
+                body: {
+                  error: {
+                    message: "Payment required to settle this transfer",
+                    type: "payment_required",
+                    code: "x402_payment_required",
+                  },
+                  settlement: {
+                    payee: intent.payee,
+                    amount_usdc: intent.amount.toFixed(6),
+                    asset: intent.asset,
+                    reference: intent.reference,
+                  },
+                },
+              };
+            },
+          },
+        }
+      : {}),
+  };
+  const httpServer = new x402HTTPResourceServer(resourceServer, routes);
 
   httpServer.onProtectedRequest(async (context) => {
+    if (context.path.split("?")[0] !== "/v1/chat/completions") return;
     const authHeader = context.adapter.getHeader("authorization");
     if (authHeader?.startsWith("Bearer ")) {
       return { grantAccess: true };
@@ -431,4 +509,14 @@ export function registerX402ChatPayments(deps: X402ServerDeps): void {
 
   registerEarlyJsonBodyParser(deps.app);
   paymentMiddlewareFromHTTPServer(deps.app, httpServer, undefined, undefined, true);
+
+  if (settlementStore && deps.usdcContractAddress) {
+    registerSettlementRoutes(deps.app, {
+      store: settlementStore,
+      usdcContractAddress: deps.usdcContractAddress,
+    });
+    deps.app.log.info(
+      "x402 wallet settlement enabled on POST /v1/settlements",
+    );
+  }
 }

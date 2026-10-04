@@ -105,6 +105,7 @@ export class AnchorPoller {
         txHash: null,
         blockNumber: null,
         chainId: this.config.chainId,
+        contractAddress: null,
         createdAt: new Date().toISOString(),
         anchoredAt: null,
       });
@@ -127,7 +128,12 @@ export class AnchorPoller {
 
     if (anchoredAt > 0n) {
       this.log(`Root ${batch.merkleRoot} already anchored on-chain`);
-      await this.store.markBatchAnchored(batch.id, batch.txHash ?? "0x0", 0n);
+      await this.store.markBatchAnchored(
+        batch.id,
+        batch.txHash ?? "0x0",
+        0n,
+        this.config.contractAddress,
+      );
       return;
     }
 
@@ -149,6 +155,7 @@ export class AnchorPoller {
         batch.id,
         txHash,
         receipt.blockNumber,
+        this.config.contractAddress,
       );
       this.log(
         `Anchored batch ${batch.id} (${batch.eventCount} receipts) in tx ${txHash}`,
@@ -160,7 +167,12 @@ export class AnchorPoller {
         message.toLowerCase().includes("already anchored");
 
       if (alreadyAnchored) {
-        await this.store.markBatchAnchored(batch.id, "0x0", 0n);
+        await this.store.markBatchAnchored(
+          batch.id,
+          "0x0",
+          0n,
+          this.config.contractAddress,
+        );
         this.log(`Root ${batch.merkleRoot} was already anchored`);
         return;
       }

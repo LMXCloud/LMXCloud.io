@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envFile = process.argv.includes("--mainnet")
   ? ".env.mainnet"
   : ".env";
-dotenv.config({ path: path.resolve(__dirname, "../../../", envFile) });
+dotenv.config({ path: path.resolve(__dirname, "../../../", envFile), override: true });
 
 const MAINNET_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 

@@ -11,7 +11,7 @@
     "dev:storage": "pnpm --filter @lmxcloud/lmx-tool-storage dev",
     "dev:tools-host": "pnpm --filter @lmxcloud/pdf-extract build && pnpm --filter @lmxcloud/tools-host dev",
     "dev:web": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/web dev",
-    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/x402 build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build && pnpm --filter @lmxcloud/mcp-server build && pnpm --filter @lmxcloud/web build && pnpm --filter @lmxcloud/ops build",
+    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/x402 build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build && pnpm --filter @lmxcloud/mcp-server build && pnpm --filter @lmxcloud/web build && pnpm --filter @lmxcloud/ops build && pnpm --filter @lmxcloud/verifier build",
     "build:demo": "pnpm --filter @lmxcloud/demo build",
     "build:pdf-extract": "pnpm --filter @lmxcloud/pdf-extract build",
     "build:storage": "pnpm --filter @lmxcloud/lmx-tool-storage build",
@@ -26,7 +26,10 @@
     "deploy:anchor:mainnet": "pnpm --filter @lmxcloud/api deploy:anchor:mainnet",
     "verify:receipt": "pnpm --filter @lmxcloud/api verify:receipt",
     "dev:ops": "pnpm --filter @lmxcloud/ops dev",
-    "build:ops": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/ops build"
+    "build:ops": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/ops build",
+    "dev:verifier": "pnpm --filter @lmxcloud/verifier dev",
+    "build:verifier": "pnpm --filter @lmxcloud/verifier build",
+    "labs-probe": "pnpm --filter @lmxcloud/labs-probe start"
   },
   "engines": {
     "node": ">=20"

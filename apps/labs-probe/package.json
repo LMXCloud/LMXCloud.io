@@ -1,0 +1,27 @@
+{
+  "name": "@lmxcloud/labs-probe",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Paying x402 buyer that checks whether a listed call actually delivers",
+  "type": "module",
+  "bin": {
+    "lmx-labs-probe": "./dist/index.js"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/price.test.ts src/schema.test.ts src/probe.test.ts src/import.test.ts src/drift.test.ts src/reconcile.test.ts src/verdict.test.ts src/grade.test.ts src/preflight.test.ts src/rpc.test.ts src/checks.test.ts src/sample.test.ts"
+  },
+  "dependencies": {
+    "@x402/core": "2.17.0",
+    "@x402/evm": "2.17.0",
+    "dotenv": "^16.5.0",
+    "viem": "^2.54.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

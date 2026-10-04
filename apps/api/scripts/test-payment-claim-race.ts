@@ -13,7 +13,7 @@ import { createPaymentStore } from "../src/payments/store.js";
 import { getPool } from "../src/db/pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
 
 const CONCURRENCY = 40;
 

@@ -13,8 +13,9 @@ import { fileURLToPath } from "url";
 import { spawn } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-dotenv.config({ path: path.join(root, ".env.mainnet") });
-dotenv.config({ path: path.join(root, ".env") });
+// Later file wins. .env.mainnet overrides .env and any values already in the shell.
+dotenv.config({ path: path.join(root, ".env"), override: true });
+dotenv.config({ path: path.join(root, ".env.mainnet"), override: true });
 
 if (process.env.ALLOW_MAINNET_ANCHOR_DEPLOY !== "true") {
   console.error(

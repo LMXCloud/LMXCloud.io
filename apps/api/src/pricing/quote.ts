@@ -23,7 +23,7 @@ export interface QuoteResult {
 }
 
 function contentCharLength(content: ChatMessageContent): number {
-  if (typeof content === "string") return content.length;
+  if (content == null || typeof content === "string") return content?.length ?? 0;
   return content.reduce((sum, part) => {
     if (part.type === "text") return sum + part.text.length;
     return sum;
@@ -31,7 +31,7 @@ function contentCharLength(content: ChatMessageContent): number {
 }
 
 function contentImageCount(content: ChatMessageContent): number {
-  if (typeof content === "string") return 0;
+  if (content == null || typeof content === "string") return 0;
   return content.filter((part) => part.type === "image_url").length;
 }
 

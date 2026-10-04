@@ -18,7 +18,7 @@ import { fileURLToPath } from "url";
 import { listVisionModelAliases } from "@lmxcloud/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
 
 const API_URL = (process.env.API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const VISION_MODEL =

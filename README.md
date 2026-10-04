@@ -297,6 +297,7 @@ apps/tools/       Tool packages + shared tools-host (deployable)
 apps/web/         Dashboard (Vite + React)
 apps/demo/        Demo UI
 apps/ops/         Internal ops dashboard
+apps/verifier/    Public settlement receipt verifier
 apps/cli/         CLI helpers
 packages/shared/  OpenAI-compatible types + model catalog
 packages/x402/    Shared CDP/x402 resource-server helpers

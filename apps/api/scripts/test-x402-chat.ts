@@ -35,7 +35,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envFile = process.argv.includes("--mainnet")
   ? ".env.mainnet"
   : ".env";
-dotenv.config({ path: path.resolve(__dirname, "../../../", envFile) });
+dotenv.config({ path: path.resolve(__dirname, "../../../", envFile), override: true });
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 const MODEL = process.env.MODEL ?? "llama-3-70b";

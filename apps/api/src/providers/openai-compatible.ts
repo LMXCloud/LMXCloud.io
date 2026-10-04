@@ -1,5 +1,10 @@
 import { isOpenAiProprietaryModelId, type ChatCompletionRequest } from "@lmxcloud/shared";
 import { classifyProviderTelemetryErrorCode } from "./billing-errors.js";
+import {
+  applyProviderFieldPolicy,
+  FORWARDED_CHAT_FIELDS,
+  normalizeChatCompletionPayload,
+} from "./chat-passthrough.js";
 import { ProviderError, type ProviderAdapter, type ProviderHealthResult } from "./types.js";
 
 export interface OpenAiCompatibleConfig {
@@ -164,26 +169,8 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
       const start = performance.now();
       const upstreamModel = config.resolveModel(request.model);
       const baseUrl = resolveRequestBaseUrl(config, request.model);
-
-      const body: Record<string, unknown> = {
-        model: upstreamModel,
-        messages: request.messages,
-        stream: request.stream === true,
-      };
-
-      if (request.stream === true) {
-        body.stream_options = { include_usage: true };
-      }
-
-      if (request.temperature !== undefined) {
-        body.temperature = request.temperature;
-      }
-
-      const maxTokens = request.max_completion_tokens ?? request.max_tokens;
-      if (maxTokens !== undefined) {
-        body.max_tokens = maxTokens;
-        body.max_completion_tokens = maxTokens;
-      }
+      const body = buildUpstreamChatBody(config.name, upstreamModel, request);
+      logForwardedChatFields(config.name, upstreamModel, body);
 
       let response: Response;
       try {
@@ -232,9 +219,11 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
         };
       }
 
-      const data = (await response.json()) as Awaited<
-        ReturnType<ProviderAdapter["chatCompletion"]>
-      >["response"];
+      const data = normalizeChatCompletionPayload(
+        (await response.json()) as Awaited<
+          ReturnType<ProviderAdapter["chatCompletion"]>
+        >["response"],
+      );
 
       return {
         response: data,
@@ -286,9 +275,9 @@ function parseProviderStream(
             continue;
           }
 
-          const parsed = JSON.parse(data) as {
-            [key: string]: unknown;
-          };
+          const parsed = normalizeChatCompletionPayload(
+            JSON.parse(data) as { [key: string]: unknown },
+          );
 
           yield `data: ${JSON.stringify(parsed)}\n\n`;
         }
@@ -322,6 +311,84 @@ function parseProviderStream(
       ],
     },
   };
+}
+
+/** Upstream body. Unknown request fields are not copied. */
+export function buildUpstreamChatBody(
+  provider: string,
+  upstreamModel: string,
+  request: ChatCompletionRequest,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: upstreamModel,
+    messages: request.messages,
+    stream: request.stream === true,
+  };
+
+  if (request.stream === true) {
+    // Keep usage on the stream unless the caller explicitly turns it off.
+    body.stream_options = {
+      include_usage: true,
+      ...request.stream_options,
+    };
+  } else if (request.stream_options) {
+    body.stream_options = request.stream_options;
+  }
+
+  if (request.temperature !== undefined) {
+    body.temperature = request.temperature;
+  }
+
+  const maxTokens = request.max_completion_tokens ?? request.max_tokens;
+  if (maxTokens !== undefined) {
+    body.max_tokens = maxTokens;
+    body.max_completion_tokens = maxTokens;
+  }
+
+  if (request.tools !== undefined) body.tools = request.tools;
+  if (request.tool_choice !== undefined) body.tool_choice = request.tool_choice;
+  if (request.response_format !== undefined) body.response_format = request.response_format;
+  if (request.reasoning_effort !== undefined) body.reasoning_effort = request.reasoning_effort;
+  if (request.chat_template_kwargs !== undefined) {
+    body.chat_template_kwargs = request.chat_template_kwargs;
+  }
+  if (request.top_p !== undefined) body.top_p = request.top_p;
+  if (request.stop !== undefined) body.stop = request.stop;
+  if (request.seed !== undefined) body.seed = request.seed;
+
+  applyProviderFieldPolicy(provider, body);
+  return body;
+}
+
+function logForwardedChatFields(
+  provider: string,
+  model: string,
+  body: Record<string, unknown>,
+): void {
+  const fields = FORWARDED_CHAT_FIELDS.filter((field) => {
+    if (body[field] === undefined) return false;
+    // The streaming default is existing behavior, not a caller-supplied field.
+    if (
+      field === "stream_options" &&
+      JSON.stringify(body.stream_options) === JSON.stringify({ include_usage: true })
+    ) {
+      return false;
+    }
+    return true;
+  });
+  if (fields.length === 0) return;
+
+  console.info(
+    JSON.stringify({
+      msg: "upstream_chat_fields",
+      provider,
+      model,
+      fields,
+      ...(body.response_format !== undefined
+        ? { response_format: body.response_format }
+        : {}),
+    }),
+  );
 }
 
 async function* iterateStreamChunks(

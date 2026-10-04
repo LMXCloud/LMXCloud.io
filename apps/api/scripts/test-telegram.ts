@@ -15,7 +15,7 @@ import {
 } from "../src/notify/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
 
 async function sendRaw(text: string): Promise<{ ok: boolean; status: number; body: string }> {
   const config = getTelegramConfig();

@@ -1,0 +1,1815 @@
+{
+  "runId": "sample-r3-1791078097889",
+  "seed": "1791078097889",
+  "n": 20,
+  "catalog": 29316,
+  "eligible": 792,
+  "exclusions": {
+    "invalid": 0,
+    "not-v2": 186,
+    "not-exact-base-usdc": 335,
+    "price": 11324,
+    "missing-input": 179,
+    "missing-output": 912,
+    "lmxcloud": 0,
+    "pilot-host": 0,
+    "tested-host": 142,
+    "side-effect": 4539,
+    "async": 42,
+    "duplicate-host": 10865
+  },
+  "replacements": [
+    {
+      "droppedId": "api.agentsouk.dev-post-v1-x402-lst_01M1XYP3M9411Q18YT0MDB3V6S",
+      "droppedUrl": "https://api.agentsouk.dev/v1/x402/lst_01M1XYP3M9411Q18YT0MDB3V6S",
+      "reason": "v1",
+      "replacementId": "jsonrecon.com-post-extract-verified",
+      "replacementUrl": "https://jsonrecon.com/extract/verified"
+    },
+    {
+      "droppedId": "kronos.forgemesh.io-get-api-kronos-futures-funding",
+      "droppedUrl": "https://kronos.forgemesh.io/api/kronos/futures/funding?symbol=BTC",
+      "reason": "v1",
+      "replacementId": "cot.lonestaroracle.xyz-get-cot",
+      "replacementUrl": "https://cot.lonestaroracle.xyz/cot?market=gold"
+    },
+    {
+      "droppedId": "cot.lonestaroracle.xyz-get-cot",
+      "droppedUrl": "https://cot.lonestaroracle.xyz/cot?market=gold",
+      "reason": "v1",
+      "replacementId": "automaton.outlier.money-post-work",
+      "replacementUrl": "https://automaton.outlier.money/work"
+    }
+  ],
+  "frame": "random-r3",
+  "pools": {
+    "ai-generation": 97,
+    "scraping/extraction": 38,
+    "search/research": 88,
+    "finance/market-data": 125,
+    "onchain/crypto-data": 88,
+    "other": 356
+  },
+  "selected": [
+    {
+      "id": "signalforgestudios.com-post-x402-prospect-qualifier",
+      "url": "https://signalforgestudios.com/x402/prospect-qualifier",
+      "sampleCategory": "ai-generation",
+      "method": "POST",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x7e4d786057930b66cb45e2017a587425ebade587",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "icp": "local service businesses that need qualified inbound leads",
+        "url": "https://example-roofing-company.com",
+        "use_case": "lead_generation"
+      },
+      "outputExample": {
+        "data": {
+          "analyzed_url": "https://example-roofing-company.com/",
+          "business_type": "home_service",
+          "canonical_host": "example-roofing-company.com",
+          "confidence": 88,
+          "contact_channels": {
+            "contact_page_found": true,
+            "contact_page_url": "https://example-roofing-company.com/contact",
+            "email_found": [
+              "info@example-roofing-company.com"
+            ],
+            "phone_found": [
+              "555-555-1212"
+            ],
+            "social_links": []
+          },
+          "evidence": [
+            {
+              "bytes_sampled": 12000,
+              "fetched_at_utc": "2026-09-02T00:00:00.000Z",
+              "status": 200,
+              "url": "https://example-roofing-company.com/"
+            }
+          ],
+          "marketing_observations": [
+            {
+              "code": "weak_conversion_cta",
+              "confidence": 70,
+              "evidence": "No clear quote, schedule, booking, or call CTA detected in sampled content.",
+              "severity": "medium"
+            }
+          ],
+          "opportunity_signals": [
+            "Trust/friction issue: missing_policy_language",
+            "Marketing issue: weak_conversion_cta",
+            "Lead-generation fit score: 77"
+          ],
+          "prospect_qualification": {
+            "rationale": "Strong first-pass fit for lead-generation or trust-review follow-up.",
+            "score": 77
+          },
+          "recommendation": "qualify",
+          "service_name": "Signal Forge Prospect Qualifier",
+          "service_slug": "prospect-qualifier",
+          "trust_or_friction_observations": [
+            {
+              "code": "missing_policy_language",
+              "confidence": 65,
+              "evidence": "Privacy, terms, or policy language was not detected in sampled text.",
+              "severity": "medium"
+            }
+          ],
+          "use_case": "lead_generation"
+        },
+        "success": true
+      },
+      "listingOutputSchema": {
+        "properties": {
+          "data": {
+            "properties": {
+              "analyzed_url": {
+                "type": "string"
+              },
+              "business_type": {
+                "type": "string"
+              },
+              "canonical_host": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "number"
+              },
+              "contact_channels": {
+                "type": "object"
+              },
+              "evidence": {
+                "type": "array"
+              },
+              "lead_generation_fit": {
+                "type": "object"
+              },
+              "marketing_observations": {
+                "type": "array"
+              },
+              "opportunity_signals": {
+                "type": "array"
+              },
+              "prospect_qualification": {
+                "type": "object"
+              },
+              "public_site_summary": {
+                "type": "object"
+              },
+              "recommendation": {
+                "enum": [
+                  "skip",
+                  "review",
+                  "qualify"
+                ],
+                "type": "string"
+              },
+              "service_name": {
+                "type": "string"
+              },
+              "service_slug": {
+                "type": "string"
+              },
+              "trust_or_friction_observations": {
+                "type": "array"
+              },
+              "use_case": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "meta": {
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "hivemindos-paid-agent-gateway.hivemindos.workers.dev-post-api-x402-photo-keyworder-analyses",
+      "url": "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/x402/photo-keyworder/analyses",
+      "sampleCategory": "ai-generation",
+      "method": "POST",
+      "listedPriceUsdc": 0.03,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xbD62F8DCB52E21CA5BDf20ba173488Da101eBCf0",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "context": "Product photo for an ecommerce catalog",
+        "filename": "product-photo.png",
+        "imageDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+      },
+      "outputExample": {
+        "ok": true,
+        "result": {
+          "analysis": {
+            "annotation": {
+              "keywords": [
+                "..."
+              ],
+              "title": "..."
+            },
+            "status": "complete"
+          }
+        },
+        "runId": "pka_..."
+      },
+      "level": 0
+    },
+    {
+      "id": "api.messyvirgo.com-get-api-v1-paid-context-news-latest",
+      "url": "https://api.messyvirgo.com/api/v1/paid/context/news/latest?as_of=2026-09-11&include=summary%2Cactive_items",
+      "sampleCategory": "ai-generation",
+      "method": "GET",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x2C34eB776AA5Ec50987A32774eB242a5Bc20b357",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "as_of": "2026-09-11",
+        "include": "summary,active_items"
+      },
+      "outputExample": {
+        "curated_items": [
+          {
+            "impact": "medium",
+            "title": "Spot ETF inflows continue"
+          }
+        ],
+        "news_score_final": 58,
+        "news_title": "ETF flows steady, regulation quiet",
+        "news_verdict": "neutral",
+        "snapshot_date": "2026-09-11"
+      },
+      "level": 0
+    },
+    {
+      "id": "k-data-x402-production.theblack1022.workers.dev-get-api-research-latest",
+      "url": "https://k-data-x402-production.theblack1022.workers.dev/api/research/latest?limit=10",
+      "sampleCategory": "ai-generation",
+      "method": "GET",
+      "listedPriceUsdc": 0.02,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x519c79c7EB7566F7353a324472A5CE4f05330C81",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "limit": "10"
+      },
+      "outputExample": {
+        "as_of": "2026-08-02T00:00:00.000Z",
+        "count": 20,
+        "items": [
+          {
+            "analyst": "이재혁",
+            "broker": "LS증권",
+            "company": "HMM",
+            "published_date": "2026-07-31",
+            "rating": "Buy",
+            "rating_raw": "Buy",
+            "report_idx": 651350,
+            "source_url": "https://consensus.hankyung.com/analysis/downpdf?report_idx=651350",
+            "summary_en": "LS Securities rates HMM (011200) Buy with a KRW 30,000 target in a 2Q26 preview by analyst Lee Jae-hyuk.",
+            "target_price": 30000,
+            "ticker": "011200",
+            "title": "2Q26 Preview: 건물 사이에 피어난 장미",
+            "title_en": "2Q26 Preview: a rose blooming between the buildings"
+          }
+        ]
+      },
+      "level": 0
+    },
+    {
+      "id": "sovereign-x402-zeta.vercel.app-post-api-v1-web-scrape",
+      "url": "https://sovereign-x402-zeta.vercel.app/api/v1/web/scrape",
+      "sampleCategory": "scraping/extraction",
+      "method": "POST",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x41595e02275629126aD11551E39ee9Ac8531Ad3C",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "url": "https://example.com"
+      },
+      "outputExample": {},
+      "level": 0
+    },
+    {
+      "id": "fractalai.net.co-post-api-x402-midas-attest",
+      "url": "https://fractalai.net.co/api/x402/midas-attest",
+      "sampleCategory": "scraping/extraction",
+      "method": "POST",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xC13789e82661635d9Cea38a53A0390CF9939ef4f",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "address": "0xafbf278e06d2269aba2a4898afbab2ecb2584924"
+      },
+      "outputExample": {
+        "attestation": {
+          "algorithm": "ml-dsa-65",
+          "facts": {
+            "chain_id": 1,
+            "health_factor": 1.0009
+          },
+          "receipt_id": "sha256…"
+        }
+      },
+      "level": 0
+    },
+    {
+      "id": "api.cryptoetfsentinel.com-get-v1-profiles-issuer",
+      "url": "https://api.cryptoetfsentinel.com/v1/profiles/issuer?cik=0001980994",
+      "sampleCategory": "scraping/extraction",
+      "method": "GET",
+      "listedPriceUsdc": 0.03,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x169Bf49c6ee5A179190121Ab8D180B50e31683d1",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "cik": "0001980994"
+      },
+      "outputExample": {
+        "data": {
+          "ap_count_cash": 5,
+          "ap_count_cash_delta": 1,
+          "ap_count_inkind": 3,
+          "basket_size": 40000,
+          "cik": "0001980994",
+          "custodian": "Coinbase Custody Trust Company, LLC",
+          "custodian_changed": false,
+          "fee_delta": null,
+          "fee_waiver_expiry": null,
+          "filing_date": "2026-01-15",
+          "inkind_eligible": true,
+          "reference_rate": "CME CF Bitcoin Reference Rate - New York Variant",
+          "sponsor_fee": "0.25%"
+        },
+        "meta": {
+          "total": null
+        }
+      },
+      "listingOutputSchema": {
+        "properties": {
+          "data": {
+            "description": "The endpoint payload — type varies per route"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "properties": {
+              "limit": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "offset": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "total": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "pro-api.coinmarketcap.com-get-x402-v1-dex-search",
+      "url": "https://pro-api.coinmarketcap.com/x402/v1/dex/search?q=bnb",
+      "sampleCategory": "search/research",
+      "method": "GET",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x3C5f3a6cE224BB89D72f5EB4232ecC27F67B3eeA",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "q": "bnb"
+      },
+      "outputExample": {
+        "data": {
+          "tks": [
+            {
+              "addr": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+              "cid": 7192,
+              "dec": 18,
+              "liq": 141742079.24,
+              "mc": 1053227843.87,
+              "n": "Wrapped BNB",
+              "pc24h": 0.0395,
+              "plt": "BSC",
+              "pltId": 14,
+              "plti": 1839,
+              "pu": "626.34551132653429346570",
+              "s": "WBNB",
+              "v24h": 253425810.06
+            }
+          ],
+          "total": 50
+        },
+        "status": {
+          "credit_count": 1,
+          "elapsed": 2388,
+          "error_code": "0",
+          "error_message": "",
+          "timestamp": "2026-02-26T11:05:46.935Z"
+        }
+      },
+      "level": 0
+    },
+    {
+      "id": "google-trends.use.x402atlas.com-get-interest-by-region",
+      "url": "https://google-trends.use.x402atlas.com/interest-by-region?country=us&keyword=bitcoin",
+      "sampleCategory": "search/research",
+      "method": "GET",
+      "listedPriceUsdc": 0.03,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x9AACeabAD8E1858b72fcEA1665381B168841b2fa",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "country": "us",
+        "keyword": "bitcoin"
+      },
+      "outputExample": {
+        "country": "us",
+        "keyword": "bitcoin",
+        "queried_at": "2026-06-05T12:00:00Z",
+        "regions": [
+          {
+            "region": "California",
+            "value": 100
+          }
+        ]
+      },
+      "listingOutputSchema": {
+        "properties": {
+          "country": {
+            "description": "Echoed country code, lower-cased",
+            "type": "string"
+          },
+          "keyword": {
+            "description": "Echoed search keyword",
+            "type": "string"
+          },
+          "queried_at": {
+            "description": "UTC timestamp the upstream was queried",
+            "format": "date-time",
+            "type": "string"
+          },
+          "regions": {
+            "description": "Interest broken down by subregion within the country",
+            "items": {
+              "properties": {
+                "region": {
+                  "description": "Subregion name",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "Relative search-popularity index (0-100)",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "region",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keyword",
+          "country",
+          "queried_at",
+          "regions"
+        ],
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "api.qonoro.ai-post-v1-person-search",
+      "url": "https://api.qonoro.ai/v1/person/search",
+      "sampleCategory": "search/research",
+      "method": "POST",
+      "listedPriceUsdc": 0.05,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x40B62aa49F4a929760fb2DD0Fcb0642f0AA872eb",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "buyer_region": "unknown",
+        "industry": "fintech",
+        "limit": 5,
+        "location": "New York, NY",
+        "title": "VP of Sales"
+      },
+      "outputExample": {
+        "cache_hit": false,
+        "criteria": {
+          "industry": "fintech",
+          "location": "New York, NY",
+          "title": "VP of Sales"
+        },
+        "quality_warnings": [],
+        "request_id": "b2c3d4e5-0000-0000-0000-000000000000",
+        "response_time_ms": 6100,
+        "result_count": 2,
+        "results": [
+          {
+            "company_name": "Example Fintech Inc.",
+            "confidence_score": 0.81,
+            "department": "sales",
+            "full_name": "Jane Doe",
+            "is_decision_maker": true,
+            "linkedin_url": "https://www.linkedin.com/in/janedoe",
+            "location": "New York, NY",
+            "seniority": "vp",
+            "title": "VP of Sales"
+          }
+        ],
+        "sources": [
+          "https://example.com/team"
+        ]
+      },
+      "listingOutputSchema": {
+        "properties": {
+          "cache_hit": {
+            "type": "boolean"
+          },
+          "criteria": {
+            "type": "object"
+          },
+          "quality_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "response_time_ms": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "result_count": {
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "company_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "confidence_score": {
+                  "type": "number"
+                },
+                "department": {
+                  "enum": [
+                    "engineering",
+                    "sales",
+                    "marketing",
+                    "finance",
+                    "product",
+                    "hr",
+                    "legal",
+                    "operations",
+                    "executive",
+                    "other",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "full_name": {
+                  "type": "string"
+                },
+                "is_decision_maker": {
+                  "type": "boolean"
+                },
+                "linkedin_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "location": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seniority": {
+                  "enum": [
+                    "c_level",
+                    "vp",
+                    "director",
+                    "manager",
+                    "individual_contributor",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "registry.wickedapi.com-get-tools",
+      "url": "https://registry.wickedapi.com/tools?category=data&min_score=80&protocol=x402&sort=score",
+      "sampleCategory": "search/research",
+      "method": "GET",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xB71C06dAC44c91bc997FB84C247DeEF676F4A9f6",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "category": "data",
+        "min_score": "80",
+        "protocol": "x402",
+        "sort": "score"
+      },
+      "outputExample": {
+        "data": [
+          {
+            "category": "data",
+            "id": "…",
+            "name": "Example Tool",
+            "protocol": "x402",
+            "score": {
+              "compositeScore": 92
+            }
+          }
+        ],
+        "meta": {
+          "count": 1,
+          "total": 1
+        }
+      },
+      "level": 0
+    },
+    {
+      "id": "derivatives-pricer-production.up.railway.app-post-v1-option-price",
+      "url": "https://derivatives-pricer-production.up.railway.app/v1/option/price",
+      "sampleCategory": "finance/market-data",
+      "method": "POST",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x34cfb8bdbf16e4484b7da0ed31deed5771b16c8f",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "dividendYield": 0,
+        "optionType": "call",
+        "rate": 0.05,
+        "spot": 100,
+        "strike": 100,
+        "timeToExpiry": 1,
+        "volatility": 0.2
+      },
+      "outputExample": {
+        "computedAt": "2026-01-01T00:00:00.000Z",
+        "greekConvention": "raw",
+        "greeks": {
+          "delta": 0.63683059,
+          "gamma": 0.01876202,
+          "rho": 53.23248343,
+          "theta": -6.41402764,
+          "vega": 37.52403469
+        },
+        "greeksQuality": "analytic",
+        "inputs": {
+          "dividendYield": 0,
+          "greekConvention": "raw",
+          "model": "bsm",
+          "optionStyle": "european",
+          "optionType": "call",
+          "rate": 0.05,
+          "spot": 100,
+          "strike": 100,
+          "timeToExpiry": 1,
+          "volatility": 0.2
+        },
+        "model": "black-scholes-merton",
+        "optionStyle": "european",
+        "price": 10.45057562,
+        "requestId": "00000000-0000-4000-8000-000000000001",
+        "timeline": {
+          "calendarYearsToExpiry": 1,
+          "effectiveStart": "2026-01-01T00:00:00.000Z",
+          "expiration": "2027-01-01T06:00:00.000Z",
+          "forwardStart": "2026-01-01T00:00:00.000Z",
+          "tauYears": 1,
+          "yearBasis": "ACT/365.25"
+        },
+        "units": {
+          "delta": "dV/dS or dV/dF (share / forward equivalent)",
+          "gamma": "d²V/dS² or d²V/dF²",
+          "price": "option value in spot/forward currency units",
+          "rho": "dV/dr per 1.0 absolute rate (not per 1%)",
+          "theta": "dV/dT per year (not per day)",
+          "vega": "dV/dσ per 1.0 absolute volatility (not per 1%)"
+        }
+      },
+      "listingOutputSchema": {
+        "description": "Fair value and Greeks. European Greeks are analytic BSM; American Greeks are finite-difference on the CRR tree. timeline.tauYears is the model life (window); calendarYearsToExpiry is purchase→expiry.",
+        "properties": {
+          "computedAt": {
+            "description": "ISO-8601 UTC timestamp of computation",
+            "type": "string"
+          },
+          "greeks": {
+            "description": "Greeks for hedge construction",
+            "properties": {
+              "delta": {
+                "description": "∂V/∂S",
+                "type": "number"
+              },
+              "gamma": {
+                "description": "∂²V/∂S²",
+                "type": "number"
+              },
+              "rho": {
+                "description": "∂V/∂r per 1.0 absolute rate",
+                "type": "number"
+              },
+              "theta": {
+                "description": "∂V/∂T per year",
+                "type": "number"
+              },
+              "vega": {
+                "description": "∂V/∂σ per 1.0 absolute vol",
+                "type": "number"
+              }
+            },
+            "required": [
+              "delta",
+              "gamma",
+              "vega",
+              "theta",
+              "rho"
+            ],
+            "type": "object"
+          },
+          "greeksQuality": {
+            "enum": [
+              "analytic",
+              "finite-difference"
+            ],
+            "type": "string"
+          },
+          "inputs": {
+            "description": "Echo of validated request inputs (timeToExpiry may be resolved τ)",
+            "type": "object"
+          },
+          "model": {
+            "enum": [
+              "black-scholes-merton",
+              "binomial-crr-american"
+            ],
+            "type": "string"
+          },
+          "optionStyle": {
+            "enum": [
+              "european",
+              "american"
+            ],
+            "type": "string"
+          },
+          "price": {
+            "description": "Model option fair value in underlying currency units",
+            "type": "number"
+          },
+          "requestId": {
+            "description": "Correlation id for this call",
+            "type": "string"
+          },
+          "timeline": {
+            "description": "Resolved ACT/365.25 window",
+            "type": "object"
+          },
+          "treeSteps": {
+            "type": "integer"
+          },
+          "units": {
+            "description": "Human/agent readable unit notes for price and Greeks",
+            "type": "object"
+          }
+        },
+        "required": [
+          "price",
+          "greeks",
+          "inputs",
+          "model",
+          "optionStyle",
+          "timeline",
+          "greeksQuality",
+          "requestId",
+          "computedAt"
+        ],
+        "title": "OptionPriceResponse",
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "cryptodataapi.com-get-api-v1-market-intelligence-etf-btc-flows",
+      "url": "https://cryptodataapi.com/api/v1/market-intelligence/etf/btc/flows?asset=btc",
+      "sampleCategory": "finance/market-data",
+      "method": "GET",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xb48699946ce35fdab44b5cd99ad41eb8d977ba8b",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "asset": "btc"
+      },
+      "outputExample": {
+        "flows": [
+          {
+            "flow_usd": 174600000,
+            "time": 1788742356
+          }
+        ]
+      },
+      "level": 0
+    },
+    {
+      "id": "x402.donnyautomation.com-get-avalanche-reserves",
+      "url": "https://x402.donnyautomation.com/avalanche/reserves?pair=WAVAX%2FUSDC",
+      "sampleCategory": "finance/market-data",
+      "method": "GET",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x2740651e046c59aB2A6510401140643292d3a96F",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "query": {
+        "pair": "WAVAX/USDC"
+      },
+      "outputExample": {
+        "chainId": 43114,
+        "network": "avalanche",
+        "ts": "2026-07-31T00:00:00.000Z"
+      },
+      "level": 0
+    },
+    {
+      "id": "zk.quickai.build-post-prove",
+      "url": "https://zk.quickai.build/prove",
+      "sampleCategory": "onchain/crypto-data",
+      "method": "POST",
+      "listedPriceUsdc": 0.05,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x85557C90027354eAeFFe9Ee4B4f4014818d8D3e1",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "min_balance_usdc": 1000,
+        "tier": "basic",
+        "wallet": "0x0000000000000000000000000000000000000001"
+      },
+      "outputExample": {
+        "block_number": 25000000,
+        "calldata": "0x",
+        "claims": {
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "balance_proof_type": "rpc_attestation",
+          "balance_qualifier_met": true,
+          "min_balance_tier": "1000 USDC",
+          "nullifier_scope": "quickzkauth-v1",
+          "observed_balance_usdc": 2500.5,
+          "ownership_proof_type": "semaphore_zk",
+          "ownership_proven": true,
+          "snapshot_block": 25000000
+        },
+        "erc8004_compatible": true,
+        "expiry": "2026-06-03T01:30:00.000Z",
+        "job_id": "550e8400-e29b-41d4-a716-446655440000",
+        "on_chain_verifiable": false,
+        "privacy_score": "maximal",
+        "proof_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        "service_version": "1.0.1",
+        "timestamp": "2026-06-03T01:00:00.000Z",
+        "valid": true,
+        "validation_registry_hint": {
+          "reference_uri": "https://zk.quickai.build/proof/550e8400-e29b-41d4-a716-446655440000",
+          "suggested_evidence_type": "zk_proof",
+          "suggested_tag": "base_wallet_qualification"
+        },
+        "verified_by": "Quick AI — Coeur d'Alene, Idaho, US",
+        "verifier_contract": "0x0000000000000000000000000000000000000000",
+        "x402_payment_ref": {
+          "amount_usdc": "0.05",
+          "network": "eip155:8453",
+          "payer": "0x0000000000000000000000000000000000000002",
+          "poll_uri": "https://zk.quickai.build/proof/550e8400-e29b-41d4-a716-446655440000",
+          "resource": "POST /prove",
+          "status": "settled",
+          "tx_hash": "0xabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+        }
+      },
+      "listingOutputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "block_number": {
+            "type": "integer"
+          },
+          "calldata": {
+            "type": "string"
+          },
+          "claims": {
+            "additionalProperties": false,
+            "properties": {
+              "asset": {
+                "type": "string"
+              },
+              "balance_proof_type": {
+                "enum": [
+                  "rpc_attestation",
+                  "zk_range"
+                ],
+                "type": "string"
+              },
+              "balance_qualifier_met": {
+                "type": "boolean"
+              },
+              "min_balance_tier": {
+                "type": "string"
+              },
+              "nullifier_scope": {
+                "type": "string"
+              },
+              "observed_balance_usdc": {
+                "type": "number"
+              },
+              "ownership_proof_type": {
+                "enum": [
+                  "semaphore_zk"
+                ],
+                "type": "string"
+              },
+              "ownership_proven": {
+                "type": "boolean"
+              },
+              "snapshot_block": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ownership_proven",
+              "ownership_proof_type",
+              "balance_qualifier_met",
+              "balance_proof_type",
+              "min_balance_tier",
+              "asset",
+              "snapshot_block",
+              "nullifier_scope"
+            ],
+            "type": "object"
+          },
+          "erc8004_compatible": {
+            "type": "boolean"
+          },
+          "expiry": {
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "on_chain_verifiable": {
+            "type": "boolean"
+          },
+          "privacy_score": {
+            "type": "string"
+          },
+          "proof_hash": {
+            "type": "string"
+          },
+          "service_version": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "validation_registry_hint": {
+            "additionalProperties": false,
+            "properties": {
+              "reference_uri": {
+                "type": "string"
+              },
+              "suggested_evidence_type": {
+                "type": "string"
+              },
+              "suggested_tag": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "suggested_evidence_type",
+              "suggested_tag"
+            ],
+            "type": "object"
+          },
+          "verified_by": {
+            "type": "string"
+          },
+          "verifier_contract": {
+            "type": "string"
+          },
+          "x402_payment_ref": {
+            "additionalProperties": false,
+            "properties": {
+              "amount_usdc": {
+                "type": "string"
+              },
+              "network": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "poll_uri": {
+                "type": "string"
+              },
+              "resource": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pending_settlement",
+                  "settled"
+                ],
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "network"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "verified_by",
+          "valid",
+          "job_id",
+          "claims",
+          "proof_hash",
+          "block_number",
+          "expiry",
+          "verifier_contract",
+          "calldata",
+          "on_chain_verifiable",
+          "timestamp",
+          "privacy_score",
+          "erc8004_compatible",
+          "validation_registry_hint",
+          "x402_payment_ref",
+          "service_version"
+        ],
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "agentic-reservations.vercel.app-post-api-book",
+      "url": "https://agentic-reservations.vercel.app/api/book",
+      "sampleCategory": "onchain/crypto-data",
+      "method": "POST",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x66717045858d9f598e2ebd046bf42a0b1063c0fa",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "config_id": "eyJ2ZXJzaW9uIjoiMS4yIi...",
+        "day": "2026-05-01",
+        "party_size": 2,
+        "venue_id": "6194"
+      },
+      "outputExample": {
+        "kind": "booked",
+        "reservation_id": 987654,
+        "resy_token": "abc123token",
+        "success": true
+      },
+      "listingOutputSchema": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "reservation_id": {
+            "type": "integer"
+          },
+          "resy_token": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "zayguard.onrender.com-post-v1-assessments",
+      "url": "https://zayguard.onrender.com/v1/assessments",
+      "sampleCategory": "onchain/crypto-data",
+      "method": "POST",
+      "listedPriceUsdc": 0.05,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xF66b43E9532493C8877bA1e518028457c3A093Ea",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "chain": "base",
+        "from_address": "0x1111111111111111111111111111111111111111",
+        "to_address": "0x2222222222222222222222222222222222222222",
+        "value_wei": 0
+      },
+      "outputExample": {
+        "api_version": "v1",
+        "decision": "allow",
+        "reasons": [
+          "No value transfer or contract-call data was provided."
+        ]
+      },
+      "level": 0
+    },
+    {
+      "id": "api.aurelianflo.com-get-api-ofac-wallet-screen-:address",
+      "url": "https://api.aurelianflo.com/api/ofac-wallet-screen/EVM%20wallet%20address%20(0x-prefixed%2C%2040%20hex%20characters)?asset=ETH",
+      "sampleCategory": "onchain/crypto-data",
+      "method": "GET",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0x348Df429BD49A7506128c74CE1124A81B4B7dC9d",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": "application/json",
+      "x402Version": 2,
+      "query": {
+        "asset": "ETH"
+      },
+      "outputExample": {
+        "data": {
+          "matches": [
+            {
+              "address": "0x098B716B8Aaf21512996dC57EB0615e2383E2f96",
+              "aliases": [
+                "Hidden Cobra"
+              ],
+              "asset": "ETH",
+              "entityName": "Lazarus Group",
+              "entryId": "27307",
+              "identityId": "19011",
+              "listName": "SDN List",
+              "listedOn": "2019-09-13",
+              "measures": [
+                "Block",
+                "Program"
+              ],
+              "normalizedAddress": "0x098b716b8aaf21512996dc57eb0615e2383e2f96",
+              "profileId": "27307",
+              "programs": [
+                "DPRK3"
+              ],
+              "sourceType": "Digital Currency Address - ETH"
+            }
+          ],
+          "query": {
+            "address": "0x098B716B8Aaf21512996dC57EB0615e2383E2f96",
+            "asset": "ETH",
+            "normalizedAddress": "0x098b716b8aaf21512996dc57eb0615e2383e2f96"
+          },
+          "screeningOnly": true,
+          "sourceFreshness": {
+            "addressCount": 2,
+            "coveredAssets": [
+              "ETH",
+              "XBT"
+            ],
+            "datasetPublishedAt": "2026-04-06T02:00:00.000Z",
+            "refreshedAt": "2026-04-06T02:00:00.000Z",
+            "sourceUrl": "https://www.treasury.gov/ofac/downloads/sanctions/1.0/sdn_advanced.xml"
+          },
+          "summary": {
+            "exactAddressMatch": true,
+            "manualReviewRecommended": true,
+            "matchCount": 1,
+            "status": "match"
+          }
+        },
+        "source": "OFAC SDN Advanced XML",
+        "success": true
+      },
+      "level": 0
+    },
+    {
+      "id": "jsonrecon.com-post-extract-verified",
+      "url": "https://jsonrecon.com/extract/verified",
+      "sampleCategory": "scraping/extraction",
+      "method": "POST",
+      "listedPriceUsdc": 0.02,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xC1726e09aEa4b9b967353B7b56890955E9E5Bc2c",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {
+        "url": "https://www.seed-sack.com/products/the-classic-single-seed-sack"
+      },
+      "outputExample": {
+        "cached": false,
+        "data": {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "brand": {
+            "@type": "Brand",
+            "name": "Seed Sack"
+          },
+          "name": "The Classic Seed Sack",
+          "offers": {
+            "@type": "Offer",
+            "availability": "https://schema.org/InStock",
+            "price": "17.99",
+            "priceCurrency": "USD"
+          },
+          "sku": "11413-1983"
+        },
+        "extraction_ms": 1400,
+        "schema_type": "Product",
+        "success": true,
+        "verdict": "verified",
+        "verification": {
+          "ambiguous_offer": false,
+          "content_sha256": "sha256:3b6f1d7a74b32ea172e1ac97db4e1838f36a80f31c873539cc02964211432f7a",
+          "contradictions": [],
+          "coverage": {
+            "conflicted": 0,
+            "corroborated": 4,
+            "single_source": 0
+          },
+          "efficiency": {
+            "estimate_method": "characters_divided_by_4",
+            "estimated_page_tokens": 12000,
+            "estimated_response_tokens": 600,
+            "estimated_tokens_avoided": 11400,
+            "page_characters": 48000,
+            "response_characters": 2400
+          },
+          "fields": {
+            "availability": {
+              "sources": [
+                {
+                  "channel": "json_ld",
+                  "excerpt": "\"availability\": \"https://schema.org/InStock\"",
+                  "value": "https://schema.org/InStock"
+                },
+                {
+                  "channel": "visible_text",
+                  "excerpt": "In stock",
+                  "value": "https://schema.org/InStock"
+                }
+              ],
+              "status": "corroborated",
+              "value": "https://schema.org/InStock"
+            },
+            "name": {
+              "sources": [
+                {
+                  "channel": "json_ld",
+                  "excerpt": "\"name\": \"The Classic Seed Sack\"",
+                  "value": "The Classic Seed Sack"
+                },
+                {
+                  "channel": "visible_text",
+                  "excerpt": "The Classic Seed Sack",
+                  "value": "The Classic Seed Sack"
+                }
+              ],
+              "status": "corroborated",
+              "value": "The Classic Seed Sack"
+            },
+            "price": {
+              "sources": [
+                {
+                  "channel": "json_ld",
+                  "excerpt": "\"price\": \"17.99\"",
+                  "value": "17.99"
+                },
+                {
+                  "channel": "visible_text",
+                  "excerpt": "$17.99",
+                  "value": "17.99"
+                }
+              ],
+              "status": "corroborated",
+              "value": "17.99"
+            },
+            "sku": {
+              "sources": [
+                {
+                  "channel": "json_ld",
+                  "excerpt": "\"sku\": \"11413-1983\"",
+                  "value": "11413-1983"
+                },
+                {
+                  "channel": "visible_text",
+                  "excerpt": "SKU: 11413-1983",
+                  "value": "11413-1983"
+                }
+              ],
+              "status": "corroborated",
+              "value": "11413-1983"
+            }
+          },
+          "observed_at": "2026-07-20T12:00:00.000Z",
+          "scope": "page_consistency"
+        },
+        "verification_version": "product/v1"
+      },
+      "listingOutputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A successful Product verification response with a page-consistency verdict, field evidence, contradictions, coverage, observation time, and content hash.",
+        "properties": {
+          "cached": {
+            "type": "boolean"
+          },
+          "data": {
+            "additionalProperties": true,
+            "description": "The sanitized Product entity whose fields were assessed.",
+            "properties": {
+              "@context": {},
+              "@type": {
+                "const": "Product",
+                "type": "string"
+              }
+            },
+            "required": [
+              "@type"
+            ],
+            "type": "object"
+          },
+          "extraction_ms": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "schema_type": {
+            "const": "Product",
+            "type": "string"
+          },
+          "success": {
+            "const": true,
+            "type": "boolean"
+          },
+          "verdict": {
+            "enum": [
+              "verified",
+              "conflicted",
+              "insufficient_evidence"
+            ],
+            "type": "string"
+          },
+          "verification": {
+            "additionalProperties": false,
+            "properties": {
+              "ambiguous_offer": {
+                "type": "boolean"
+              },
+              "content_sha256": {
+                "pattern": "^sha256:[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "contradictions": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "const": "critical",
+                      "type": "string"
+                    },
+                    "values": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "channel": {
+                            "enum": [
+                              "json_ld",
+                              "metadata",
+                              "microdata",
+                              "visible_text"
+                            ],
+                            "type": "string"
+                          },
+                          "value": {
+                            "description": "A bounded value observed in one representation of the page."
+                          }
+                        },
+                        "required": [
+                          "channel",
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "severity",
+                    "values"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "coverage": {
+                "additionalProperties": false,
+                "properties": {
+                  "conflicted": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "corroborated": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "single_source": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "corroborated",
+                  "conflicted",
+                  "single_source"
+                ],
+                "type": "object"
+              },
+              "efficiency": {
+                "additionalProperties": false,
+                "properties": {
+                  "estimate_method": {
+                    "const": "characters_divided_by_4",
+                    "type": "string"
+                  },
+                  "estimated_page_tokens": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "estimated_response_tokens": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "estimated_tokens_avoided": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "page_characters": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "response_characters": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "estimate_method",
+                  "page_characters",
+                  "response_characters",
+                  "estimated_page_tokens",
+                  "estimated_response_tokens",
+                  "estimated_tokens_avoided"
+                ],
+                "type": "object"
+              },
+              "fields": {
+                "additionalProperties": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sources": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "channel": {
+                            "enum": [
+                              "json_ld",
+                              "metadata",
+                              "microdata",
+                              "visible_text"
+                            ],
+                            "type": "string"
+                          },
+                          "excerpt": {
+                            "maxLength": 160,
+                            "type": "string"
+                          },
+                          "value": {
+                            "description": "A bounded value observed in one representation of the page."
+                          }
+                        },
+                        "required": [
+                          "channel",
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "corroborated",
+                        "conflicted",
+                        "single_source"
+                      ],
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "A bounded value observed in one representation of the page."
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "status",
+                    "sources"
+                  ],
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              "observed_at": {
+                "type": "string"
+              },
+              "scope": {
+                "const": "page_consistency",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scope",
+              "observed_at",
+              "content_sha256",
+              "fields",
+              "contradictions",
+              "coverage",
+              "ambiguous_offer",
+              "efficiency"
+            ],
+            "type": "object"
+          },
+          "verification_version": {
+            "pattern": "^product\\/v[0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "data",
+          "schema_type",
+          "verification_version",
+          "verdict",
+          "verification",
+          "cached",
+          "extraction_ms"
+        ],
+        "title": "JSON Recon Verified Product result",
+        "type": "object"
+      },
+      "level": 0
+    },
+    {
+      "id": "automaton.outlier.money-post-work",
+      "url": "https://automaton.outlier.money/work",
+      "sampleCategory": "finance/market-data",
+      "method": "POST",
+      "listedPriceUsdc": 0.01,
+      "paid": true,
+      "source": "bazaar",
+      "payTo": "0xe2C88e17F8eD7720b13B5F746BDc9D5Fa0A764bf",
+      "scheme": "exact",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "eip155:8453",
+      "mimeType": null,
+      "x402Version": 2,
+      "body": {},
+      "outputExample": {
+        "scanned": 250,
+        "signal": "unusual_activity",
+        "unusual": [
+          {
+            "age_minutes": 2,
+            "cap_tier": "mid",
+            "change_24h_pct": 6.2,
+            "early": true,
+            "score": 12.4,
+            "signals": [
+              {
+                "dir": "up",
+                "move_pct": 3.1,
+                "type": "acceleration",
+                "z": 4.2
+              },
+              {
+                "rvol": 6.4,
+                "type": "volume",
+                "z": 5.1
+              }
+            ],
+            "summary": "[EARLY] ENA: moving +3.1% now, volume 6.4x normal",
+            "symbol": "ENA"
+          },
+          {
+            "age_minutes": 12,
+            "cap_tier": "small",
+            "change_24h_pct": 3.8,
+            "early": false,
+            "score": 3.3,
+            "signals": [
+              {
+                "dir": "down",
+                "type": "price_level",
+                "z": -3.31
+              }
+            ],
+            "summary": "XDC: price -3.31σ vs its range",
+            "symbol": "XDC"
+          }
+        ]
+      },
+      "listingOutputSchema": {
+        "properties": {
+          "scanned": {
+            "type": "integer"
+          },
+          "signal": {
+            "type": "string"
+          },
+          "unusual": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "level": 0
+    }
+  ],
+  "canary": {
+    "id": "rpc.nodeflare.app-post-base-x402#canary",
+    "url": "https://rpc.nodeflare.app/base/x402",
+    "listedPriceUsdc": 0.001
+  },
+  "walletBeforeUsdc": "11.055501",
+  "walletAfterUsdc": "10.704501",
+  "spendUsdc": "0.351000"
+}

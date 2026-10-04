@@ -11,6 +11,10 @@ import {
 } from "@lmxcloud/shared";
 import type { HTTPRequestContext } from "@x402/core/server";
 import {
+  parseChatPassthrough,
+  readMessageToolFields,
+} from "../providers/chat-passthrough.js";
+import {
   ModelNotSupportedError,
   type ProviderAdapter,
 } from "../providers/types.js";
@@ -153,17 +157,35 @@ export function parseChatBody(
       );
     }
 
+    const extras = readMessageToolFields(m);
+    if (typeof extras === "string") {
+      return new InvalidChatRequestError(extras, "invalid_message");
+    }
+
+    let content: ChatMessage["content"];
     if (typeof m.content === "string") {
-      messages.push({ role: m.role as ChatMessage["role"], content: m.content });
-      continue;
+      content = m.content;
+    } else if (m.role === "assistant" && m.content === null) {
+      content = null;
+    } else if (
+      m.role === "assistant" &&
+      m.content === undefined &&
+      (extras.tool_calls?.length ?? 0) > 0
+    ) {
+      content = null;
+    } else {
+      const parsed = parseMessageContent(m.content, m.role);
+      if (typeof parsed === "string") {
+        return new InvalidChatRequestError(parsed, "invalid_message");
+      }
+      content = parsed;
     }
 
-    const content = parseMessageContent(m.content, m.role);
-    if (typeof content === "string") {
-      return new InvalidChatRequestError(content, "invalid_message");
-    }
-
-    messages.push({ role: m.role as ChatMessage["role"], content });
+    messages.push({
+      role: m.role as ChatMessage["role"],
+      content,
+      ...extras,
+    });
   }
 
   if (chatMessagesHaveImageContent(messages) && !modelSupportsImageInput(b.model)) {
@@ -172,6 +194,11 @@ export function parseChatBody(
       `Model "${b.model}" does not support image input. Use a vision-capable model such as: ${visionModels}`,
       "vision_not_supported",
     );
+  }
+
+  const passthrough = parseChatPassthrough(b);
+  if (typeof passthrough === "string") {
+    return new InvalidChatRequestError(passthrough, "invalid_request");
   }
 
   return {
@@ -184,6 +211,7 @@ export function parseChatBody(
         ? b.max_completion_tokens
         : undefined,
     stream: b.stream === true,
+    ...passthrough,
   };
 }
 

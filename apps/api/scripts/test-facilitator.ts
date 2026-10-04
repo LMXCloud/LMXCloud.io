@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import { createFacilitatorConfig } from "@coinbase/x402";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
 
 const config = createFacilitatorConfig(
   process.env.CDP_API_KEY_ID,

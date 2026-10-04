@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   RECEIPT_VERSION,
+  SETTLEMENT_RECEIPT_VERSION,
   buildReceiptPayload,
+  buildSettlementReceiptPayload,
   canonicalizeReceiptPayload,
+  canonicalizeSettlementReceipt,
   formatCostForReceipt,
   hashReceipt,
+  hashSettlementReceipt,
+  hashSettlementReceiptPayload,
 } from "./receipt.js";
 
 const FIXTURE = {
@@ -94,6 +99,61 @@ describe("hashReceipt", () => {
     assert.notEqual(
       baseline,
       hashReceipt({ ...FIXTURE, createdAt: "2026-07-07T15:30:00.001Z" }),
+    );
+  });
+});
+
+const SETTLEMENT_FIXTURE = {
+  id: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  referenceId: "ref-agent-trade-1",
+  payer: "0x1111111111111111111111111111111111111111",
+  payee: "0x2222222222222222222222222222222222222222",
+  amount: 0.001,
+  asset: "USDC",
+  createdAt: "2026-09-22T20:00:00.000Z",
+};
+
+describe("buildSettlementReceiptPayload", () => {
+  it("records payer, payee, amount, asset, timestamp, and reference", () => {
+    const payload = buildSettlementReceiptPayload(SETTLEMENT_FIXTURE);
+    assert.equal(payload.version, SETTLEMENT_RECEIPT_VERSION);
+    assert.equal(payload.payer, SETTLEMENT_FIXTURE.payer);
+    assert.equal(payload.payee, SETTLEMENT_FIXTURE.payee);
+    assert.equal(payload.amount, "0.00100000");
+    assert.equal(payload.asset, "USDC");
+    assert.equal(payload.reference_id, SETTLEMENT_FIXTURE.referenceId);
+    assert.equal(payload.created_at, SETTLEMENT_FIXTURE.createdAt);
+    assert.equal("provider" in payload, false);
+    assert.equal("model" in payload, false);
+  });
+});
+
+describe("canonicalizeSettlementReceipt", () => {
+  it("sorts keys alphabetically", () => {
+    const payload = buildSettlementReceiptPayload(SETTLEMENT_FIXTURE);
+    assert.equal(
+      canonicalizeSettlementReceipt(payload),
+      '{"amount":"0.00100000","asset":"USDC","created_at":"2026-09-22T20:00:00.000Z","id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","payee":"0x2222222222222222222222222222222222222222","payer":"0x1111111111111111111111111111111111111111","reference_id":"ref-agent-trade-1","version":"lmx_settlement_receipt_v1"}',
+    );
+  });
+});
+
+describe("hashSettlementReceipt", () => {
+  it("is a deterministic 32-byte hash and changes when the payee changes", () => {
+    const hash = hashSettlementReceipt(SETTLEMENT_FIXTURE);
+    assert.match(hash, /^0x[0-9a-f]{64}$/);
+    assert.equal(hash, hashSettlementReceipt(SETTLEMENT_FIXTURE));
+    assert.notEqual(
+      hash,
+      hashSettlementReceipt({
+        ...SETTLEMENT_FIXTURE,
+        payee: "0x3333333333333333333333333333333333333333",
+      }),
+    );
+    assert.notEqual(hash, hashReceipt(FIXTURE));
+    assert.equal(
+      hash,
+      hashSettlementReceiptPayload(buildSettlementReceiptPayload(SETTLEMENT_FIXTURE)),
     );
   });
 });

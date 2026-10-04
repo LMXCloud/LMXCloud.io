@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildReceiptMerkleTree, verifyReceiptMerkleProof } from "./merkle.js";
-import { buildUsageLogProof } from "./proof.js";
-import { hashReceipt } from "./receipt.js";
+import { buildSettlementReceiptProof, buildUsageLogProof } from "./proof.js";
+import { hashReceipt, hashSettlementReceipt } from "./receipt.js";
 import type { AnchorBatchRecord } from "./store.js";
 
 const EVENT = {
@@ -31,6 +31,7 @@ describe("buildUsageLogProof", () => {
         txHash: null,
         blockNumber: null,
         chainId: 84532,
+        contractAddress: null,
         createdAt: EVENT.createdAt,
         anchoredAt: null,
       },
@@ -59,6 +60,7 @@ describe("buildUsageLogProof", () => {
       txHash: "0xabc",
       blockNumber: 123n,
       chainId: 84532,
+      contractAddress: null,
       createdAt: EVENT.createdAt,
       anchoredAt: EVENT.createdAt,
     };
@@ -76,5 +78,102 @@ describe("buildUsageLogProof", () => {
       verifyReceiptMerkleProof(proof.merkleRoot!, proof.receiptHash!, proof.merkleProof!),
       true,
     );
+  });
+});
+
+const SETTLEMENT = {
+  id: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  referenceId: "ref-agent-trade-1",
+  payer: "0x1111111111111111111111111111111111111111",
+  payee: "0x2222222222222222222222222222222222222222",
+  amount: 0.001,
+  asset: "USDC",
+  createdAt: "2026-09-22T20:00:00.000Z",
+};
+
+describe("buildSettlementReceiptProof", () => {
+  it("returns pending when batch is not anchored", () => {
+    const receiptHash = hashSettlementReceipt(SETTLEMENT);
+    const proof = buildSettlementReceiptProof(
+      { ...SETTLEMENT, receiptHash, leafIndex: 0 },
+      {
+        id: "batch-1",
+        merkleRoot: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        eventCount: 1,
+        status: "submitting",
+        txHash: null,
+        blockNumber: null,
+        chainId: 84532,
+        contractAddress: null,
+        createdAt: SETTLEMENT.createdAt,
+        anchoredAt: null,
+      },
+      [receiptHash],
+    );
+
+    assert.equal(proof.status, "pending");
+    assert.equal(proof.receiptHash, receiptHash);
+    assert.equal(proof.settlementId, SETTLEMENT.id);
+    assert.equal(proof.merkleProof, undefined);
+  });
+
+  it("returns anchored proof that verifies", () => {
+    const receiptHash = hashSettlementReceipt(SETTLEMENT);
+    const leaves = [
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      receiptHash,
+    ] as `0x${string}`[];
+
+    const tree = buildReceiptMerkleTree(leaves);
+    const batch: AnchorBatchRecord = {
+      id: "batch-2",
+      merkleRoot: tree.root,
+      eventCount: 2,
+      status: "anchored",
+      txHash: "0xabc",
+      blockNumber: 123n,
+      chainId: 84532,
+      contractAddress: "0x51d2a68a5f43e44dff6cbf1b5231270a6fb4ca03",
+      createdAt: SETTLEMENT.createdAt,
+      anchoredAt: SETTLEMENT.createdAt,
+    };
+
+    const proof = buildSettlementReceiptProof(
+      { ...SETTLEMENT, receiptHash, leafIndex: 1 },
+      batch,
+      leaves,
+    );
+
+    assert.equal(proof.status, "anchored");
+    assert.equal(proof.receipt?.payee, SETTLEMENT.payee);
+    assert.equal(proof.anchor?.contractAddress, batch.contractAddress);
+    assert.ok(proof.merkleProof);
+    assert.equal(
+      verifyReceiptMerkleProof(proof.merkleRoot!, proof.receiptHash!, proof.merkleProof!),
+      true,
+    );
+  });
+
+  it("leaves the contract unset when the batch has no recorded address", () => {
+    const receiptHash = hashSettlementReceipt(SETTLEMENT);
+    const tree = buildReceiptMerkleTree([receiptHash]);
+    const proof = buildSettlementReceiptProof(
+      { ...SETTLEMENT, receiptHash, leafIndex: 0 },
+      {
+        id: "batch-3",
+        merkleRoot: tree.root,
+        eventCount: 1,
+        status: "anchored",
+        txHash: "0xabc",
+        blockNumber: 1n,
+        chainId: 84532,
+        contractAddress: null,
+        createdAt: SETTLEMENT.createdAt,
+        anchoredAt: SETTLEMENT.createdAt,
+      },
+      [receiptHash],
+    );
+
+    assert.equal(proof.anchor?.contractAddress, null);
   });
 });

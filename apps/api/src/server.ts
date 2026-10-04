@@ -54,6 +54,11 @@ import { createUsageStore } from "./usage/index.js";
 import { createCreditStore } from "./credits/index.js";
 import { createOriginLockHook } from "./origin-lock.js";
 import { isChatQuoteFailure, quoteFailurePayload, quoteFailureStatusCode } from "./payments/quote-errors.js";
+import { registerSettlementProofRoute } from "./settlements/http.js";
+import {
+  isSettlementRequestError,
+  settlementErrorPayload,
+} from "./settlements/parse.js";
 
 
 
@@ -114,11 +119,17 @@ export async function buildServer() {
   });
 
   app.setErrorHandler((error, request, reply) => {
-    if (isChatQuoteFailure(error)) {
-      request.log.warn({ err: error, code: quoteFailurePayload(error).code }, error.name);
+    if (isChatQuoteFailure(error) || isSettlementRequestError(error)) {
+      const payload = isSettlementRequestError(error)
+        ? settlementErrorPayload(error)
+        : quoteFailurePayload(error);
+      const statusCode = isSettlementRequestError(error)
+        ? error.statusCode
+        : quoteFailureStatusCode(error);
+      request.log.warn({ err: error, code: payload.code }, error.name);
       if (!reply.sent) {
-        void reply.status(quoteFailureStatusCode(error)).send({
-          error: quoteFailurePayload(error),
+        void reply.status(statusCode).send({
+          error: payload,
         });
       }
       return;
@@ -282,6 +293,7 @@ export async function buildServer() {
       marginPct: config.x402.marginPct,
       minCallUsdc: config.x402.minCallUsdc,
       defaultMaxCompletionTokens: config.x402.defaultMaxCompletionTokens,
+      usdcContractAddress: config.deposits?.usdcContractAddress ?? "",
     });
     app.log.info("x402 per-call payments enabled on POST /v1/chat/completions");
   } else if (config.x402.enabled) {
@@ -469,6 +481,11 @@ export async function buildServer() {
     authenticate,
     anchorStore,
     anchorContractAddress: config.anchoring?.contractAddress,
+  });
+  await registerSettlementProofRoute(app, {
+    anchorStore,
+    anchorContractAddress: config.anchoring?.contractAddress,
+    rpcUrl: config.anchoring?.rpcUrl ?? config.deposits?.rpcUrl,
   });
   await registerBalanceRoutes(app, {
     creditStore,

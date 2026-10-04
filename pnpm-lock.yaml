@@ -147,6 +147,31 @@ importers:
         specifier: ^8.0.12
         version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)
 
+  apps/labs-probe:
+    dependencies:
+      '@x402/core':
+        specifier: 2.17.0
+        version: 2.17.0
+      '@x402/evm':
+        specifier: 2.17.0
+        version: 2.17.0(typescript@5.9.3)
+      dotenv:
+        specifier: ^16.5.0
+        version: 16.6.1
+      viem:
+        specifier: ^2.54.6
+        version: 2.54.6(typescript@5.9.3)(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.20.0
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.4
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/mcp-server:
     dependencies:
       '@lmxcloud/x402':
@@ -326,6 +351,49 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+
+  apps/verifier:
+    dependencies:
+      '@lmxcloud/api':
+        specifier: workspace:*
+        version: link:../api
+      lucide-react:
+        specifier: ^1.23.0
+        version: 1.23.0(react@19.2.7)
+      react:
+        specifier: ^19.2.6
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.1
+        version: 4.3.1(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
+      '@types/node':
+        specifier: ^24.12.3
+        version: 24.13.2
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.1
+        version: 6.0.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
+      tailwindcss:
+        specifier: ^4.3.1
+        version: 4.3.1
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.4
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)
 
   apps/web:
     dependencies:

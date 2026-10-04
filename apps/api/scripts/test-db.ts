@@ -5,7 +5,7 @@ import { getPool } from "../src/db/pool.js";
 import { createPaymentStore } from "../src/payments/store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
 
 async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
   const start = Date.now();
