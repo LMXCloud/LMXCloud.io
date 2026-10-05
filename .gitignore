@@ -13,5 +13,4 @@ Thumbs.db
 
 apps/ops/.env
 apps/verifier/.env
-apps/labs-probe/results.jsonl
-apps/labs-probe/reconciled.jsonl
+apps/labs-probe/
