@@ -96,28 +96,32 @@ describe("buildUpstreamChatBody", () => {
     }
   });
 
-  it("turns thinking off for hybrid Qwen models when the caller did not ask", () => {
+  it("sends reasoning_effort none when a hybrid Qwen caller did not set thinking", () => {
     for (const model of ["qwen-3.6-35b", "qwen-3.5-35b", "qwen-3.6-27b", "qwen3.6-35b-a3b", "Qwen/Qwen3.6-27B"]) {
       const body = buildUpstreamChatBody("ionet", "not-a-catalog-id", baseRequest({
         model,
         max_tokens: 64,
       }));
-      assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false }, model);
-      assert.equal(body.reasoning_effort, undefined, model);
+      assert.equal(body.reasoning_effort, "none", model);
+      assert.equal("chat_template_kwargs" in body, false, model);
     }
-
-    const viaUpstream = buildUpstreamChatBody("akash", "Qwen/Qwen3.5-35B-A3B", baseRequest({
-      model: "not-a-catalog-id",
-      chat_template_kwargs: { note: "keep" },
-    }));
-    assert.deepEqual(viaUpstream.chat_template_kwargs, { note: "keep", enable_thinking: false });
   });
 
-  it("keeps a caller's explicit thinking setting", () => {
+  it("keeps enable_thinking false and still sends reasoning_effort none", () => {
+    const body = buildUpstreamChatBody("akash", "Qwen/Qwen3.5-35B-A3B", baseRequest({
+      model: "qwen-3.5-35b",
+      chat_template_kwargs: { enable_thinking: false, note: "keep" },
+    }));
+    assert.equal(body.reasoning_effort, "none");
+    assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false, note: "keep" });
+  });
+
+  it("forwards reasoning_effort or enable_thinking true without adding a default", () => {
     const enabled = buildUpstreamChatBody("akash", "Qwen/Qwen3.6-35B-A3B", baseRequest({
       model: "qwen-3.6-35b",
       chat_template_kwargs: { enable_thinking: true, extra: "keep" },
     }));
+    assert.equal("reasoning_effort" in enabled, false);
     assert.deepEqual(enabled.chat_template_kwargs, { enable_thinking: true, extra: "keep" });
 
     const reasoned = buildUpstreamChatBody("aethir", "qwen3.6-35b-a3b", baseRequest({
@@ -127,6 +131,14 @@ describe("buildUpstreamChatBody", () => {
     }));
     assert.equal(reasoned.reasoning_effort, "low");
     assert.deepEqual(reasoned.chat_template_kwargs, { preserve: true });
+
+    const both = buildUpstreamChatBody("ionet", "Qwen/Qwen3.6-35B-A3B", baseRequest({
+      model: "qwen-3.6-35b",
+      reasoning_effort: "medium",
+      chat_template_kwargs: { enable_thinking: false },
+    }));
+    assert.equal(both.reasoning_effort, "medium");
+    assert.deepEqual(both.chat_template_kwargs, { enable_thinking: false });
   });
 
   it("leaves non-Qwen models without a thinking default", () => {

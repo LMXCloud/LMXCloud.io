@@ -58,25 +58,45 @@ const TOOL_CHOICES = new Set(["none", "auto", "required"]);
 
 export type ChatPassthrough = Pick<ChatCompletionRequest, ForwardedChatField>;
 
+export interface ThinkingUpstream {
+  reasoning_effort?: ReasoningEffort;
+  chat_template_kwargs?: ChatTemplateKwargs;
+}
+
 /**
  * Hybrid-thinking models spend max_tokens on reasoning unless thinking is off.
- * When the caller did not set reasoning_effort or enable_thinking, send
- * enable_thinking: false. Anything they set is returned unchanged.
+ * Those models get reasoning_effort "none" when the caller did not set
+ * reasoning_effort. chat_template_kwargs are not added unless the caller sent
+ * them. enable_thinking false is kept and still paired with reasoning_effort
+ * "none", because some providers ignore the template flag. reasoning_effort
+ * or enable_thinking true is forwarded unchanged.
  */
 export function withThinkingDefault(
   request: Pick<ChatCompletionRequest, "model" | "reasoning_effort" | "chat_template_kwargs">,
   upstreamModel?: string,
-): ChatTemplateKwargs | undefined {
-  const explicit = request.chat_template_kwargs;
-  if (request.reasoning_effort !== undefined) return explicit;
-  if (explicit !== undefined && Object.prototype.hasOwnProperty.call(explicit, "enable_thinking")) {
-    return explicit;
+): ThinkingUpstream {
+  const sent: ThinkingUpstream = {};
+  if (request.reasoning_effort !== undefined) sent.reasoning_effort = request.reasoning_effort;
+  if (request.chat_template_kwargs !== undefined) {
+    sent.chat_template_kwargs = request.chat_template_kwargs;
   }
+
   const applies =
     isThinkingOffByDefault(request.model) ||
     (upstreamModel !== undefined && isThinkingOffByDefault(upstreamModel));
-  if (!applies) return explicit;
-  return { ...explicit, enable_thinking: false };
+  if (!applies) return sent;
+
+  const explicit = request.chat_template_kwargs;
+  const thinkingOn =
+    explicit !== undefined &&
+    Object.prototype.hasOwnProperty.call(explicit, "enable_thinking") &&
+    explicit.enable_thinking === true;
+  if (request.reasoning_effort !== undefined || thinkingOn) return sent;
+
+  return {
+    reasoning_effort: "none",
+    ...(explicit !== undefined ? { chat_template_kwargs: explicit } : {}),
+  };
 }
 
 export function applyProviderFieldPolicy(

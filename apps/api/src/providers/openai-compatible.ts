@@ -349,10 +349,10 @@ export function buildUpstreamChatBody(
   if (request.tools !== undefined) body.tools = request.tools;
   if (request.tool_choice !== undefined) body.tool_choice = request.tool_choice;
   if (request.response_format !== undefined) body.response_format = request.response_format;
-  if (request.reasoning_effort !== undefined) body.reasoning_effort = request.reasoning_effort;
-  const chatTemplateKwargs = withThinkingDefault(request, upstreamModel);
-  if (chatTemplateKwargs !== undefined) {
-    body.chat_template_kwargs = chatTemplateKwargs;
+  const thinking = withThinkingDefault(request, upstreamModel);
+  if (thinking.reasoning_effort !== undefined) body.reasoning_effort = thinking.reasoning_effort;
+  if (thinking.chat_template_kwargs !== undefined) {
+    body.chat_template_kwargs = thinking.chat_template_kwargs;
   }
   if (request.top_p !== undefined) body.top_p = request.top_p;
   if (request.stop !== undefined) body.stop = request.stop;

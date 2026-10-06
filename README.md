@@ -316,14 +316,14 @@ LMX exposes **30 short aliases** mapped to io.net, AkashML, and Aethir Mesh upst
 |-----------|-------------|:------:|:-------:|:------:|-------|
 | `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct` | ✓ | ✓ | | |
 | `llama-3.3-70b` | same | ✓ | ✓ | | |
-| `qwen-3.6-35b` | `Qwen/Qwen3.6-35B-A3B` | ✓ | ✓ | ✓ | vision; thinking off unless requested |
+| `qwen-3.6-35b` | `Qwen/Qwen3.6-35B-A3B` | ✓ | ✓ | ✓ | vision; thinking off unless `reasoning_effort` is set |
 | `deepseek-v4-flash` | `deepseek-ai/DeepSeek-V4-Flash` | ✓ | ✓ | ✓ | |
 | `deepseek-v4-pro` | `deepseek-ai/DeepSeek-V4-Pro` | ✓ | | ✓ | |
 | `glm-5.2` | `zai-org/GLM-5.2` | ✓ | ✓ | | |
 | `glm-5.1` | `zai-org/GLM-5.1` | ✓ | | ✓ | |
-| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ | | vision; thinking off unless requested |
+| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ | | vision; thinking off unless `reasoning_effort` is set |
 | `llama-3.2-90b-vision` | `meta-llama/Llama-3.2-90B-Vision-Instruct` | ✓ | | | vision |
 | `deepseek-r1` | `deepseek-ai/DeepSeek-R1-0528` | ✓ | | | |
 | `gpt-oss-120b` | `openai/gpt-oss-120b` | ✓ | | | |
 
-Plus other io.net / Aethir overlaps (`qwen-3.6-27b`, `deepseek-v3.2`, `glm-5`, `kimi-k2.5`, `minimax-m2.5`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400. `qwen-3.5-35b`, `qwen-3.6-35b`, and `qwen-3.6-27b` think by default at the provider. LMX sends `chat_template_kwargs.enable_thinking=false` unless the request sets `reasoning_effort` or `chat_template_kwargs.enable_thinking`, so a normal `max_tokens` budget is left for the answer. Set `enable_thinking` to `true` to keep thinking.
+Plus other io.net / Aethir overlaps (`qwen-3.6-27b`, `deepseek-v3.2`, `glm-5`, `kimi-k2.5`, `minimax-m2.5`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400. Thinking is off by default for `qwen-3.5-35b`, `qwen-3.6-35b`, and `qwen-3.6-27b`: LMX sends `reasoning_effort` `"none"` so a normal `max_tokens` budget is left for the answer. Set `reasoning_effort` to a value such as `"low"` or `"medium"` to turn thinking back on.

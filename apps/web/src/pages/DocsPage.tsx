@@ -1294,15 +1294,13 @@ ${agentRunCommand()}`}
                     <code className="text-mono-sm">{alias}</code>
                   </span>
                 ))}{" "}
-                think at the provider unless you turn that off. LMX sends{" "}
-                <code className="text-mono-sm">chat_template_kwargs.enable_thinking: false</code>{" "}
-                when the request does not set <code className="text-mono-sm">reasoning_effort</code>{" "}
-                or <code className="text-mono-sm">chat_template_kwargs.enable_thinking</code>, so a
-                normal <code className="text-mono-sm">max_tokens</code> budget is left for the
-                answer. Set <code className="text-mono-sm">enable_thinking</code> to{" "}
-                <code className="text-mono-sm">true</code>, or set{" "}
-                <code className="text-mono-sm">reasoning_effort</code>, and that value is forwarded
-                unchanged.
+                have thinking off by default. LMX sends{" "}
+                <code className="text-mono-sm">reasoning_effort: &quot;none&quot;</code> unless you
+                set <code className="text-mono-sm">reasoning_effort</code>, so a normal{" "}
+                <code className="text-mono-sm">max_tokens</code> budget is left for the answer. A
+                value such as <code className="text-mono-sm">&quot;low&quot;</code> or{" "}
+                <code className="text-mono-sm">&quot;medium&quot;</code> turns thinking back on and
+                is forwarded as sent.
               </p>
             </>
             ) : null}
@@ -1756,11 +1754,11 @@ data: {
                     <code className="text-mono-sm">{alias}</code>
                   </span>
                 ))}
-                . Those models reason unless asked not to, and that reasoning can use the whole{" "}
-                <code className="text-mono-sm">max_tokens</code> budget. LMX sends{" "}
-                <code className="text-mono-sm">enable_thinking: false</code> unless the request sets{" "}
-                <code className="text-mono-sm">reasoning_effort</code> or{" "}
-                <code className="text-mono-sm">chat_template_kwargs.enable_thinking</code>.
+                . LMX sends <code className="text-mono-sm">reasoning_effort: &quot;none&quot;</code>{" "}
+                for those aliases unless the request sets{" "}
+                <code className="text-mono-sm">reasoning_effort</code>. A value such as{" "}
+                <code className="text-mono-sm">&quot;low&quot;</code> or{" "}
+                <code className="text-mono-sm">&quot;medium&quot;</code> turns thinking back on.
               </p>
               <div className="mt-6">
                 <DataTable title="Alias → upstream model" minWidth={800}>

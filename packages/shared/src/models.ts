@@ -36,8 +36,9 @@ export interface SupportedModel {
   /**
    * Hybrid-thinking models reason unless asked not to, and that reasoning can
    * spend the whole max_tokens budget before any answer. When true, LMX sends
-   * chat_template_kwargs.enable_thinking=false unless the caller sets
-   * reasoning_effort or chat_template_kwargs.enable_thinking.
+   * reasoning_effort "none" unless the caller sets reasoning_effort or
+   * chat_template_kwargs.enable_thinking true. A value such as "low" or
+   * "medium" turns thinking back on.
    */
   thinkingOffByDefault?: boolean;
   /** Provider IDs for this model besides the LMX alias and upstreamId. */
