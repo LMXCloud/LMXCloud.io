@@ -4,6 +4,7 @@ import {
   applyProviderFieldPolicy,
   FORWARDED_CHAT_FIELDS,
   normalizeChatCompletionPayload,
+  withThinkingDefault,
 } from "./chat-passthrough.js";
 import { ProviderError, type ProviderAdapter, type ProviderHealthResult } from "./types.js";
 
@@ -349,8 +350,9 @@ export function buildUpstreamChatBody(
   if (request.tool_choice !== undefined) body.tool_choice = request.tool_choice;
   if (request.response_format !== undefined) body.response_format = request.response_format;
   if (request.reasoning_effort !== undefined) body.reasoning_effort = request.reasoning_effort;
-  if (request.chat_template_kwargs !== undefined) {
-    body.chat_template_kwargs = request.chat_template_kwargs;
+  const chatTemplateKwargs = withThinkingDefault(request, upstreamModel);
+  if (chatTemplateKwargs !== undefined) {
+    body.chat_template_kwargs = chatTemplateKwargs;
   }
   if (request.top_p !== undefined) body.top_p = request.top_p;
   if (request.stop !== undefined) body.stop = request.stop;

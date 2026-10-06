@@ -1,4 +1,5 @@
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
+import { expectedProviderModelId } from "../providers/model-maps.js";
 import {
   AllProvidersDownError,
   ModelNotSupportedError,
@@ -31,6 +32,29 @@ export interface RoutedResult {
   costPer1kTokens: number;
   usage: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["usage"];
   stream?: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["stream"];
+}
+
+/**
+ * Provider returned a different model than the ID we asked it to run.
+ * Logged only. The response is still returned to the caller.
+ */
+export function logModelSubstitution(
+  provider: string,
+  requested: string,
+  returned: string | undefined,
+): void {
+  if (!returned) return;
+  const expected = expectedProviderModelId(provider, requested);
+  if (!expected || returned === expected) return;
+  console.info(
+    JSON.stringify({
+      msg: "model_substitution",
+      provider,
+      requested,
+      expected,
+      returned,
+    }),
+  );
 }
 
 /**
@@ -77,6 +101,7 @@ export class InferenceRouter {
       try {
         const result = await provider.chatCompletion(request);
         this.signalStore?.recordAttempt(provider.name, true);
+        logModelSubstitution(provider.name, request.model, result.response.model);
         return {
           response: result.response,
           latencyMs: result.latencyMs,

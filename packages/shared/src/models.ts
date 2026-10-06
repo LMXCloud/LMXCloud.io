@@ -33,6 +33,15 @@ export interface SupportedModel {
    * Omitted means text-only.
    */
   inputModalities?: InputModality[];
+  /**
+   * Hybrid-thinking models reason unless asked not to, and that reasoning can
+   * spend the whole max_tokens budget before any answer. When true, LMX sends
+   * chat_template_kwargs.enable_thinking=false unless the caller sets
+   * reasoning_effort or chat_template_kwargs.enable_thinking.
+   */
+  thinkingOffByDefault?: boolean;
+  /** Provider IDs for this model besides the LMX alias and upstreamId. */
+  providerIds?: readonly string[];
 }
 
 /**
@@ -114,6 +123,8 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     providers: ["ionet", "akash", "aethir", "nosana"],
     category: "qwen",
     inputModalities: ["text", "image"],
+    thinkingOffByDefault: true,
+    providerIds: ["qwen3.6-35b-a3b", "Qwen3.6-35B-A3B"],
   },
   {
     alias: "qwen-3.5-35b",
@@ -122,6 +133,8 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     providers: ["akash", "nosana"],
     category: "qwen",
     inputModalities: ["text", "image"],
+    thinkingOffByDefault: true,
+    providerIds: ["Qwen3.5-35B-A3B"],
   },
   {
     alias: "qwen-3.6-27b",
@@ -129,6 +142,8 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     upstreamId: "Qwen/Qwen3.6-27B",
     providers: ["ionet", "aethir", "nosana"],
     category: "qwen",
+    thinkingOffByDefault: true,
+    providerIds: ["qwen3.6-27b", "Qwen3.6-27B"],
   },
   {
     alias: "qwen-3-next-80b",
@@ -366,6 +381,26 @@ export function modelInputModalities(modelId: string): InputModality[] {
 
 export function modelSupportsImageInput(modelId: string): boolean {
   return modelInputModalities(modelId).includes("image");
+}
+
+const THINKING_OFF_MODEL_IDS: ReadonlySet<string> = new Set(
+  SUPPORTED_MODELS.flatMap((model) =>
+    model.thinkingOffByDefault
+      ? [model.alias, model.upstreamId, ...(model.providerIds ?? [])]
+      : [],
+  ),
+);
+
+/** True when this alias, upstream ID, or provider ID defaults thinking off. */
+export function isThinkingOffByDefault(modelId: string): boolean {
+  return THINKING_OFF_MODEL_IDS.has(modelId);
+}
+
+/** LMX aliases whose thinking is off unless the caller asks for it. */
+export function listThinkingOffAliases(): string[] {
+  return listUniqueModelAliases()
+    .filter((model) => model.thinkingOffByDefault === true)
+    .map((model) => model.alias);
 }
 
 /** Unique aliases for models that accept image content parts. */

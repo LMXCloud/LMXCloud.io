@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
-import { listUniqueModelAliases, listVisionModelAliases } from "@lmxcloud/shared";
+import { listThinkingOffAliases, listUniqueModelAliases, listVisionModelAliases } from "@lmxcloud/shared";
 import { Menu, Plug, Rocket, X } from "lucide-react";
 import { API_BASE, fetchModels, type ModelsResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
@@ -48,6 +48,7 @@ const MCP_HOSTED_BASE = "https://mcp.lmxcloud.io/mcp";
 
 const CATALOG_MODELS = listUniqueModelAliases();
 const VISION_ALIASES = listVisionModelAliases();
+const THINKING_OFF_ALIASES = listThinkingOffAliases();
 
 export function DocsPage() {
   const { slug } = useParams<{ slug?: string }>();
@@ -1286,6 +1287,23 @@ ${agentRunCommand()}`}
                 Optional routing preference via{" "}
                 <code className="text-mono-sm">x-lmx-prefer</code> header — see Routing below.
               </p>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                {THINKING_OFF_ALIASES.map((alias, i) => (
+                  <span key={alias}>
+                    {i > 0 ? ", " : ""}
+                    <code className="text-mono-sm">{alias}</code>
+                  </span>
+                ))}{" "}
+                think at the provider unless you turn that off. LMX sends{" "}
+                <code className="text-mono-sm">chat_template_kwargs.enable_thinking: false</code>{" "}
+                when the request does not set <code className="text-mono-sm">reasoning_effort</code>{" "}
+                or <code className="text-mono-sm">chat_template_kwargs.enable_thinking</code>, so a
+                normal <code className="text-mono-sm">max_tokens</code> budget is left for the
+                answer. Set <code className="text-mono-sm">enable_thinking</code> to{" "}
+                <code className="text-mono-sm">true</code>, or set{" "}
+                <code className="text-mono-sm">reasoning_effort</code>, and that value is forwarded
+                unchanged.
+              </p>
             </>
             ) : null}
 
@@ -1731,7 +1749,18 @@ data: {
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 Each provider maps aliases to its own upstream model ID. The router only tries
-                providers that support the requested alias.
+                providers that support the requested alias. Thinking is off by default for{" "}
+                {THINKING_OFF_ALIASES.map((alias, i) => (
+                  <span key={alias}>
+                    {i > 0 ? ", " : ""}
+                    <code className="text-mono-sm">{alias}</code>
+                  </span>
+                ))}
+                . Those models reason unless asked not to, and that reasoning can use the whole{" "}
+                <code className="text-mono-sm">max_tokens</code> budget. LMX sends{" "}
+                <code className="text-mono-sm">enable_thinking: false</code> unless the request sets{" "}
+                <code className="text-mono-sm">reasoning_effort</code> or{" "}
+                <code className="text-mono-sm">chat_template_kwargs.enable_thinking</code>.
               </p>
               <div className="mt-6">
                 <DataTable title="Alias → upstream model" minWidth={800}>

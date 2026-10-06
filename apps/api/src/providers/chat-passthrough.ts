@@ -1,15 +1,16 @@
-import type {
-  ChatCompletionMessageToolCall,
-  ChatCompletionRequest,
-  ChatMessage,
-  ChatResponseFormat,
-  ChatStreamOptions,
-  ChatTemplateKwargs,
-  ChatTool,
-  ChatToolChoice,
-  JsonObject,
-  JsonValue,
-  ReasoningEffort,
+import {
+  isThinkingOffByDefault,
+  type ChatCompletionMessageToolCall,
+  type ChatCompletionRequest,
+  type ChatMessage,
+  type ChatResponseFormat,
+  type ChatStreamOptions,
+  type ChatTemplateKwargs,
+  type ChatTool,
+  type ChatToolChoice,
+  type JsonObject,
+  type JsonValue,
+  type ReasoningEffort,
 } from "@lmxcloud/shared";
 
 /**
@@ -56,6 +57,27 @@ const REASONING_EFFORTS = new Set<ReasoningEffort>([
 const TOOL_CHOICES = new Set(["none", "auto", "required"]);
 
 export type ChatPassthrough = Pick<ChatCompletionRequest, ForwardedChatField>;
+
+/**
+ * Hybrid-thinking models spend max_tokens on reasoning unless thinking is off.
+ * When the caller did not set reasoning_effort or enable_thinking, send
+ * enable_thinking: false. Anything they set is returned unchanged.
+ */
+export function withThinkingDefault(
+  request: Pick<ChatCompletionRequest, "model" | "reasoning_effort" | "chat_template_kwargs">,
+  upstreamModel?: string,
+): ChatTemplateKwargs | undefined {
+  const explicit = request.chat_template_kwargs;
+  if (request.reasoning_effort !== undefined) return explicit;
+  if (explicit !== undefined && Object.prototype.hasOwnProperty.call(explicit, "enable_thinking")) {
+    return explicit;
+  }
+  const applies =
+    isThinkingOffByDefault(request.model) ||
+    (upstreamModel !== undefined && isThinkingOffByDefault(upstreamModel));
+  if (!applies) return explicit;
+  return { ...explicit, enable_thinking: false };
+}
 
 export function applyProviderFieldPolicy(
   provider: string,

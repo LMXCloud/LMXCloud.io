@@ -96,6 +96,48 @@ describe("buildUpstreamChatBody", () => {
     }
   });
 
+  it("turns thinking off for hybrid Qwen models when the caller did not ask", () => {
+    for (const model of ["qwen-3.6-35b", "qwen-3.5-35b", "qwen-3.6-27b", "qwen3.6-35b-a3b", "Qwen/Qwen3.6-27B"]) {
+      const body = buildUpstreamChatBody("ionet", "not-a-catalog-id", baseRequest({
+        model,
+        max_tokens: 64,
+      }));
+      assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false }, model);
+      assert.equal(body.reasoning_effort, undefined, model);
+    }
+
+    const viaUpstream = buildUpstreamChatBody("akash", "Qwen/Qwen3.5-35B-A3B", baseRequest({
+      model: "not-a-catalog-id",
+      chat_template_kwargs: { note: "keep" },
+    }));
+    assert.deepEqual(viaUpstream.chat_template_kwargs, { note: "keep", enable_thinking: false });
+  });
+
+  it("keeps a caller's explicit thinking setting", () => {
+    const enabled = buildUpstreamChatBody("akash", "Qwen/Qwen3.6-35B-A3B", baseRequest({
+      model: "qwen-3.6-35b",
+      chat_template_kwargs: { enable_thinking: true, extra: "keep" },
+    }));
+    assert.deepEqual(enabled.chat_template_kwargs, { enable_thinking: true, extra: "keep" });
+
+    const reasoned = buildUpstreamChatBody("aethir", "qwen3.6-35b-a3b", baseRequest({
+      model: "qwen-3.6-35b",
+      reasoning_effort: "low",
+      chat_template_kwargs: { preserve: true },
+    }));
+    assert.equal(reasoned.reasoning_effort, "low");
+    assert.deepEqual(reasoned.chat_template_kwargs, { preserve: true });
+  });
+
+  it("leaves non-Qwen models without a thinking default", () => {
+    const body = buildUpstreamChatBody("ionet", "meta-llama/Llama-3.3-70B-Instruct", baseRequest({
+      model: "llama-3-70b",
+      max_tokens: 64,
+    }));
+    assert.equal("chat_template_kwargs" in body, false);
+    assert.equal("reasoning_effort" in body, false);
+  });
+
   it("drops a field only for the provider that rejects it", () => {
     const rejected = PROVIDER_REJECTED_FIELDS as Record<string, ForwardedChatField[]>;
     rejected.aethir = ["chat_template_kwargs"];

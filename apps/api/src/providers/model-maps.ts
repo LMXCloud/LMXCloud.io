@@ -35,6 +35,23 @@ export const TOGETHER_MODEL_MAP: Record<string, string> = {
 
 export { aliasKeys };
 
+const PROVIDER_MODEL_MAPS: Record<string, Record<string, string>> = {
+  ionet: IONET_MODEL_MAP,
+  akash: AKASH_MODEL_MAP,
+  nosana: NOSANA_MODEL_MAP,
+  aethir: AETHIR_MODEL_MAP,
+  together: TOGETHER_MODEL_MAP,
+};
+
+/** Upstream model ID this provider will be asked to run, when the alias is known. */
+export function expectedProviderModelId(provider: string, model: string): string | undefined {
+  const map = PROVIDER_MODEL_MAPS[provider];
+  if (!map) return undefined;
+  const upstream = map[model];
+  if (!upstream || isOpenAiProprietaryModelId(model)) return undefined;
+  return upstream;
+}
+
 export function resolveProviderModel(
   map: Record<string, string>,
   provider: string,

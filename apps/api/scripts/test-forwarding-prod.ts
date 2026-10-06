@@ -13,6 +13,7 @@ import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { expectedProviderModelId } from "../src/providers/model-maps.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../.env"), override: true });
@@ -695,15 +696,24 @@ function printSummary(
     );
   }
 
-  console.log("\n(c) returned model differs from requested model");
-  const mismatches = rows.filter(
-    (row) => row.returned_model != null && row.returned_model !== row.requested_model,
-  );
+  console.log("\n(c) returned model differs from the provider model id");
+  const mismatches = rows.filter((row) => {
+    if (row.returned_model == null) return false;
+    const provider = row["x-lmx-provider"];
+    if (!provider) return false;
+    const expected = expectedProviderModelId(provider, row.requested_model);
+    if (!expected) return false;
+    return row.returned_model !== expected;
+  });
   if (mismatches.length === 0) {
     console.log("none");
   } else {
     for (const row of mismatches) {
-      console.log(`${row.check}: requested ${row.requested_model}, returned ${row.returned_model}`);
+      const provider = row["x-lmx-provider"];
+      const expected = provider ? expectedProviderModelId(provider, row.requested_model) : null;
+      console.log(
+        `${row.check}: requested ${row.requested_model}, expected ${expected}, returned ${row.returned_model}`,
+      );
     }
   }
   console.log(`\n${rows.length} rows written to ${resultsPath}`);

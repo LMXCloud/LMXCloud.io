@@ -2,6 +2,7 @@ import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import {
   DEFAULT_MODEL_ALIAS,
   DEPIN_PROVIDER_ORDER,
+  listThinkingOffAliases,
   listUniqueModelAliases,
   PROVIDER_LABELS,
 } from "@lmxcloud/shared";
@@ -53,6 +54,7 @@ const HeroNetworkGlobe = lazy(() =>
 );
 
 const SUPPORTED_MODEL_LIST = listUniqueModelAliases();
+const THINKING_OFF_ALIASES = listThinkingOffAliases();
 
 const ACTIVE_DEPIN_PROVIDERS = DEPIN_PROVIDER_ORDER.filter((provider) =>
   SUPPORTED_MODEL_LIST.some((model) => model.providers.includes(provider)),
@@ -478,7 +480,7 @@ export function LandingPage() {
                 <SectionHeader
                   eyebrow="Model catalog"
                   title={`${SUPPORTED_MODEL_LIST.length} models on DePIN`}
-                  description={`Default ${DEFAULT_MODEL_ALIAS}. ${SUPPORTED_MODEL_LIST.length} aliases across ${MODEL_FAMILY_COUNT} families, routed across ${ROUTING_NETWORKS_PHRASE} with automatic failover.`}
+                  description={`Default ${DEFAULT_MODEL_ALIAS}. ${SUPPORTED_MODEL_LIST.length} aliases across ${MODEL_FAMILY_COUNT} families, routed across ${ROUTING_NETWORKS_PHRASE} with automatic failover. ${THINKING_OFF_ALIASES.join(", ")} answer with thinking off unless the request sets reasoning_effort or enable_thinking.`}
                 />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
