@@ -14,3 +14,4 @@ Thumbs.db
 apps/ops/.env
 apps/verifier/.env
 apps/labs-probe/
+apps/api/scripts/results/

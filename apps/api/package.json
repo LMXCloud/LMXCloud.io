@@ -20,6 +20,7 @@
     "test:x402:mainnet-canary": "tsx scripts/test-x402-chat.ts --mainnet --pay",
     "test:x402:settlement": "tsx scripts/test-x402-settlement.ts",
     "test:vision": "tsx scripts/test-vision-chat.ts",
+    "test:forwarding": "tsx scripts/test-forwarding-prod.ts",
     "check:mainnet-balance": "tsx scripts/check-mainnet-balance.ts --mainnet",
     "dev:mainnet": "tsx watch scripts/dev-mainnet.ts",
     "deploy:anchor": "node scripts/deploy-anchor.mjs",
