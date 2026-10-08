@@ -9,6 +9,7 @@ import {
 import type { HealthStore } from "../health/store.js";
 import { RESOURCE_TYPE_CHAT } from "../telemetry/types.js";
 import type { UsageStore } from "../usage/store.js";
+import { isKnownBadRoute } from "./known-bad-routes.js";
 import type { RoutingPreference } from "./strategies.js";
 import type { RoutingSignalStore } from "./signal-store.js";
 
@@ -42,6 +43,7 @@ export function logModelSubstitution(
   provider: string,
   requested: string,
   returned: string | undefined,
+  options?: { streaming?: boolean },
 ): void {
   if (!returned) return;
   const expected = expectedProviderModelId(provider, requested);
@@ -53,8 +55,38 @@ export function logModelSubstitution(
       requested,
       expected,
       returned,
+      ...(options?.streaming ? { streaming: true } : {}),
     }),
   );
+}
+
+/** First model id seen on a relayed stream. Later chunks are not checked again. */
+export function observeStreamedModel(
+  provider: string,
+  requested: string,
+  returned: string | undefined,
+  state: { noted: boolean },
+): void {
+  if (state.noted || !returned) return;
+  state.noted = true;
+  logModelSubstitution(provider, requested, returned, { streaming: true });
+}
+
+/**
+ * Streaming request whose every supporting provider is a known-bad route.
+ * Non-streaming for the same model is unchanged.
+ */
+export class StreamingTemporarilyUnavailableError extends Error {
+  readonly statusCode = 503;
+  readonly type = "service_unavailable";
+  readonly code = "streaming_temporarily_unavailable";
+
+  constructor(public readonly model: string) {
+    super(
+      `Model "${model}" is temporarily unavailable for streaming. stream:false works.`,
+    );
+    this.name = "StreamingTemporarilyUnavailableError";
+  }
 }
 
 /**
@@ -83,9 +115,23 @@ export class InferenceRouter {
       throw new AllProvidersDownError(depinOnly);
     }
 
-    const capable = order.filter((provider) => provider.supportsModel(request.model));
+    const streaming = request.stream === true;
+    const supporting = order.filter((provider) => provider.supportsModel(request.model));
+
+    if (supporting.length === 0) {
+      throw new ModelNotSupportedError(request.model);
+    }
+
+    // Known-bad routes are removed before a provider is chosen.
+    // x-lmx-prefer only reorders `order`, so it cannot put one back.
+    const capable = supporting.filter(
+      (provider) => !isKnownBadRoute(provider.name, request.model, streaming),
+    );
 
     if (capable.length === 0) {
+      if (streaming) {
+        throw new StreamingTemporarilyUnavailableError(request.model);
+      }
       throw new ModelNotSupportedError(request.model);
     }
 
@@ -101,7 +147,9 @@ export class InferenceRouter {
       try {
         const result = await provider.chatCompletion(request);
         this.signalStore?.recordAttempt(provider.name, true);
-        logModelSubstitution(provider.name, request.model, result.response.model);
+        if (!result.stream) {
+          logModelSubstitution(provider.name, request.model, result.response.model);
+        }
         return {
           response: result.response,
           latencyMs: result.latencyMs,

@@ -441,4 +441,66 @@ describe("createOpenAiCompatibleAdapter chat passthrough", () => {
     assert.match(frames[1] ?? "", /"finish_reason":"tool_calls"/);
     assert.match(frames[2] ?? "", /\[DONE\]/);
   });
+
+  it("logs one streamed model substitution and forwards the chunks unchanged", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+
+    const streamed = createOpenAiCompatibleAdapter({
+      name: "nosana",
+      tier: 1,
+      costPer1kTokens: 0.0002,
+      isDepin: true,
+      apiKey: "test",
+      baseUrl: "https://provider.test/v1",
+      resolveModel: () => "Qwen/Qwen3.5-35B-A3B",
+      aliases: ["qwen-3.5-35b"],
+    });
+    const chunks = [
+      { id: "chatcmpl_1", choices: [{ index: 0, delta: { content: "" } }] },
+      {
+        id: "chatcmpl_1",
+        model: "Qwen/Qwen3.6-35B-A3B",
+        choices: [{ index: 0, delta: { content: "hi" } }],
+      },
+      {
+        id: "chatcmpl_1",
+        model: "Qwen/Qwen3.6-35B-A3B",
+        choices: [{ index: 0, delta: { content: "!" } }],
+      },
+    ];
+    const encoder = new TextEncoder();
+    mock.method(globalThis, "fetch", async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          }
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, { status: 200 });
+    });
+
+    const result = await streamed.chatCompletion(
+      baseRequest({ model: "qwen-3.5-35b", stream: true }),
+    );
+    assert.ok(result.stream);
+    const frames: string[] = [];
+    for await (const frame of result.stream) frames.push(frame);
+
+    assert.deepEqual(frames, [
+      ...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`),
+      "data: [DONE]\n\n",
+    ]);
+    const substitutions = lines
+      .map((line) => JSON.parse(line) as { msg?: string; returned?: string; streaming?: boolean })
+      .filter((entry) => entry.msg === "model_substitution");
+    assert.equal(substitutions.length, 1);
+    assert.equal(substitutions[0]?.returned, "Qwen/Qwen3.6-35B-A3B");
+    assert.equal(substitutions[0]?.streaming, true);
+  });
 });

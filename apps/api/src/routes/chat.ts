@@ -5,7 +5,10 @@ import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
 import { hasBearerAuth, requireAuthenticatedKey } from "../auth/optional-auth.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
-import type { InferenceRouter } from "../routing/router.js";
+import {
+  StreamingTemporarilyUnavailableError,
+  type InferenceRouter,
+} from "../routing/router.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
@@ -181,6 +184,17 @@ async function handleProviderErrors(
         type: "invalid_request_error",
         code: "model_not_supported",
         param: "model",
+      },
+    });
+    return;
+  }
+
+  if (err instanceof StreamingTemporarilyUnavailableError) {
+    await reply.status(err.statusCode).send({
+      error: {
+        message: err.message,
+        type: err.type,
+        code: err.code,
       },
     });
     return;
