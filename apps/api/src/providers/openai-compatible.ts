@@ -6,6 +6,7 @@ import {
   normalizeChatCompletionPayload,
   withThinkingDefault,
 } from "./chat-passthrough.js";
+import { observeStreamedModel } from "../routing/router.js";
 import { ProviderError, type ProviderAdapter, type ProviderHealthResult } from "./types.js";
 
 export interface OpenAiCompatibleConfig {
@@ -211,7 +212,12 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
       }
 
       if (request.stream === true) {
-        const parsed = parseProviderStream(response.body, config.name, upstreamModel);
+        const parsed = parseProviderStream(
+          response.body,
+          config.name,
+          request.model,
+          upstreamModel,
+        );
         return {
           response: parsed.response,
           latencyMs,
@@ -238,6 +244,7 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
 function parseProviderStream(
   body: ReadableStream<Uint8Array> | null,
   providerName: string,
+  requestedModel: string,
   upstreamModel: string,
 ): {
   response: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["response"];
@@ -252,6 +259,7 @@ function parseProviderStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let done = false;
+  const modelWatch = { noted: false };
 
   async function* stream(): AsyncIterable<string> {
     for await (const chunk of iterateStreamChunks(streamBody, decoder)) {
@@ -279,6 +287,14 @@ function parseProviderStream(
           const parsed = normalizeChatCompletionPayload(
             JSON.parse(data) as { [key: string]: unknown },
           );
+          if (!modelWatch.noted) {
+            observeStreamedModel(
+              providerName,
+              requestedModel,
+              typeof parsed.model === "string" ? parsed.model : undefined,
+              modelWatch,
+            );
+          }
 
           yield `data: ${JSON.stringify(parsed)}\n\n`;
         }
