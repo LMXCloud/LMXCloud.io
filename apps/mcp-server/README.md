@@ -22,7 +22,7 @@ Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_
 
 - `prompt` (required), optional `model`, `max_tokens`, `temperature`, `api_key`
 - Optional vision: `image_url` and/or `images` (https URL or `data:image/...;base64,...`)
-- Use a vision-capable model such as `qwen-3.6-35b`, `qwen-3.5-35b`, or `llama-3.2-90b-vision`
+- Use a vision-capable model such as `qwen-3.6-35b` or `llama-3.2-90b-vision`
 
 ### `web_search`
 

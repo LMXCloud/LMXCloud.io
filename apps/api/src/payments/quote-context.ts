@@ -8,6 +8,7 @@ import {
   chatMessagesHaveImageContent,
   listVisionModelAliases,
   modelSupportsImageInput,
+  resolveModelAlias,
 } from "@lmxcloud/shared";
 import type { HTTPRequestContext } from "@x402/core/server";
 import {
@@ -131,6 +132,8 @@ export function parseChatBody(
     );
   }
 
+  const model = resolveModelAlias(b.model);
+
   if (!Array.isArray(b.messages) || b.messages.length === 0) {
     return new InvalidChatRequestError(
       "Field 'messages' is required and must be a non-empty array",
@@ -188,10 +191,10 @@ export function parseChatBody(
     });
   }
 
-  if (chatMessagesHaveImageContent(messages) && !modelSupportsImageInput(b.model)) {
+  if (chatMessagesHaveImageContent(messages) && !modelSupportsImageInput(model)) {
     const visionModels = listVisionModelAliases().join(", ");
     return new InvalidChatRequestError(
-      `Model "${b.model}" does not support image input. Use a vision-capable model such as: ${visionModels}`,
+      `Model "${model}" does not support image input. Use a vision-capable model such as: ${visionModels}`,
       "vision_not_supported",
     );
   }
@@ -202,7 +205,7 @@ export function parseChatBody(
   }
 
   return {
-    model: b.model,
+    model,
     messages,
     temperature: typeof b.temperature === "number" ? b.temperature : undefined,
     max_tokens: typeof b.max_tokens === "number" ? b.max_tokens : undefined,

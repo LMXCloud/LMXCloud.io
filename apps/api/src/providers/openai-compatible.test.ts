@@ -442,32 +442,32 @@ describe("createOpenAiCompatibleAdapter chat passthrough", () => {
     assert.match(frames[2] ?? "", /\[DONE\]/);
   });
 
-  it("logs one streamed model substitution and forwards the chunks unchanged", async () => {
+  it("logs one streamed model substitution from the body and forwards the chunks unchanged", async () => {
     const lines: string[] = [];
     mock.method(console, "info", (...args: unknown[]) => {
       lines.push(String(args[0]));
     });
 
     const streamed = createOpenAiCompatibleAdapter({
-      name: "nosana",
+      name: "akash",
       tier: 1,
       costPer1kTokens: 0.0002,
       isDepin: true,
       apiKey: "test",
       baseUrl: "https://provider.test/v1",
-      resolveModel: () => "Qwen/Qwen3.5-35B-A3B",
-      aliases: ["qwen-3.5-35b"],
+      resolveModel: () => "Qwen/Qwen3.6-35B-A3B",
+      aliases: ["qwen-3.6-35b"],
     });
     const chunks = [
       { id: "chatcmpl_1", choices: [{ index: 0, delta: { content: "" } }] },
       {
         id: "chatcmpl_1",
-        model: "Qwen/Qwen3.6-35B-A3B",
+        model: "some-other-model",
         choices: [{ index: 0, delta: { content: "hi" } }],
       },
       {
         id: "chatcmpl_1",
-        model: "Qwen/Qwen3.6-35B-A3B",
+        model: "some-other-model",
         choices: [{ index: 0, delta: { content: "!" } }],
       },
     ];
@@ -486,7 +486,7 @@ describe("createOpenAiCompatibleAdapter chat passthrough", () => {
     });
 
     const result = await streamed.chatCompletion(
-      baseRequest({ model: "qwen-3.5-35b", stream: true }),
+      baseRequest({ model: "qwen-3.6-35b", stream: true }),
     );
     assert.ok(result.stream);
     const frames: string[] = [];
@@ -497,10 +497,164 @@ describe("createOpenAiCompatibleAdapter chat passthrough", () => {
       "data: [DONE]\n\n",
     ]);
     const substitutions = lines
-      .map((line) => JSON.parse(line) as { msg?: string; returned?: string; streaming?: boolean })
+      .map((line) => JSON.parse(line) as { msg?: string; returned?: string; streaming?: boolean; source?: string })
       .filter((entry) => entry.msg === "model_substitution");
     assert.equal(substitutions.length, 1);
-    assert.equal(substitutions[0]?.returned, "Qwen/Qwen3.6-35B-A3B");
+    assert.equal(substitutions[0]?.returned, "some-other-model");
+    assert.equal(substitutions[0]?.source, "body");
     assert.equal(substitutions[0]?.streaming, true);
+  });
+
+  it("logs a streamed substitution from X-Model-Executed and ignores the chunk model", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+
+    const streamed = createOpenAiCompatibleAdapter({
+      name: "akash",
+      tier: 1,
+      costPer1kTokens: 0.0002,
+      isDepin: true,
+      apiKey: "test",
+      baseUrl: "https://provider.test/v1",
+      resolveModel: () => "Qwen/Qwen3.6-35B-A3B",
+      aliases: ["qwen-3.6-35b"],
+    });
+    const chunks = [
+      {
+        id: "chatcmpl_1",
+        model: "Qwen/Qwen3.6-35B-A3B",
+        choices: [{ index: 0, delta: { content: "hi" } }],
+      },
+    ];
+    const encoder = new TextEncoder();
+    mock.method(globalThis, "fetch", async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          }
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "x-model-executed": "other-executed-model" },
+      });
+    });
+
+    const result = await streamed.chatCompletion(
+      baseRequest({ model: "qwen-3.6-35b", stream: true }),
+    );
+    assert.ok(result.stream);
+    const frames: string[] = [];
+    for await (const frame of result.stream) frames.push(frame);
+    assert.match(frames[0] ?? "", /Qwen\/Qwen3\.6-35B-A3B/);
+
+    const substitutions = lines
+      .map((line) => JSON.parse(line) as { msg?: string; returned?: string; source?: string; streaming?: boolean })
+      .filter((entry) => entry.msg === "model_substitution");
+    assert.equal(substitutions.length, 1);
+    assert.equal(substitutions[0]?.returned, "other-executed-model");
+    assert.equal(substitutions[0]?.source, "header");
+    assert.equal(substitutions[0]?.streaming, true);
+  });
+
+  it("does not log a streamed substitution when X-Model-Executed matches, even if chunks disagree", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+
+    const streamed = createOpenAiCompatibleAdapter({
+      name: "akash",
+      tier: 1,
+      costPer1kTokens: 0.0002,
+      isDepin: true,
+      apiKey: "test",
+      baseUrl: "https://provider.test/v1",
+      resolveModel: () => "Qwen/Qwen3.6-35B-A3B",
+      aliases: ["qwen-3.6-35b"],
+    });
+    const encoder = new TextEncoder();
+    mock.method(globalThis, "fetch", async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                id: "chatcmpl_1",
+                model: "Qwen/Qwen3.5-35B-A3B",
+                choices: [{ index: 0, delta: { content: "hi" } }],
+              })}\n\n`,
+            ),
+          );
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "x-model-executed": "Qwen/Qwen3.6-35B-A3B" },
+      });
+    });
+
+    const result = await streamed.chatCompletion(
+      baseRequest({ model: "qwen-3.6-35b", stream: true }),
+    );
+    assert.ok(result.stream);
+    const frames: string[] = [];
+    for await (const frame of result.stream) frames.push(frame);
+    assert.match(frames[0] ?? "", /Qwen\/Qwen3\.5-35B-A3B/);
+    assert.equal(
+      lines.filter((line) => line.includes("model_substitution")).length,
+      0,
+    );
+  });
+
+  it("reports a non-streaming executed model from the header and leaves the body model in place", async () => {
+    mock.method(globalThis, "fetch", async () =>
+      new Response(
+        JSON.stringify({
+          id: "chatcmpl_test",
+          object: "chat.completion",
+          created: 0,
+          model: "Qwen/Qwen3.5-35B-A3B",
+          choices: [
+            {
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: "ok" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "x-model-executed": "Qwen/Qwen3.6-35B-A3B",
+          },
+        },
+      ),
+    );
+
+    const result = await createOpenAiCompatibleAdapter({
+      name: "akash",
+      tier: 1,
+      costPer1kTokens: 0.0002,
+      isDepin: true,
+      apiKey: "test",
+      baseUrl: "https://provider.test/v1",
+      resolveModel: () => "Qwen/Qwen3.6-35B-A3B",
+      aliases: ["qwen-3.6-35b"],
+    }).chatCompletion(baseRequest({ model: "qwen-3.6-35b" }));
+
+    assert.equal(result.response.model, "Qwen/Qwen3.5-35B-A3B");
+    assert.deepEqual(result.executedModel, {
+      id: "Qwen/Qwen3.6-35B-A3B",
+      source: "header",
+    });
   });
 });

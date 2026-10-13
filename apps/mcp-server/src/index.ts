@@ -586,7 +586,7 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
 
   server.tool(
     "chat_completion",
-    "Call LMX Cloud OpenAI-compatible chat completions. Prefers a pre-funded API key (Bearer / api_key); when omitted and x402 is enabled, requires a USDC pay-per-call payment. Optional image_url / images enable vision input (OpenAI content-parts format) — use a vision model such as llama-3.2-90b-vision, qwen-3.6-35b, or qwen-3.5-35b.",
+    "Call LMX Cloud OpenAI-compatible chat completions. Prefers a pre-funded API key (Bearer / api_key); when omitted and x402 is enabled, requires a USDC pay-per-call payment. Optional image_url / images enable vision input (OpenAI content-parts format) — use a vision model such as llama-3.2-90b-vision or qwen-3.6-35b.",
     {
       prompt: z.string().min(1).describe("User prompt to send to the selected model."),
       image_url: z

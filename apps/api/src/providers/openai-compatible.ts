@@ -6,7 +6,7 @@ import {
   normalizeChatCompletionPayload,
   withThinkingDefault,
 } from "./chat-passthrough.js";
-import { observeStreamedModel } from "../routing/router.js";
+import { observeStreamedModel, selectExecutedModel } from "../routing/router.js";
 import { ProviderError, type ProviderAdapter, type ProviderHealthResult } from "./types.js";
 
 export interface OpenAiCompatibleConfig {
@@ -211,12 +211,15 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
         );
       }
 
+      const executedHeader = response.headers.get("x-model-executed");
+
       if (request.stream === true) {
         const parsed = parseProviderStream(
           response.body,
           config.name,
           request.model,
           upstreamModel,
+          executedHeader,
         );
         return {
           response: parsed.response,
@@ -231,11 +234,16 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
           ReturnType<ProviderAdapter["chatCompletion"]>
         >["response"],
       );
+      const executedModel = selectExecutedModel(
+        executedHeader,
+        typeof data.model === "string" ? data.model : undefined,
+      );
 
       return {
         response: data,
         latencyMs,
         usage: data.usage ?? null,
+        ...(executedModel ? { executedModel } : {}),
       };
     },
   };
@@ -246,6 +254,7 @@ function parseProviderStream(
   providerName: string,
   requestedModel: string,
   upstreamModel: string,
+  executedHeader: string | null,
 ): {
   response: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["response"];
   usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
@@ -260,6 +269,16 @@ function parseProviderStream(
   let buffer = "";
   let done = false;
   const modelWatch = { noted: false };
+  const headerModel = selectExecutedModel(executedHeader, undefined);
+  if (headerModel) {
+    observeStreamedModel(
+      providerName,
+      requestedModel,
+      headerModel.id,
+      modelWatch,
+      "header",
+    );
+  }
 
   async function* stream(): AsyncIterable<string> {
     for await (const chunk of iterateStreamChunks(streamBody, decoder)) {
@@ -293,6 +312,7 @@ function parseProviderStream(
               requestedModel,
               typeof parsed.model === "string" ? parsed.model : undefined,
               modelWatch,
+              "body",
             );
           }
 

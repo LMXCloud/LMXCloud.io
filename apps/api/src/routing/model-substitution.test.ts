@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
 import { InMemoryHealthStore } from "../health/store.js";
-import { expectedProviderModelId } from "../providers/model-maps.js";
-import { ProviderError, type ProviderAdapter } from "../providers/types.js";
-import { parseRoutingPreference } from "./strategies.js";
+import { createOpenAiCompatibleAdapter } from "../providers/openai-compatible.js";
+import type { ProviderAdapter } from "../providers/types.js";
 import {
   InferenceRouter,
-  StreamingTemporarilyUnavailableError,
   logModelSubstitution,
   observeStreamedModel,
+  selectExecutedModel,
 } from "./router.js";
 
 describe("logModelSubstitution", () => {
@@ -32,6 +31,7 @@ describe("logModelSubstitution", () => {
       requested: "qwen-3.6-35b",
       expected: "Qwen/Qwen3.6-35B-A3B",
       returned: "some-other-model",
+      source: "body",
     });
   });
 
@@ -61,18 +61,19 @@ describe("observeStreamedModel", () => {
     });
 
     const state = { noted: false };
-    observeStreamedModel("akash", "qwen-3.5-35b", undefined, state);
-    observeStreamedModel("akash", "qwen-3.5-35b", "Qwen/Qwen3.6-35B-A3B", state);
-    observeStreamedModel("akash", "qwen-3.5-35b", "Qwen/Qwen3.6-35B-A3B", state);
+    observeStreamedModel("akash", "qwen-3.6-35b", undefined, state);
+    observeStreamedModel("akash", "qwen-3.6-35b", "some-other-model", state);
+    observeStreamedModel("akash", "qwen-3.6-35b", "some-other-model", state);
 
     assert.equal(state.noted, true);
     assert.equal(lines.length, 1);
     assert.deepEqual(JSON.parse(lines[0]!), {
       msg: "model_substitution",
       provider: "akash",
-      requested: "qwen-3.5-35b",
-      expected: "Qwen/Qwen3.5-35B-A3B",
-      returned: "Qwen/Qwen3.6-35B-A3B",
+      requested: "qwen-3.6-35b",
+      expected: "Qwen/Qwen3.6-35B-A3B",
+      returned: "some-other-model",
+      source: "body",
       streaming: true,
     });
   });
@@ -84,15 +85,36 @@ describe("observeStreamedModel", () => {
     });
 
     const state = { noted: false };
-    observeStreamedModel("nosana", "qwen-3.5-35b", "Qwen/Qwen3.5-35B-A3B", state);
-    observeStreamedModel("nosana", "qwen-3.5-35b", "Qwen/Qwen3.6-35B-A3B", state);
+    observeStreamedModel("akash", "qwen-3.6-35b", "Qwen/Qwen3.6-35B-A3B", state);
+    observeStreamedModel("akash", "qwen-3.6-35b", "some-other-model", state);
 
     assert.equal(state.noted, true);
     assert.deepEqual(lines, []);
   });
 });
 
-describe("known-bad streamed routes", () => {
+describe("selectExecutedModel", () => {
+  it("prefers a non-empty X-Model-Executed value over the body model", () => {
+    assert.deepEqual(
+      selectExecutedModel(" Qwen/Qwen3.6-35B-A3B ", "Qwen/Qwen3.5-35B-A3B"),
+      { id: "Qwen/Qwen3.6-35B-A3B", source: "header" },
+    );
+  });
+
+  it("uses the body model when the header is missing or blank", () => {
+    assert.deepEqual(selectExecutedModel(undefined, "Qwen/Qwen3.6-35B-A3B"), {
+      id: "Qwen/Qwen3.6-35B-A3B",
+      source: "body",
+    });
+    assert.deepEqual(selectExecutedModel("  ", "Qwen/Qwen3.6-35B-A3B"), {
+      id: "Qwen/Qwen3.6-35B-A3B",
+      source: "body",
+    });
+    assert.equal(selectExecutedModel(null, "  "), undefined);
+  });
+});
+
+describe("executed-model header on the routed response", () => {
   function request(model: string, stream?: boolean): ChatCompletionRequest {
     return {
       model,
@@ -102,127 +124,180 @@ describe("known-bad streamed routes", () => {
   }
 
   function provider(
-    name: string,
-    aliases: string[],
-    calls: Array<{ name: string; model: string; stream?: boolean }>,
-    options?: { fail?: boolean },
+    responseModel: string,
+    executedModel?: { id: string; source: "header" | "body" },
   ): ProviderAdapter {
     return {
-      name,
+      name: "akash",
       tier: 1,
       costPer1kTokens: 0.001,
       isDepin: true,
-      aliases,
-      supportsModel: (model) => aliases.includes(model),
-      chatCompletion: async (body) => {
-        calls.push({ name, model: body.model, stream: body.stream });
-        if (options?.fail) {
-          throw new ProviderError(`${name} down`, name, 503);
-        }
-        return {
-          response: {
-            id: "chatcmpl_test",
-            object: "chat.completion",
-            created: 0,
-            model: expectedProviderModelId(name, body.model) ?? body.model,
-            choices: [
-              {
-                index: 0,
-                finish_reason: "stop",
-                message: { role: "assistant", content: "ok" },
-              },
-            ],
-          },
-          latencyMs: 1,
-          usage: null,
-        };
-      },
+      aliases: ["qwen-3.6-35b", "llama-3-70b"],
+      supportsModel: (model) => model === "qwen-3.6-35b" || model === "llama-3-70b",
+      chatCompletion: async () => ({
+        response: {
+          id: "chatcmpl_test",
+          object: "chat.completion",
+          created: 0,
+          model: responseModel,
+          choices: [
+            {
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: "ok" },
+            },
+          ],
+        },
+        latencyMs: 1,
+        usage: null,
+        ...(executedModel ? { executedModel } : {}),
+      }),
       healthCheck: async () => ({ healthy: true, latencyMs: 1 }),
     };
   }
 
-  function router(providers: ProviderAdapter[]): InferenceRouter {
+  function router(candidate: ProviderAdapter): InferenceRouter {
     const health = new InMemoryHealthStore();
-    for (const candidate of providers) {
-      health.set(candidate.name, { healthy: true, latencyMs: 1, lastCheck: 1 });
-    }
-    return new InferenceRouter(providers, health);
+    health.set(candidate.name, { healthy: true, latencyMs: 1, lastCheck: 1 });
+    return new InferenceRouter([candidate], health);
   }
 
-  it("does not send streamed qwen-3.5-35b to akash, even when x-lmx-prefer asks for akash", async () => {
-    const calls: Array<{ name: string; model: string; stream?: boolean }> = [];
-    const selected = await router([
-      provider("nosana", ["qwen-3.5-35b"], calls),
-      provider("akash", ["qwen-3.5-35b", "llama-3-70b"], calls),
-    ]).route(
-      request("qwen-3.5-35b", true),
-      parseRoutingPreference("provider:akash"),
-    );
-
-    assert.equal(selected.provider, "nosana");
-    assert.deepEqual(calls, [{ name: "nosana", model: "qwen-3.5-35b", stream: true }]);
+  afterEach(() => {
+    mock.restoreAll();
   });
 
-  it("does not fall back to akash when the other streamed provider fails", async () => {
-    const calls: Array<{ name: string; model: string; stream?: boolean }> = [];
-    await assert.rejects(
-      () =>
-        router([
-          provider("nosana", ["qwen-3.5-35b"], calls, { fail: true }),
-          provider("akash", ["qwen-3.5-35b"], calls),
-        ]).route(request("qwen-3.5-35b", true), { strategy: "default" }),
-      (err: unknown) => err instanceof ProviderError && err.provider === "nosana",
-    );
-    assert.deepEqual(calls, [{ name: "nosana", model: "qwen-3.5-35b", stream: true }]);
+  it("logs the header model when the body model matches the expected id", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+
+    const routed = await router(
+      provider("Qwen/Qwen3.6-35B-A3B", {
+        id: "other-executed-model",
+        source: "header",
+      }),
+    ).route(request("qwen-3.6-35b", false), { strategy: "default" });
+
+    assert.equal(routed.response.model, "Qwen/Qwen3.6-35B-A3B");
+    assert.equal(lines.length, 1);
+    assert.deepEqual(JSON.parse(lines[0]!), {
+      msg: "model_substitution",
+      provider: "akash",
+      requested: "qwen-3.6-35b",
+      expected: "Qwen/Qwen3.6-35B-A3B",
+      returned: "other-executed-model",
+      source: "header",
+    });
   });
 
-  it("returns a client error when streamed qwen-3.5-35b has no provider left", async () => {
-    const calls: Array<{ name: string; model: string; stream?: boolean }> = [];
-    await assert.rejects(
-      () =>
-        router([provider("akash", ["qwen-3.5-35b", "llama-3-70b"], calls)]).route(
-          request("qwen-3.5-35b", true),
-          parseRoutingPreference("provider:akash"),
-        ),
-      (err: unknown) => {
-        assert.ok(err instanceof StreamingTemporarilyUnavailableError);
-        assert.equal(err.statusCode, 503);
-        assert.equal(err.model, "qwen-3.5-35b");
-        assert.match(err.message, /temporarily unavailable for streaming/);
-        assert.match(err.message, /stream:false/);
-        return true;
+  it("stays quiet when the header matches even if the body model does not", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+
+    const routed = await router(
+      provider("Qwen/Qwen3.5-35B-A3B", {
+        id: "Qwen/Qwen3.6-35B-A3B",
+        source: "header",
+      }),
+    ).route(request("qwen-3.6-35b"), { strategy: "default" });
+
+    assert.equal(routed.response.model, "Qwen/Qwen3.5-35B-A3B");
+    assert.deepEqual(lines, []);
+  });
+
+  it("keeps logging the body model for providers that do not send the header", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+
+    await router(provider("some-other-model")).route(request("llama-3-70b", false), {
+      strategy: "default",
+    });
+
+    assert.equal(lines.length, 1);
+    assert.deepEqual(JSON.parse(lines[0]!), {
+      msg: "model_substitution",
+      provider: "akash",
+      requested: "llama-3-70b",
+      expected: "meta-llama/Llama-3.3-70B-Instruct",
+      returned: "some-other-model",
+      source: "body",
+    });
+  });
+});
+
+describe("non-streaming header from the provider response", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("logs X-Model-Executed and leaves the mislabeled body model unchanged", async () => {
+    const lines: string[] = [];
+    mock.method(console, "info", (...args: unknown[]) => {
+      lines.push(String(args[0]));
+    });
+    mock.method(globalThis, "fetch", async () =>
+      new Response(
+        JSON.stringify({
+          id: "chatcmpl_test",
+          object: "chat.completion",
+          created: 0,
+          model: "Qwen/Qwen3.5-35B-A3B",
+          choices: [
+            {
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: "ok" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "x-model-executed": "other-executed-model",
+          },
+        },
+      ),
+    );
+
+    const akash = createOpenAiCompatibleAdapter({
+      name: "akash",
+      tier: 1,
+      costPer1kTokens: 0.001,
+      isDepin: true,
+      apiKey: "test",
+      baseUrl: "https://akash.test/v1",
+      resolveModel: () => "Qwen/Qwen3.6-35B-A3B",
+      aliases: ["qwen-3.6-35b"],
+    });
+    const health = new InMemoryHealthStore();
+    health.set("akash", { healthy: true, latencyMs: 1, lastCheck: 1 });
+    const routed = await new InferenceRouter([akash], health).route(
+      {
+        model: "qwen-3.6-35b",
+        messages: [{ role: "user", content: "hi" }],
       },
+      { strategy: "default" },
     );
-    assert.deepEqual(calls, []);
-  });
 
-  it("still sends non-streaming qwen-3.5-35b to akash", async () => {
-    const calls: Array<{ name: string; model: string; stream?: boolean }> = [];
-    const routed = router([
-      provider("akash", ["qwen-3.5-35b"], calls),
-      provider("nosana", ["qwen-3.5-35b"], calls),
+    assert.equal(routed.response.model, "Qwen/Qwen3.5-35B-A3B");
+    const substitutions = lines
+      .map((line) => JSON.parse(line) as { msg?: string })
+      .filter((entry) => entry.msg === "model_substitution");
+    assert.deepEqual(substitutions, [
+      {
+        msg: "model_substitution",
+        provider: "akash",
+        requested: "qwen-3.6-35b",
+        expected: "Qwen/Qwen3.6-35B-A3B",
+        returned: "other-executed-model",
+        source: "header",
+      },
     ]);
-    const selected = await routed.route(
-      request("qwen-3.5-35b", false),
-      parseRoutingPreference("provider:akash"),
-    );
-    const omitted = await routed.route(request("qwen-3.5-35b"), { strategy: "default" });
-
-    assert.equal(selected.provider, "akash");
-    assert.equal(omitted.provider, "akash");
-    assert.deepEqual(calls, [
-      { name: "akash", model: "qwen-3.5-35b", stream: false },
-      { name: "akash", model: "qwen-3.5-35b", stream: undefined },
-    ]);
-  });
-
-  it("still sends other streamed models to akash", async () => {
-    const calls: Array<{ name: string; model: string; stream?: boolean }> = [];
-    const selected = await router([
-      provider("akash", ["qwen-3.5-35b", "llama-3-70b"], calls),
-    ]).route(request("llama-3-70b", true), { strategy: "default" });
-
-    assert.equal(selected.provider, "akash");
-    assert.deepEqual(calls, [{ name: "akash", model: "llama-3-70b", stream: true }]);
   });
 });

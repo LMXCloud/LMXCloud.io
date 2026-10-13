@@ -9,6 +9,11 @@ export interface ProviderResult {
   latencyMs: number;
   usage: UsageInfo | null;
   stream?: AsyncIterable<string>;
+  /**
+   * Model the provider actually ran, when known.
+   * Header (X-Model-Executed) is preferred over the response body model field.
+   */
+  executedModel?: { id: string; source: "header" | "body" };
 }
 
 export interface ProviderHealthResult {

@@ -4,6 +4,7 @@ import path from "path";
 
 import { fileURLToPath } from "url";
 
+import { resolveModelAlias } from "@lmxcloud/shared";
 import { getAddress } from "viem";
 
 import { resolveMaxDepositUsdc } from "./deposits/limits.js";
@@ -339,13 +340,14 @@ function optionalNosana(): NosanaConfig | undefined {
   const endpoints: Record<string, NosanaEndpoint> = {};
 
   for (const [alias, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (!(alias in NOSANA_MODEL_MAP)) {
+    const canonical = resolveModelAlias(alias);
+    if (!(canonical in NOSANA_MODEL_MAP)) {
       throw new Error(
         `NOSANA_ENDPOINTS key "${alias}" is not a known Nosana catalog alias`,
       );
     }
 
-    const defaultUpstream = NOSANA_MODEL_MAP[alias]!;
+    const defaultUpstream = NOSANA_MODEL_MAP[canonical]!;
     let baseUrl: string;
     let upstreamId = defaultUpstream;
 
@@ -379,7 +381,13 @@ function optionalNosana(): NosanaConfig | undefined {
     endpoints[alias] = { baseUrl: normalized, upstreamId };
 
     // Also accept the catalog upstream ID as a request model key.
-    if (defaultUpstream !== alias && !endpoints[defaultUpstream]) {
+    // A retired alias is stored under its own key only, so it does not
+    // retarget the canonical model's Nosana deployment.
+    if (
+      alias === canonical &&
+      defaultUpstream !== alias &&
+      !endpoints[defaultUpstream]
+    ) {
       endpoints[defaultUpstream] = endpoints[alias]!;
     }
   }

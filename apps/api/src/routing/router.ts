@@ -1,4 +1,4 @@
-import type { ChatCompletionRequest } from "@lmxcloud/shared";
+import { resolveModelAlias, type ChatCompletionRequest } from "@lmxcloud/shared";
 import { expectedProviderModelId } from "../providers/model-maps.js";
 import {
   AllProvidersDownError,
@@ -9,7 +9,6 @@ import {
 import type { HealthStore } from "../health/store.js";
 import { RESOURCE_TYPE_CHAT } from "../telemetry/types.js";
 import type { UsageStore } from "../usage/store.js";
-import { isKnownBadRoute } from "./known-bad-routes.js";
 import type { RoutingPreference } from "./strategies.js";
 import type { RoutingSignalStore } from "./signal-store.js";
 
@@ -35,6 +34,9 @@ export interface RoutedResult {
   stream?: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["stream"];
 }
 
+/** Where the executed model id was read from. Header wins over the body. */
+export type ModelIdSource = "header" | "body";
+
 /**
  * Provider returned a different model than the ID we asked it to run.
  * Logged only. The response is still returned to the caller.
@@ -43,7 +45,7 @@ export function logModelSubstitution(
   provider: string,
   requested: string,
   returned: string | undefined,
-  options?: { streaming?: boolean },
+  options?: { streaming?: boolean; source?: ModelIdSource },
 ): void {
   if (!returned) return;
   const expected = expectedProviderModelId(provider, requested);
@@ -55,9 +57,26 @@ export function logModelSubstitution(
       requested,
       expected,
       returned,
+      source: options?.source ?? "body",
       ...(options?.streaming ? { streaming: true } : {}),
     }),
   );
+}
+
+/**
+ * Executed model id for substitution checks.
+ * X-Model-Executed wins when the provider sent it, including when the body
+ * model field disagrees. A blank header is ignored.
+ */
+export function selectExecutedModel(
+  headerModel: string | null | undefined,
+  bodyModel: string | null | undefined,
+): { id: string; source: ModelIdSource } | undefined {
+  const header = headerModel?.trim();
+  if (header) return { id: header, source: "header" };
+  const body = bodyModel?.trim();
+  if (body) return { id: body, source: "body" };
+  return undefined;
 }
 
 /** First model id seen on a relayed stream. Later chunks are not checked again. */
@@ -66,27 +85,11 @@ export function observeStreamedModel(
   requested: string,
   returned: string | undefined,
   state: { noted: boolean },
+  source: ModelIdSource = "body",
 ): void {
   if (state.noted || !returned) return;
   state.noted = true;
-  logModelSubstitution(provider, requested, returned, { streaming: true });
-}
-
-/**
- * Streaming request whose every supporting provider is a known-bad route.
- * Non-streaming for the same model is unchanged.
- */
-export class StreamingTemporarilyUnavailableError extends Error {
-  readonly statusCode = 503;
-  readonly type = "service_unavailable";
-  readonly code = "streaming_temporarily_unavailable";
-
-  constructor(public readonly model: string) {
-    super(
-      `Model "${model}" is temporarily unavailable for streaming. stream:false works.`,
-    );
-    this.name = "StreamingTemporarilyUnavailableError";
-  }
+  logModelSubstitution(provider, requested, returned, { streaming: true, source });
 }
 
 /**
@@ -107,6 +110,11 @@ export class InferenceRouter {
     preference: RoutingPreference,
     telemetry?: RouteTelemetryContext,
   ): Promise<RoutedResult> {
+    const canonical = resolveModelAlias(request.model);
+    if (canonical !== request.model) {
+      request = { ...request, model: canonical };
+    }
+
     const order = this.resolveProviderOrder(preference);
     const depinOnly = preference.strategy === "depin-only";
     const resourceType = telemetry?.resourceType ?? RESOURCE_TYPE_CHAT;
@@ -115,23 +123,9 @@ export class InferenceRouter {
       throw new AllProvidersDownError(depinOnly);
     }
 
-    const streaming = request.stream === true;
-    const supporting = order.filter((provider) => provider.supportsModel(request.model));
-
-    if (supporting.length === 0) {
-      throw new ModelNotSupportedError(request.model);
-    }
-
-    // Known-bad routes are removed before a provider is chosen.
-    // x-lmx-prefer only reorders `order`, so it cannot put one back.
-    const capable = supporting.filter(
-      (provider) => !isKnownBadRoute(provider.name, request.model, streaming),
-    );
+    const capable = order.filter((provider) => provider.supportsModel(request.model));
 
     if (capable.length === 0) {
-      if (streaming) {
-        throw new StreamingTemporarilyUnavailableError(request.model);
-      }
       throw new ModelNotSupportedError(request.model);
     }
 
@@ -148,7 +142,13 @@ export class InferenceRouter {
         const result = await provider.chatCompletion(request);
         this.signalStore?.recordAttempt(provider.name, true);
         if (!result.stream) {
-          logModelSubstitution(provider.name, request.model, result.response.model);
+          const executed = result.executedModel;
+          logModelSubstitution(
+            provider.name,
+            request.model,
+            executed?.id ?? result.response.model,
+            { source: executed?.source ?? "body" },
+          );
         }
         return {
           response: result.response,
