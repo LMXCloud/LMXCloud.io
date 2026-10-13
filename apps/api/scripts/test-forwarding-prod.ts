@@ -105,7 +105,7 @@ type Feature =
   | "json_schema"
   | "enable_thinking";
 
-const AKASH_PREFER = ["qwen-3.5-35b", "llama-3.3-70b", "qwen-3.6-35b"];
+const AKASH_PREFER = ["llama-3.3-70b", "qwen-3.6-35b"];
 const AETHIR_PREFER = ["qwen3.6-35b-a3b", "qwen3.6-27b", "qwen-3.6-35b", "qwen-3.6-27b"];
 
 function main() {

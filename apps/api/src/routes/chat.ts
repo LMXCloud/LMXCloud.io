@@ -5,10 +5,7 @@ import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
 import { hasBearerAuth, requireAuthenticatedKey } from "../auth/optional-auth.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
-import {
-  StreamingTemporarilyUnavailableError,
-  type InferenceRouter,
-} from "../routing/router.js";
+import type { InferenceRouter } from "../routing/router.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
@@ -35,6 +32,12 @@ interface ChatRouteDeps {
 function headerValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+function callerRequestedModel(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null || !("model" in body)) return undefined;
+  const model = (body as { model?: unknown }).model;
+  return typeof model === "string" ? model : undefined;
 }
 
 function extractUsageFromSseChunk(chunk: string): {
@@ -189,17 +192,6 @@ async function handleProviderErrors(
     return;
   }
 
-  if (err instanceof StreamingTemporarilyUnavailableError) {
-    await reply.status(err.statusCode).send({
-      error: {
-        message: err.message,
-        type: err.type,
-        code: err.code,
-      },
-    });
-    return;
-  }
-
   if (err instanceof AllProvidersDownError) {
     await reply.status(503).send({
       error: {
@@ -334,6 +326,8 @@ export async function registerChatRoutes(
       return;
     }
 
+    const modelRequested = callerRequestedModel(request.body) ?? validated.model;
+    const modelResolved = validated.model;
     const preference = parseRoutingPreference(headerValue(request.headers["x-lmx-prefer"]));
     const telemetry = {
       resourceType: RESOURCE_TYPE_CHAT,
@@ -386,6 +380,8 @@ export async function registerChatRoutes(
         reply.raw.setHeader("x-lmx-provider", result.provider);
         reply.raw.setHeader("x-lmx-fallback", result.fallbackUsed ? "true" : "false");
         reply.raw.setHeader("x-lmx-latency", String(result.latencyMs));
+        reply.raw.setHeader("x-lmx-model-requested", modelRequested);
+        reply.raw.setHeader("x-lmx-model-resolved", modelResolved);
 
         let usage = result.usage ?? result.response.usage ?? null;
         let chargedAmount = 0;
@@ -560,6 +556,8 @@ export async function registerChatRoutes(
       reply.header("x-lmx-provider", result.provider);
       reply.header("x-lmx-fallback", result.fallbackUsed ? "true" : "false");
       reply.header("x-lmx-latency", String(result.latencyMs));
+      reply.header("x-lmx-model-requested", modelRequested);
+      reply.header("x-lmx-model-resolved", modelResolved);
       reply.header("x-lmx-cost", String(requestCost));
       if (usageEventId) {
         reply.header("x-lmx-usage-id", usageEventId);

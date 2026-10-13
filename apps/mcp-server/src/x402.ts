@@ -195,7 +195,7 @@ export type ChatCompletionArgs = {
 };
 
 const CHAT_TOOL_DESCRIPTION =
-  "Pay-per-request OpenAI-compatible chat completions on DePIN infrastructure. Generate text from Llama, Qwen, DeepSeek, and other models with USDC micropayments on Base — no prepaid API credits required. Optional image_url / images for vision models (llama-3.2-90b-vision, qwen-3.6-35b, qwen-3.5-35b).";
+  "Pay-per-request OpenAI-compatible chat completions on DePIN infrastructure. Generate text from Llama, Qwen, DeepSeek, and other models with USDC micropayments on Base — no prepaid API credits required. Optional image_url / images for vision models (llama-3.2-90b-vision, qwen-3.6-35b).";
 
 /**
  * Run an x402-gated chat_completion: quote → build payment requirements →

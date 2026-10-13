@@ -79,7 +79,7 @@ export function isOpenAiProprietaryModelId(modelId: string): boolean {
  * short lowercase IDs (e.g. minimax-m2.5), mapped in apps/api AETHIR_MODEL_MAP.
  * Nosana overlap confirmed against official vLLM/LMDeploy/Ollama templates
  * (nosana-ci/pipeline-templates, 2026-07): Llama 70B family, DeepSeek-R1,
- * Qwen 3.5/3.6, GLM 4.7 Flash, GPT-OSS, Gemma 4 26B. Nosana has no shared
+ * Qwen 3.6, GLM 4.7 Flash, GPT-OSS, Gemma 4 26B. Nosana has no shared
  * gateway — only aliases listed in NOSANA_ENDPOINTS (per-deployment /v1 URLs)
  * are actually routable.
  *
@@ -126,16 +126,6 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     inputModalities: ["text", "image"],
     thinkingOffByDefault: true,
     providerIds: ["qwen3.6-35b-a3b", "Qwen3.6-35B-A3B"],
-  },
-  {
-    alias: "qwen-3.5-35b",
-    label: "Qwen 3.5 35B",
-    upstreamId: "Qwen/Qwen3.5-35B-A3B",
-    providers: ["akash", "nosana"],
-    category: "qwen",
-    inputModalities: ["text", "image"],
-    thinkingOffByDefault: true,
-    providerIds: ["Qwen3.5-35B-A3B"],
   },
   {
     alias: "qwen-3.6-27b",
@@ -309,6 +299,24 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
   },
 ];
 
+/**
+ * Retired request names that are not catalog rows.
+ * AkashML has executed Qwen/Qwen3.6-35B-A3B for every Qwen/Qwen3.5-35B-A3B
+ * request since 2026-08-19. Non-streaming bodies still label that response
+ * as 3.5, so the old name is not a model we can honestly list. Callers who
+ * send it are served qwen-3.6-35b and see that model's id in the response.
+ */
+export const MODEL_ALIASES: Readonly<Record<string, string>> = {
+  "qwen-3.5-35b": "qwen-3.6-35b",
+  "Qwen/Qwen3.5-35B-A3B": "qwen-3.6-35b",
+  "Qwen3.5-35B-A3B": "qwen-3.6-35b",
+};
+
+/** Catalog alias for a request name. Unknown names are returned unchanged. */
+export function resolveModelAlias(modelId: string): string {
+  return MODEL_ALIASES[modelId] ?? modelId;
+}
+
 export function buildProviderModelMap(provider: DepinProvider): Record<string, string> {
   const map: Record<string, string> = {};
 
@@ -370,8 +378,9 @@ export function listUniqueModelAliases(): SupportedModel[] {
 }
 
 export function resolveSupportedModel(modelId: string): SupportedModel | undefined {
+  const canonical = resolveModelAlias(modelId);
   return SUPPORTED_MODELS.find(
-    (model) => model.alias === modelId || model.upstreamId === modelId,
+    (model) => model.alias === canonical || model.upstreamId === canonical,
   );
 }
 
@@ -384,13 +393,20 @@ export function modelSupportsImageInput(modelId: string): boolean {
   return modelInputModalities(modelId).includes("image");
 }
 
-const THINKING_OFF_MODEL_IDS: ReadonlySet<string> = new Set(
-  SUPPORTED_MODELS.flatMap((model) =>
+const THINKING_OFF_MODEL_IDS: ReadonlySet<string> = new Set([
+  ...SUPPORTED_MODELS.flatMap((model) =>
     model.thinkingOffByDefault
       ? [model.alias, model.upstreamId, ...(model.providerIds ?? [])]
       : [],
   ),
-);
+  ...Object.entries(MODEL_ALIASES)
+    .filter(([, target]) =>
+      SUPPORTED_MODELS.some(
+        (model) => model.alias === target && model.thinkingOffByDefault === true,
+      ),
+    )
+    .map(([alias]) => alias),
+]);
 
 /** True when this alias, upstream ID, or provider ID defaults thinking off. */
 export function isThinkingOffByDefault(modelId: string): boolean {

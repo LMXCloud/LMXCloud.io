@@ -10,7 +10,7 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 - Multi-provider routing with health-aware fallback and transparent `x-lmx-*` headers
 - Streaming chat completions (SSE) with billing metadata
 - Vision input on chat (OpenAI `image_url` content parts) for flagged models
-- 30 model aliases mapped to healthy DePIN providers (`GET /v1/models`)
+- 29 model aliases mapped to healthy DePIN providers (`GET /v1/models`)
 - Web search passthrough (`POST /v1/web/search`) via Brave Search — fixed per-call price
 
 ### Auth & funding
@@ -160,7 +160,7 @@ LMX ships a hosted MCP server so agents can discover pricing, check balance, and
 
 **Tools (9):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`, `web_search`, `extract_pdf`
 
-`chat_completion` accepts an API key **or** x402 pay-per-call when no key is provided. Optional `image_url` / `images` enable vision on models such as `qwen-3.6-35b`, `qwen-3.5-35b`, and `llama-3.2-90b-vision`.
+`chat_completion` accepts an API key **or** x402 pay-per-call when no key is provided. Optional `image_url` / `images` enable vision on models such as `qwen-3.6-35b` and `llama-3.2-90b-vision`.
 
 `web_search` requires a balance-funded API key (Brave passthrough; fixed per-call price from `GET /v1/pricing` → `tools.web_search`).
 
@@ -308,7 +308,7 @@ Repos: [LMXCloud/LMXCloud.io](https://github.com/LMXCloud/LMXCloud.io) · [LMXCl
 
 ## Supported models (aliases)
 
-LMX exposes **30 short aliases** mapped to io.net, AkashML, and Aethir Mesh upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live provider catalogs.
+LMX exposes **29 short aliases** mapped to io.net, AkashML, and Aethir Mesh upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live provider catalogs. `qwen-3.5-35b` is not a separate model: AkashML serves `Qwen/Qwen3.6-35B-A3B` for that name, so requests for it run as `qwen-3.6-35b`.
 
 `GET /v1/models` returns aliases from **healthy** providers only. The router skips providers that do not support the requested alias.
 
@@ -321,9 +321,8 @@ LMX exposes **30 short aliases** mapped to io.net, AkashML, and Aethir Mesh upst
 | `deepseek-v4-pro` | `deepseek-ai/DeepSeek-V4-Pro` | ✓ | | ✓ | |
 | `glm-5.2` | `zai-org/GLM-5.2` | ✓ | ✓ | | |
 | `glm-5.1` | `zai-org/GLM-5.1` | ✓ | | ✓ | |
-| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ | | vision; thinking off unless `reasoning_effort` is set |
 | `llama-3.2-90b-vision` | `meta-llama/Llama-3.2-90B-Vision-Instruct` | ✓ | | | vision |
 | `deepseek-r1` | `deepseek-ai/DeepSeek-R1-0528` | ✓ | | | |
 | `gpt-oss-120b` | `openai/gpt-oss-120b` | ✓ | | | |
 
-Plus other io.net / Aethir overlaps (`qwen-3.6-27b`, `deepseek-v3.2`, `glm-5`, `kimi-k2.5`, `minimax-m2.5`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400. Thinking is off by default for `qwen-3.5-35b`, `qwen-3.6-35b`, and `qwen-3.6-27b`: LMX sends `reasoning_effort` `"none"` so a normal `max_tokens` budget is left for the answer. Set `reasoning_effort` to a value such as `"low"` or `"medium"` to turn thinking back on.
+Plus other io.net / Aethir overlaps (`qwen-3.6-27b`, `deepseek-v3.2`, `glm-5`, `kimi-k2.5`, `minimax-m2.5`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400. Thinking is off by default for `qwen-3.6-35b` and `qwen-3.6-27b`: LMX sends `reasoning_effort` `"none"` so a normal `max_tokens` budget is left for the answer. Set `reasoning_effort` to a value such as `"low"` or `"medium"` to turn thinking back on.
