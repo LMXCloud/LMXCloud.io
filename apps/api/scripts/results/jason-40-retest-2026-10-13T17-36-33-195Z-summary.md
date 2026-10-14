@@ -4,12 +4,12 @@ Source file: `jason-40-retest-2026-10-13T17-36-33-195Z.jsonl`. One production ru
 
 ## Run conditions
 
-- Deployed commit (`origin/main`): `40502726b2b42bd0ee6890efa253bd852c87ebc0`.
+- Deployed commit: `40502726b2b42bd0ee6890efa253bd852c87ebc0` (merge of PR #3). The harness recorded origin/main at run time. Confirmed separately: Railway shows this merge as the active production deployment and the only deploy since `ab388dd`, and all 40 responses carried the `x-lmx-model-requested`/`x-lmx-model-resolved` headers that first shipped in PR #3.
 - Time: 13 October 2026, 1:36:33 PM–1:38:48 PM ET.
 - Endpoint: `https://api.lmxcloud.io/v1/chat/completions`.
 - 40 requests. One attempt each. No retries and no replacement calls.
 - `max_tokens`: 400.
-- Pacing: 2.5 seconds between requests (24 per minute).
+- Pacing: the harness waited 2.5 seconds after each response completed, not between request starts. Measured from the recorded start times, the achieved rate was 17.4 requests per minute (40 starts over 134.8 s; mean start gap 3.46 s), below the ~24 per minute target. Corrected 14 October 2026; the harness now schedules starts every 2.5 s and reports the achieved rate.
 - Requests did not set `reasoning_effort`, `enable_thinking`, or `chat_template_kwargs`. Thinking stays at the server default (off for hybrid Qwen).
 - No provider preference was sent. `provider_preference` is null on every request.
 
@@ -25,6 +25,8 @@ A plain request passes when the assistant content is non-empty. A `json_object` 
 40 of 40 requests passed.
 
 ## Requests
+
+Request ID is the completion ID returned in the response (UUID for non-streaming, `gen-…` for streaming); no `x-request-id` header was returned.
 
 | Model | Mode | Run | Request ID | Provider | Preference | Fallback | HTTP | Returned model | Stream model IDs | Substitution | finish_reason | Stream end | Empty | Truncated | Mode valid | Pass |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

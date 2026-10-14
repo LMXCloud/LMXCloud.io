@@ -4,16 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { expectedProviderModelId } from "../src/providers/model-maps.js";
-import { parseSseText, readSse, sanitizeValue, type ChatCapture } from "./jason-40-chat.js";
+import { parseSseText, readSse, recordedHeaders, sanitizeValue, type ChatCapture } from "./jason-40-chat.js";
 import { createSseModelState, observeSseModel } from "./sse-models.js";
 import {
   MODES,
   MODELS,
   PLANNED_REQUESTS,
   buildPlan,
+  PACE_MS,
   buildRow,
   etRange,
   judgeCapture,
+  pacingDelay,
+  pacingStats,
   requestBody,
   usageField,
   writeSummaryFile,
@@ -145,6 +148,7 @@ test("summary is refused when a required field is missing and written when the 4
     resultsFile: "jason-40-retest-test.jsonl",
     endpoint: "https://api.lmxcloud.io",
     paceMs: 2500,
+    deployedCommitSource: "origin/main after `git fetch` at run start; not reported by production",
   };
   const rows = forty();
   delete (rows[3] as { usage?: unknown }).usage;
@@ -161,12 +165,78 @@ test("summary is refused when a required field is missing and written when the 4
   assert.match(markdown, /\| qwen-3\.6-35b \| 5\/5 \| 5\/5 \| 5\/5 \| 4\/5 \|/);
   assert.match(markdown, /No provider preference was sent/);
   assert.match(markdown, new RegExp(COMMIT));
+  assert.match(markdown, /not reported by production/);
+  assert.doesNotMatch(markdown, /\(`origin\/main`\)/);
+  // Fixture starts are 1 s apart: the summary must report 60/min achieved, not the 24/min target.
+  assert.match(markdown, /Pacing target: a request start every 2\.5 seconds \(24\.0 per minute\)/);
+  assert.match(markdown, /Pacing achieved, measured from recorded start times: 60\.0 per minute/);
+  assert.match(markdown, /chatcmpl-row \(response_body\)/);
+  assert.match(markdown, /`x-model-executed` on 0 of 40/);
+
+  const noSource = writeSummaryFile(path.join(dir, "nosource.md"), complete, { ...meta, deployedCommitSource: " " });
+  assert.equal(noSource.written, false);
+  assert.match(noSource.problems.join("\n"), /summary metadata is incomplete/);
+
+  const badSource = forty();
+  badSource[0] = { ...badSource[0]!, request_id_source: null };
+  const sourceBlocked = writeSummaryFile(path.join(dir, "badsource.md"), badSource, meta);
+  assert.equal(sourceBlocked.written, false);
+  assert.match(sourceBlocked.problems.join("\n"), /row 1 request_id_source does not match request_id/);
 
   const inconsistent = forty();
   inconsistent[0] = { ...inconsistent[0]!, pass: true, empty: true };
   const blocked = writeSummaryFile(path.join(dir, "nope.md"), inconsistent, meta);
   assert.equal(blocked.written, false);
   assert.match(blocked.problems.join("\n"), /pass does not match/);
+});
+
+test("pacing schedules request starts, so slow responses do not lower the rate", () => {
+  const t0 = 1_000_000;
+  assert.equal(PACE_MS, 2500);
+  assert.equal(pacingDelay(t0, 0, t0), 0);
+  // Request 1 is due at t0 + 2500. A response that finished at t0 + 900 waits 1600, not 2500.
+  assert.equal(pacingDelay(t0, 1, t0 + 900), 1600);
+  // Already late: start immediately, never a negative wait.
+  assert.equal(pacingDelay(t0, 2, t0 + 6000), 0);
+});
+
+test("pacing stats report the Oct 13 run at about 17/min, not the 24/min target", () => {
+  // Oct 13 run: 40 starts from 17:36:33.195Z to 17:38:48.023Z (2.5 s sleep after each response).
+  const first = Date.parse("2026-10-13T17:36:33.195Z");
+  const last = Date.parse("2026-10-13T17:38:48.023Z");
+  const rows = Array.from({ length: 40 }, (_, i) => ({
+    timestamp: new Date(first + Math.round(((last - first) * i) / 39)).toISOString(),
+  }));
+  const stats = pacingStats(rows);
+  assert.equal(stats.requests, 40);
+  assert.ok(Math.abs(stats.achievedPerMinute - 17.36) < 0.05, `got ${stats.achievedPerMinute}`);
+  assert.equal(stats.overruns, 39);
+
+  const onSchedule = Array.from({ length: 40 }, (_, i) => ({
+    timestamp: new Date(first + i * 2500 + (i % 3) * 40).toISOString(),
+  }));
+  const good = pacingStats(onSchedule);
+  assert.ok(Math.abs(good.achievedPerMinute - 24) < 0.1, `got ${good.achievedPerMinute}`);
+  assert.equal(good.overruns, 0);
+});
+
+test("recorded headers keep x-lmx-* and provider identity headers only", () => {
+  const headers = new Headers({
+    "X-LMX-Provider": "akash",
+    "x-lmx-model-requested": "qwen-3.5-35b",
+    "x-lmx-model-resolved": "qwen-3.6-35b",
+    "X-Model-Executed": "Qwen/Qwen3.6-35B-A3B",
+    "X-Aliased": "true",
+    "set-cookie": "session=nope",
+    "content-type": "application/json",
+  });
+  assert.deepEqual(recordedHeaders(headers), {
+    "x-aliased": "true",
+    "x-lmx-model-requested": "qwen-3.5-35b",
+    "x-lmx-model-resolved": "qwen-3.6-35b",
+    "x-lmx-provider": "akash",
+    "x-model-executed": "Qwen/Qwen3.6-35B-A3B",
+  });
 });
 
 test("eastern time range matches the October follow-up clock", () => {
@@ -213,6 +283,7 @@ function sampleRow(item: PlanItem, index: number, fail: boolean): RetestRow {
     capture.httpStatus = 503;
     capture.error = "upstream unavailable";
     capture.requestId = null;
+    capture.requestIdSource = null;
     capture.responseJson = { error: { message: "upstream unavailable" } };
     capture.sseFrames = null;
     capture.streamTermination = item.mode === "streaming" ? "not_started" : "not_applicable";
@@ -252,6 +323,8 @@ function passingCapture(mode: Mode, returnedModel: string): ChatCapture {
     modelRequestedHeader: "requested",
     modelResolvedHeader: "resolved",
     requestId: "chatcmpl-row",
+    requestIdSource: "response_body",
+    responseHeaders: { "x-lmx-provider": "ionet", "x-lmx-fallback": "false" },
     returnedModel,
     streamModelIds: mode === "streaming" ? [returnedModel] : [],
     finishReason: base.finishReason,
@@ -274,6 +347,8 @@ function captureJudge(extra: Partial<ChatCapture> = {}): ChatCapture {
     modelRequestedHeader: null,
     modelResolvedHeader: null,
     requestId: "chatcmpl-1",
+    requestIdSource: "response_body",
+    responseHeaders: {},
     returnedModel: extra.returnedModel ?? "meta-llama/Llama-3.3-70B-Instruct",
     streamModelIds: [],
     finishReason: "stop",

@@ -36,6 +36,20 @@ export type ToolCall = {
 
 export type StreamTermination = "done" | "closed" | "not_started" | "error" | "not_applicable";
 
+/** Where `requestId` came from. Header IDs are LMX's; body and chunk IDs are completion IDs. */
+export type RequestIdSource = "header" | "response_body" | "stream_chunk";
+
+/**
+ * Response headers recorded on every attempt when present: all `x-lmx-*` headers plus any
+ * provider model-identity or alias headers that reach the caller.
+ */
+export const RECORDED_HEADER_NAMES = [
+  "x-request-id",
+  "x-model-executed",
+  "x-model-requested",
+  "x-aliased",
+] as const;
+
 export type ChatCapture = {
   httpStatus: number | null;
   provider: string | null;
@@ -43,6 +57,8 @@ export type ChatCapture = {
   modelRequestedHeader: string | null;
   modelResolvedHeader: string | null;
   requestId: string | null;
+  requestIdSource: RequestIdSource | null;
+  responseHeaders: Record<string, string>;
   returnedModel: string | null;
   streamModelIds: string[];
   finishReason: string | null;
@@ -94,7 +110,11 @@ export function sanitizeValue(value: unknown, secret: string): unknown {
 }
 
 /** One HTTP attempt. Callers must not retry a failure. */
-export async function postChat(apiKey: string, body: Record<string, unknown>): Promise<ChatCapture> {
+export async function postChat(
+  apiKey: string,
+  body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {},
+): Promise<ChatCapture> {
   const started = performance.now();
   const streaming = body.stream === true;
   let response: Response;
@@ -102,6 +122,7 @@ export async function postChat(apiKey: string, body: Record<string, unknown>): P
     response = await fetch(`${forwardingApiUrl()}/v1/chat/completions`, {
       method: "POST",
       headers: {
+        ...extraHeaders,
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
@@ -116,11 +137,13 @@ export async function postChat(apiKey: string, body: Record<string, unknown>): P
   if (!response.ok) {
     const errorText = await response.text();
     const responseJson = parseBody(errorText);
+    const bodyId = idFromBody(responseJson);
     return {
       ...blankCapture(Math.round(performance.now() - started)),
       ...headers,
       httpStatus: response.status,
-      requestId: headers.requestId ?? idFromBody(responseJson),
+      requestId: headers.requestId ?? bodyId,
+      requestIdSource: headers.requestId ? "header" : bodyId ? "response_body" : null,
       streamTermination: streaming ? "not_started" : "not_applicable",
       error: errorMessage(errorText) ?? `HTTP ${response.status}`,
       responseJson,
@@ -134,6 +157,7 @@ export async function postChat(apiKey: string, body: Record<string, unknown>): P
       ...parsed,
       ...headers,
       requestId: headers.requestId ?? parsed.requestId,
+      requestIdSource: headers.requestId ? "header" : parsed.requestId ? "stream_chunk" : null,
       httpStatus: response.status,
       clientLatencyMs: Math.round(performance.now() - started),
     };
@@ -143,10 +167,12 @@ export async function postChat(apiKey: string, body: Record<string, unknown>): P
   const choice = firstChoice(json);
   const message = isRecord(choice?.message) ? choice.message : undefined;
   const returnedModel = typeof json.model === "string" ? json.model : null;
+  const bodyId = typeof json.id === "string" ? json.id : null;
   return {
     httpStatus: response.status,
     ...headers,
-    requestId: headers.requestId ?? (typeof json.id === "string" ? json.id : null),
+    requestId: headers.requestId ?? bodyId,
+    requestIdSource: headers.requestId ? "header" : bodyId ? "response_body" : null,
     returnedModel,
     streamModelIds: [],
     finishReason: typeof choice?.finish_reason === "string" ? choice.finish_reason : null,
@@ -185,6 +211,8 @@ export async function readSse(
     | "modelRequestedHeader"
     | "modelResolvedHeader"
     | "clientLatencyMs"
+    | "requestIdSource"
+    | "responseHeaders"
   >
 > {
   const reader = response.body?.getReader();
@@ -342,14 +370,29 @@ function readLmxHeaders(response: Response): {
   modelRequestedHeader: string | null;
   modelResolvedHeader: string | null;
   requestId: string | null;
+  responseHeaders: Record<string, string>;
 } {
   return {
+    responseHeaders: recordedHeaders(response.headers),
     provider: response.headers.get("x-lmx-provider"),
     fallback: response.headers.get("x-lmx-fallback"),
     modelRequestedHeader: response.headers.get("x-lmx-model-requested"),
     modelResolvedHeader: response.headers.get("x-lmx-model-resolved"),
     requestId: response.headers.get("x-request-id") ?? response.headers.get("x-lmx-request-id"),
   };
+}
+
+/** Every `x-lmx-*` header plus the provider identity/alias headers, keys lowercased and sorted. */
+export function recordedHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  const names = new Set<string>(RECORDED_HEADER_NAMES);
+  const entries: Array<[string, string]> = [];
+  headers.forEach((value, name) => {
+    const key = name.toLowerCase();
+    if (key.startsWith("x-lmx-") || names.has(key)) entries.push([key, value]);
+  });
+  for (const [key, value] of entries.sort((a, b) => a[0].localeCompare(b[0]))) out[key] = value;
+  return out;
 }
 
 function absorbToolDeltas(
@@ -426,6 +469,8 @@ function blankCapture(clientLatencyMs: number): ChatCapture {
     modelRequestedHeader: null,
     modelResolvedHeader: null,
     requestId: null,
+    requestIdSource: null,
+    responseHeaders: {},
     returnedModel: null,
     streamModelIds: [],
     finishReason: null,

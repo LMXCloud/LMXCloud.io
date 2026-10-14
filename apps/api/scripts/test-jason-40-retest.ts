@@ -4,7 +4,8 @@
  *   LMX_TEST_API_KEY=lmx_... pnpm test:jason-40
  *   API_URL=https://api.lmxcloud.io pnpm --filter @lmxcloud/api test:jason-40
  *
- * 40 requests, one attempt each, no retries, max_tokens 400, about 24/min.
+ * 40 requests, one attempt each, no retries, max_tokens 400. Request starts are scheduled
+ * every 2.5 s (24/min); the summary reports the rate actually achieved from recorded start times.
  * Does not send a provider preference or reasoning overrides. Never prints the API key.
  * Results: apps/api/scripts/results/jason-40-retest-<timestamp>.jsonl
  *          apps/api/scripts/results/jason-40-retest-<timestamp>-sanitized.jsonl
@@ -29,6 +30,8 @@ import {
   PACE_MS,
   PLANNED_REQUESTS,
   buildPlan,
+  pacingDelay,
+  pacingStats,
   buildRow,
   requestBody,
   writeSummaryFile,
@@ -58,6 +61,8 @@ async function run(apiKey: string) {
     throw new Error(`refusing to run a plan of ${plan.length} requests`);
   }
   const deployedCommit = readDeployedCommit();
+  const deployedCommitSource =
+    "origin/main after `git fetch` at run start; not reported by production, confirm the active deployment separately";
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const resultsDir = path.join(__dirname, "results");
   fs.mkdirSync(resultsDir, { recursive: true });
@@ -66,10 +71,14 @@ async function run(apiKey: string) {
   const sanitizedPath = path.join(resultsDir, `jason-40-retest-${stamp}-sanitized.jsonl`);
   const summaryPath = path.join(resultsDir, `jason-40-retest-${stamp}-summary.md`);
   const rows: RetestRow[] = [];
+  const runStartMs = Date.now();
 
   for (let index = 0; index < plan.length; index += 1) {
     const item = plan[index]!;
     const params = requestBody(item);
+    // Schedule starts, not gaps after responses, so slow responses don't lower the rate.
+    const wait = pacingDelay(runStartMs, index, Date.now());
+    if (wait > 0) await sleep(wait);
     const timestamp = new Date().toISOString();
     let capture;
     try {
@@ -92,7 +101,6 @@ async function run(apiKey: string) {
     rows.push(row);
     fs.appendFileSync(rawPath, `${JSON.stringify(row)}\n`);
     console.log(redact(summaryLine(row), apiKey));
-    if (index < plan.length - 1) await sleep(PACE_MS);
   }
 
   fs.writeFileSync(sanitizedPath, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
@@ -100,10 +108,14 @@ async function run(apiKey: string) {
     resultsFile: rawName,
     endpoint: forwardingApiUrl(),
     paceMs: PACE_MS,
+    deployedCommitSource,
   });
+  const pacing = pacingStats(rows);
   console.log(`\n${rows.length} rows written to ${rawPath}`);
   console.log(`sanitized rows written to ${sanitizedPath}`);
-  console.log(`pace ${PACE_MS}ms between requests; timeout ${forwardingTimeoutMs()}ms; one attempt each`);
+  console.log(
+    `target: a start every ${PACE_MS}ms; achieved ${pacing.achievedPerMinute.toFixed(1)}/min, ${pacing.overruns} late starts; timeout ${forwardingTimeoutMs()}ms; one attempt each`,
+  );
   console.log(`deployed commit ${deployedCommit}`);
   if (!summary.written) {
     console.error(`refusing to write summary: ${summary.problems.join("; ")}`);
@@ -115,6 +127,8 @@ async function run(apiKey: string) {
 }
 
 function readDeployedCommit(): string {
+  // Refresh origin/main first; a stale local ref would record the wrong commit.
+  execFileSync("git", ["fetch", "--quiet", "origin", "main"], { cwd: repoRoot, stdio: "inherit" });
   const sha = execFileSync("git", ["rev-parse", "origin/main"], {
     cwd: repoRoot,
     encoding: "utf8",

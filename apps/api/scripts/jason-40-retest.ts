@@ -7,6 +7,7 @@ import {
   WEATHER_USER,
   isRecord,
   type ChatCapture,
+  type RequestIdSource,
   type ToolCall,
 } from "./jason-40-chat.js";
 
@@ -15,7 +16,39 @@ export const MODES = ["plain", "json_object", "tool_call", "streaming"] as const
 export const RUNS_PER_CELL = 5;
 export const PLANNED_REQUESTS = MODELS.length * MODES.length * RUNS_PER_CELL;
 export const MAX_TOKENS = 400;
+/** Interval between request *starts* (24/min). The runner schedules starts, not gaps after responses. */
 export const PACE_MS = 60_000 / 24;
+/** A start later than its slot by more than this counts as an overrun in the summary. */
+export const SLOT_TOLERANCE_MS = 250;
+
+/** How long to wait before starting request `index` so starts land every PACE_MS from `runStartMs`. */
+export function pacingDelay(runStartMs: number, index: number, nowMs: number, paceMs = PACE_MS): number {
+  return Math.max(0, runStartMs + index * paceMs - nowMs);
+}
+
+export type PacingStats = {
+  requests: number;
+  spanMs: number;
+  achievedPerMinute: number;
+  meanStartGapMs: number;
+  maxStartGapMs: number;
+  overruns: number;
+};
+
+/** Pacing measured from recorded start timestamps, so the summary reports what happened, not the target. */
+export function pacingStats(rows: readonly { timestamp: string }[], paceMs = PACE_MS): PacingStats {
+  const starts = rows.map((row) => Date.parse(row.timestamp));
+  const gaps = starts.slice(1).map((start, index) => start - starts[index]!);
+  const spanMs = starts.length > 1 ? starts[starts.length - 1]! - starts[0]! : 0;
+  return {
+    requests: starts.length,
+    spanMs,
+    achievedPerMinute: spanMs > 0 ? ((starts.length - 1) * 60_000) / spanMs : 0,
+    meanStartGapMs: gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0,
+    maxStartGapMs: gaps.length ? Math.max(...gaps) : 0,
+    overruns: gaps.filter((gap) => gap > paceMs + SLOT_TOLERANCE_MS).length,
+  };
+}
 
 export type ModelName = (typeof MODELS)[number];
 export type Mode = (typeof MODES)[number];
@@ -36,6 +69,7 @@ export type Substitution = {
 
 export type RetestRow = {
   request_id: string | null;
+  request_id_source: RequestIdSource | null;
   timestamp: string;
   deployed_commit: string;
   request_params: Record<string, unknown>;
@@ -47,6 +81,7 @@ export type RetestRow = {
   "x-lmx-fallback": string | null;
   "x-lmx-model-requested": string | null;
   "x-lmx-model-resolved": string | null;
+  response_headers: Record<string, string>;
   substitution: Substitution;
   provider_preference: string | null;
   http_status: number | null;
@@ -56,6 +91,7 @@ export type RetestRow = {
   response_json: unknown | null;
   sse_frames: string[] | null;
   usage: Record<string, unknown> | "unavailable";
+  client_latency_ms: number;
   mode: Mode;
   run: number;
   mode_valid: boolean;
@@ -67,6 +103,7 @@ export type RetestRow = {
 
 export const REQUIRED_FIELDS = [
   "request_id",
+  "request_id_source",
   "timestamp",
   "deployed_commit",
   "request_params",
@@ -78,6 +115,7 @@ export const REQUIRED_FIELDS = [
   "x-lmx-fallback",
   "x-lmx-model-requested",
   "x-lmx-model-resolved",
+  "response_headers",
   "substitution",
   "provider_preference",
   "http_status",
@@ -87,6 +125,7 @@ export const REQUIRED_FIELDS = [
   "response_json",
   "sse_frames",
   "usage",
+  "client_latency_ms",
   "mode",
   "run",
   "mode_valid",
@@ -97,11 +136,14 @@ export const REQUIRED_FIELDS = [
 ] as const;
 
 const STREAM_TERMINATIONS = new Set(["done", "closed", "not_started", "error", "not_applicable"]);
+const REQUEST_ID_SOURCES = new Set(["header", "response_body", "stream_chunk"]);
 
 export type SummaryMeta = {
   resultsFile: string;
   endpoint: string;
   paceMs: number;
+  /** Plain statement of where `deployed_commit` came from, e.g. what git ref, and whether production reported it. */
+  deployedCommitSource: string;
 };
 
 export function buildPlan(): PlanItem[] {
@@ -245,6 +287,7 @@ export function buildRow(input: {
   });
   return {
     request_id: input.capture.requestId,
+    request_id_source: input.capture.requestIdSource,
     timestamp: input.timestamp,
     deployed_commit: input.deployedCommit,
     request_params: input.requestParams,
@@ -256,6 +299,7 @@ export function buildRow(input: {
     "x-lmx-fallback": input.capture.fallback,
     "x-lmx-model-requested": input.capture.modelRequestedHeader,
     "x-lmx-model-resolved": input.capture.modelResolvedHeader,
+    response_headers: { ...input.capture.responseHeaders },
     substitution: substitutionFor(expected, input.capture.returnedModel, streamModelIds),
     provider_preference: input.providerPreference,
     http_status: input.capture.httpStatus,
@@ -265,6 +309,7 @@ export function buildRow(input: {
     response_json: streamed ? null : input.capture.responseJson,
     sse_frames: input.item.mode === "streaming" ? input.capture.sseFrames : null,
     usage: usageField(input.capture.usage),
+    client_latency_ms: input.capture.clientLatencyMs,
     mode: input.item.mode,
     run: input.item.run,
     mode_valid: judged.mode_valid,
@@ -286,7 +331,7 @@ export function summaryProblems(rows: readonly RetestRow[], meta: SummaryMeta): 
   if (problems.length > 0) return problems;
   const commits = new Set(rows.map((row) => row.deployed_commit));
   if (commits.size !== 1) problems.push("deployed_commit differs across rows");
-  if (!meta.resultsFile || !meta.endpoint || !Number.isFinite(meta.paceMs)) {
+  if (!meta.resultsFile || !meta.endpoint || !Number.isFinite(meta.paceMs) || !meta.deployedCommitSource?.trim()) {
     problems.push("summary metadata is incomplete");
   }
   return problems;
@@ -301,6 +346,8 @@ export function renderSummary(rows: readonly RetestRow[], meta: SummaryMeta): st
   const ended = rows[rows.length - 1]!.timestamp;
   const commit = rows[0]!.deployed_commit;
   const preferences = [...new Set(rows.map((row) => row.provider_preference ?? "none"))];
+  const pacing = pacingStats(rows, meta.paceMs);
+  const targetPerMinute = 60_000 / meta.paceMs;
   const lines: string[] = [
     `# Jason 40-request retest, ${etDate(started)}`,
     "",
@@ -308,12 +355,13 @@ export function renderSummary(rows: readonly RetestRow[], meta: SummaryMeta): st
     "",
     "## Run conditions",
     "",
-    `- Deployed commit (\`origin/main\`): \`${commit}\`.`,
+    `- Deployed commit: \`${commit}\` (${meta.deployedCommitSource}).`,
     `- Time: ${etRange(started, ended)}.`,
     `- Endpoint: \`${meta.endpoint}/v1/chat/completions\`.`,
     `- ${PLANNED_REQUESTS} requests. One attempt each. No retries and no replacement calls.`,
     `- \`max_tokens\`: ${MAX_TOKENS}.`,
-    `- Pacing: ${meta.paceMs / 1000} seconds between requests (${Math.round(60_000 / meta.paceMs)} per minute).`,
+    `- Pacing target: a request start every ${meta.paceMs / 1000} seconds (${fmt(targetPerMinute)} per minute).`,
+    `- Pacing achieved, measured from recorded start times: ${fmt(pacing.achievedPerMinute)} per minute (mean start gap ${fmt(pacing.meanStartGapMs / 1000, 2)} s, longest ${fmt(pacing.maxStartGapMs / 1000, 2)} s; ${pacing.overruns} of ${Math.max(pacing.requests - 1, 0)} gaps exceeded the target by more than ${SLOT_TOLERANCE_MS} ms).`,
     "- Requests did not set `reasoning_effort`, `enable_thinking`, or `chat_template_kwargs`. Thinking stays at the server default (off for hybrid Qwen).",
     preferences.length === 1 && preferences[0] === "none"
       ? "- No provider preference was sent. `provider_preference` is null on every request."
@@ -342,13 +390,15 @@ export function renderSummary(rows: readonly RetestRow[], meta: SummaryMeta): st
     "",
     "## Requests",
     "",
+    "Request ID source: `header` is LMX's `x-request-id`; `response_body` and `stream_chunk` are the completion ID returned in the response.",
+    "",
     "| Model | Mode | Run | Request ID | Provider | Preference | Fallback | HTTP | Returned model | Stream model IDs | Substitution | finish_reason | Stream end | Empty | Truncated | Mode valid | Pass |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   );
 
   for (const row of rows) {
     lines.push(
-      `| ${row.requested_model} | ${row.mode} | ${row.run} | ${cell(row.request_id)} | ${cell(row["x-lmx-provider"])} | ${cell(row.provider_preference)} | ${cell(row["x-lmx-fallback"])} | ${row.http_status ?? "-"} | ${cell(row.returned_model)} | ${row.stream_model_ids.join(" | ") || "-"} | ${row.substitution.detected ? row.substitution.differing.join(" | ") : "no"} | ${cell(row.finish_reason)} | ${row.stream_termination} | ${yesNo(row.empty)} | ${yesNo(row.truncated)} | ${yesNo(row.mode_valid)} | ${yesNo(row.pass)} |`,
+      `| ${row.requested_model} | ${row.mode} | ${row.run} | ${cell(row.request_id)}${row.request_id_source ? ` (${row.request_id_source})` : ""} | ${cell(row["x-lmx-provider"])} | ${cell(row.provider_preference)} | ${cell(row["x-lmx-fallback"])} | ${row.http_status ?? "-"} | ${cell(row.returned_model)} | ${row.stream_model_ids.join(" | ") || "-"} | ${row.substitution.detected ? row.substitution.differing.join(" | ") : "no"} | ${cell(row.finish_reason)} | ${row.stream_termination} | ${yesNo(row.empty)} | ${yesNo(row.truncated)} | ${yesNo(row.mode_valid)} | ${yesNo(row.pass)} |`,
     );
   }
 
@@ -378,6 +428,11 @@ export function renderSummary(rows: readonly RetestRow[], meta: SummaryMeta): st
   const unavailable = rows.filter((row) => row.usage === "unavailable").length;
   const requestedHeader = rows.filter((row) => row["x-lmx-model-requested"]).length;
   const resolvedHeader = rows.filter((row) => row["x-lmx-model-resolved"]).length;
+  const executedHeader = rows.filter((row) => row.response_headers["x-model-executed"]).length;
+  const aliasedHeader = rows.filter((row) => row.response_headers["x-aliased"]).length;
+  const aliasApplied = rows.filter(
+    (row) => row["x-lmx-model-resolved"] && row["x-lmx-model-resolved"] !== row["x-lmx-model-requested"],
+  ).length;
   lines.push(
     "",
     "## Usage and model headers",
@@ -385,7 +440,8 @@ export function renderSummary(rows: readonly RetestRow[], meta: SummaryMeta): st
     unavailable === 0
       ? "Every request included a usage object."
       : `Usage was unavailable on ${unavailable} of ${rows.length} requests. Those rows store \`usage\` as \`"unavailable"\` rather than an empty object.`,
-    `\`x-lmx-model-requested\` was present on ${requestedHeader} of ${rows.length} requests. \`x-lmx-model-resolved\` was present on ${resolvedHeader} of ${rows.length} requests.`,
+    `\`x-lmx-model-requested\` was present on ${requestedHeader} of ${rows.length} requests. \`x-lmx-model-resolved\` was present on ${resolvedHeader} of ${rows.length} requests. The resolved model differed from the requested model (alias applied) on ${aliasApplied}.`,
+    `Provider identity headers reaching the caller: \`x-model-executed\` on ${executedHeader} of ${rows.length}, \`x-aliased\` on ${aliasedHeader} of ${rows.length}. Each row's \`response_headers\` holds every \`x-lmx-*\` header and any of these that were sent.`,
     "",
   );
   return lines.join("\n");
@@ -439,6 +495,15 @@ function rowProblems(row: RetestRow, number: number): string[] {
   }
   if (!(row.request_id === null || typeof row.request_id === "string")) {
     problems.push(`row ${number} missing request_id`);
+  }
+  if (row.request_id === null ? row.request_id_source !== null : !REQUEST_ID_SOURCES.has(String(row.request_id_source))) {
+    problems.push(`row ${number} request_id_source does not match request_id`);
+  }
+  if (!isRecord(row.response_headers) || !Object.values(row.response_headers).every((v) => typeof v === "string")) {
+    problems.push(`row ${number} missing response_headers`);
+  }
+  if (typeof row.client_latency_ms !== "number" || !Number.isFinite(row.client_latency_ms) || row.client_latency_ms < 0) {
+    problems.push(`row ${number} missing client_latency_ms`);
   }
   if (httpSucceeded(row.http_status, row.error) && (typeof row.request_id !== "string" || row.request_id.length === 0)) {
     problems.push(`row ${number} missing request_id`);
@@ -556,6 +621,10 @@ function parseToolArguments(value: unknown): { parsed: boolean; schema: boolean 
   } catch {
     return { parsed: false, schema: false };
   }
+}
+
+function fmt(value: number, digits = 1): string {
+  return Number.isFinite(value) ? value.toFixed(digits) : "-";
 }
 
 function cell(value: string | null): string {
