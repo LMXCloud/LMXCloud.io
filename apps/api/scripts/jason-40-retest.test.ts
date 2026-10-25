@@ -14,6 +14,7 @@ import {
   PACE_MS,
   buildRow,
   etRange,
+  executedModelLine,
   judgeCapture,
   pacingDelay,
   pacingStats,
@@ -403,3 +404,27 @@ function sseResponse(text: string): Response {
   });
   return new Response(stream, { status: 200 });
 }
+
+test("summary counts the router's executed-model headers, or says none were sent", () => {
+  const rowWith = (headers: Record<string, string>) => ({ response_headers: headers }) as unknown as RetestRow;
+  assert.equal(
+    executedModelLine([rowWith({}), rowWith({ "x-lmx-provider": "ionet" })]),
+    "The deployed router did not send `x-lmx-model-executed` headers on any request.",
+  );
+  const line = executedModelLine([
+    rowWith({
+      "x-lmx-model-executed": "Qwen/Qwen3.6-35B-A3B",
+      "x-lmx-model-executed-source": "provider-header",
+      "x-lmx-substitution": "false",
+    }),
+    rowWith({
+      "x-lmx-model-executed": "meta-llama/Llama-3.3-70B-Instruct",
+      "x-lmx-model-executed-source": "response-body",
+      "x-lmx-substitution": "false",
+    }),
+    rowWith({ "x-lmx-model-executed-source": "unknown", "x-lmx-substitution": "unknown" }),
+  ]);
+  assert.match(line, /present on 2 of 3 requests/);
+  assert.match(line, /provider header on 1, response body on 1, unknown on 1/);
+  assert.match(line, /true on 0, false on 2, unknown on 1/);
+});

@@ -442,9 +442,25 @@ export function renderSummary(rows: readonly RetestRow[], meta: SummaryMeta): st
       : `Usage was unavailable on ${unavailable} of ${rows.length} requests. Those rows store \`usage\` as \`"unavailable"\` rather than an empty object.`,
     `\`x-lmx-model-requested\` was present on ${requestedHeader} of ${rows.length} requests. \`x-lmx-model-resolved\` was present on ${resolvedHeader} of ${rows.length} requests. The resolved model differed from the requested model (alias applied) on ${aliasApplied}.`,
     `Provider identity headers reaching the caller: \`x-model-executed\` on ${executedHeader} of ${rows.length}, \`x-aliased\` on ${aliasedHeader} of ${rows.length}. Each row's \`response_headers\` holds every \`x-lmx-*\` header and any of these that were sent.`,
+    executedModelLine(rows),
     "",
   );
   return lines.join("\n");
+}
+
+/** Counts the router's caller-facing executed-model evidence (x-lmx-model-executed-*). */
+export function executedModelLine(rows: readonly RetestRow[]): string {
+  const count = (header: string, value: string) =>
+    rows.filter((row) => row.response_headers[header] === value).length;
+  const reported = rows.filter((row) => row.response_headers["x-lmx-model-executed"]).length;
+  if (reported === 0 && rows.every((row) => !row.response_headers["x-lmx-model-executed-source"])) {
+    return "The deployed router did not send `x-lmx-model-executed` headers on any request.";
+  }
+  return [
+    `Router-reported executed model (\`x-lmx-model-executed\`) was present on ${reported} of ${rows.length} requests.`,
+    `Source: provider header on ${count("x-lmx-model-executed-source", "provider-header")}, response body on ${count("x-lmx-model-executed-source", "response-body")}, unknown on ${count("x-lmx-model-executed-source", "unknown")}.`,
+    `\`x-lmx-substitution\`: true on ${count("x-lmx-substitution", "true")}, false on ${count("x-lmx-substitution", "false")}, unknown on ${count("x-lmx-substitution", "unknown")}.`,
+  ].join(" ");
 }
 
 /** Writes the summary only when every required field is present and consistent. */
