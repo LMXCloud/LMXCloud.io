@@ -562,6 +562,59 @@ describe("createOpenAiCompatibleAdapter chat passthrough", () => {
     assert.equal(substitutions[0]?.streaming, true);
   });
 
+  it("exposes the streamed executed model: header first, otherwise the first chunk", async () => {
+    const adapter = createOpenAiCompatibleAdapter({
+      name: "akash",
+      tier: 1,
+      costPer1kTokens: 0.0002,
+      isDepin: true,
+      apiKey: "test",
+      baseUrl: "https://provider.test/v1",
+      resolveModel: () => "Qwen/Qwen3.6-35B-A3B",
+      aliases: ["qwen-3.6-35b"],
+    });
+    const encoder = new TextEncoder();
+    const respond = (headers: Record<string, string>) =>
+      mock.method(globalThis, "fetch", async () => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  id: "chatcmpl_1",
+                  model: "chunk-model",
+                  choices: [{ index: 0, delta: { content: "hi" } }],
+                })}\n\n`,
+              ),
+            );
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        });
+        return new Response(stream, { status: 200, headers });
+      });
+
+    respond({ "x-model-executed": "header-model" });
+    const withHeader = await adapter.chatCompletion(
+      baseRequest({ model: "qwen-3.6-35b", stream: true }),
+    );
+    assert.deepEqual(withHeader.streamExecutedModel?.(), { id: "header-model", source: "header" });
+    for await (const _ of withHeader.stream!) {
+      // drain
+    }
+    assert.deepEqual(withHeader.streamExecutedModel?.(), { id: "header-model", source: "header" });
+
+    mock.restoreAll();
+    respond({});
+    const fromBody = await adapter.chatCompletion(
+      baseRequest({ model: "qwen-3.6-35b", stream: true }),
+    );
+    assert.equal(fromBody.streamExecutedModel?.(), undefined);
+    const iterator = fromBody.stream![Symbol.asyncIterator]();
+    await iterator.next();
+    assert.deepEqual(fromBody.streamExecutedModel?.(), { id: "chunk-model", source: "body" });
+  });
+
   it("does not log a streamed substitution when X-Model-Executed matches, even if chunks disagree", async () => {
     const lines: string[] = [];
     mock.method(console, "info", (...args: unknown[]) => {

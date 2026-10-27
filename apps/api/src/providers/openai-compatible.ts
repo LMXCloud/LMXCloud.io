@@ -226,6 +226,7 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
           latencyMs,
           usage: parsed.usage,
           stream: parsed.stream,
+          streamExecutedModel: parsed.streamExecutedModel,
         };
       }
 
@@ -259,6 +260,7 @@ function parseProviderStream(
   response: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["response"];
   usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
   stream: AsyncIterable<string>;
+  streamExecutedModel: () => { id: string; source: "header" | "body" } | undefined;
 } {
   if (!body) {
     throw new ProviderError("Provider returned empty stream body", providerName);
@@ -270,6 +272,7 @@ function parseProviderStream(
   let done = false;
   const modelWatch = { noted: false };
   const headerModel = selectExecutedModel(executedHeader, undefined);
+  let executedModel: { id: string; source: "header" | "body" } | undefined = headerModel;
   if (headerModel) {
     observeStreamedModel(
       providerName,
@@ -306,6 +309,12 @@ function parseProviderStream(
           const parsed = normalizeChatCompletionPayload(
             JSON.parse(data) as { [key: string]: unknown },
           );
+          if (!executedModel) {
+            executedModel = selectExecutedModel(
+              undefined,
+              typeof parsed.model === "string" ? parsed.model : undefined,
+            );
+          }
           if (!modelWatch.noted) {
             observeStreamedModel(
               providerName,
@@ -331,6 +340,7 @@ function parseProviderStream(
   return {
     usage: null,
     stream: stream(),
+    streamExecutedModel: () => executedModel,
     response: {
       id: "chatcmpl_streaming_placeholder",
       object: "chat.completion",

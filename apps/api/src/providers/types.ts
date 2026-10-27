@@ -14,6 +14,12 @@ export interface ProviderResult {
    * Header (X-Model-Executed) is preferred over the response body model field.
    */
   executedModel?: { id: string; source: "header" | "body" };
+  /**
+   * Streaming only. Reads the executed model seen so far on the stream:
+   * the provider header when sent, otherwise the first chunk's model field.
+   * Undefined until one of those has been seen.
+   */
+  streamExecutedModel?: () => { id: string; source: "header" | "body" } | undefined;
 }
 
 export interface ProviderHealthResult {

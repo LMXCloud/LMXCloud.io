@@ -5,7 +5,12 @@ import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
 import { hasBearerAuth, requireAuthenticatedKey } from "../auth/optional-auth.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
-import type { InferenceRouter } from "../routing/router.js";
+import {
+  describeExecutedModel,
+  executedModelHeaders,
+  type ExecutedModelReport,
+  type InferenceRouter,
+} from "../routing/router.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
@@ -383,14 +388,34 @@ export async function registerChatRoutes(
         reply.raw.setHeader("x-lmx-model-requested", modelRequested);
         reply.raw.setHeader("x-lmx-model-resolved", modelResolved);
 
+        // Executed-model headers wait for the first chunk so a model read from the
+        // stream body is known. Node sends headers on the first write, so this adds
+        // no delay to the first token.
+        let executedReport: ExecutedModelReport | undefined;
+        const finalizeExecutedModel = (): ExecutedModelReport => {
+          if (!executedReport) {
+            executedReport = describeExecutedModel(
+              result.provider,
+              modelResolved,
+              result.streamExecutedModel?.(),
+            );
+            for (const [name, value] of Object.entries(executedModelHeaders(executedReport))) {
+              if (!reply.raw.headersSent) reply.raw.setHeader(name, value);
+            }
+          }
+          return executedReport;
+        };
+
         let usage = result.usage ?? result.response.usage ?? null;
         let chargedAmount = 0;
         try {
           for await (const chunk of result.stream) {
             const parsedUsage = extractUsageFromSseChunk(chunk);
             if (parsedUsage) usage = parsedUsage;
+            finalizeExecutedModel();
             reply.raw.write(chunk);
           }
+          const executed = finalizeExecutedModel();
 
           const promptTokens = usage?.prompt_tokens ?? 0;
           const completionTokens = usage?.completion_tokens ?? 0;
@@ -446,6 +471,12 @@ export async function registerChatRoutes(
               latencyMs: result.latencyMs,
               cost: requestCost,
               balance: roundCredits(balance),
+              model_requested: modelRequested,
+              model_resolved: modelResolved,
+              model_executed: executed.executed ?? null,
+              model_executed_source: executed.source,
+              model_expected: executed.expected ?? null,
+              substitution: executed.substitution,
               usage: usage ?? {
                 prompt_tokens: 0,
                 completion_tokens: 0,
@@ -467,6 +498,7 @@ export async function registerChatRoutes(
             resourceType: RESOURCE_TYPE_CHAT,
           });
         } catch (streamErr) {
+          finalizeExecutedModel();
           request.log.error({ err: streamErr }, "Streaming response failed");
           if (chargedAmount > 0 && deps.reconciler) {
             void deps.reconciler.reconcileBalanceCreditBack({
@@ -558,6 +590,13 @@ export async function registerChatRoutes(
       reply.header("x-lmx-latency", String(result.latencyMs));
       reply.header("x-lmx-model-requested", modelRequested);
       reply.header("x-lmx-model-resolved", modelResolved);
+      for (const [name, value] of Object.entries(
+        executedModelHeaders(
+          describeExecutedModel(result.provider, modelResolved, result.executedModel),
+        ),
+      )) {
+        reply.header(name, value);
+      }
       reply.header("x-lmx-cost", String(requestCost));
       if (usageEventId) {
         reply.header("x-lmx-usage-id", usageEventId);

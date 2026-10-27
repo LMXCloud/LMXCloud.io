@@ -32,10 +32,57 @@ export interface RoutedResult {
   costPer1kTokens: number;
   usage: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["usage"];
   stream?: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["stream"];
+  /** Non-streaming: executed model reported by the provider (header first, then body). */
+  executedModel?: { id: string; source: ModelIdSource };
+  /** Streaming: executed model seen so far on the stream. */
+  streamExecutedModel?: () => { id: string; source: ModelIdSource } | undefined;
 }
 
 /** Where the executed model id was read from. Header wins over the body. */
 export type ModelIdSource = "header" | "body";
+
+/** Caller-facing evidence for which model actually ran. */
+export interface ExecutedModelReport {
+  /** Model id the provider says it ran, when known. */
+  executed?: string;
+  /** provider-header = provider's X-Model-Executed; response-body = model field; unknown = neither. */
+  source: "provider-header" | "response-body" | "unknown";
+  /** Upstream id the router asked the provider to run, when the router maps one. */
+  expected?: string;
+  /** true/false when both ids are known, otherwise unknown. */
+  substitution: "true" | "false" | "unknown";
+}
+
+/**
+ * Builds the caller-facing executed-model report for one routed request.
+ * `model` is the canonical LMX model id (after alias resolution).
+ */
+export function describeExecutedModel(
+  provider: string,
+  model: string,
+  executed: { id: string; source: ModelIdSource } | undefined,
+): ExecutedModelReport {
+  const expected = expectedProviderModelId(provider, model);
+  if (!executed) {
+    return { source: "unknown", substitution: "unknown", ...(expected ? { expected } : {}) };
+  }
+  return {
+    executed: executed.id,
+    source: executed.source === "header" ? "provider-header" : "response-body",
+    ...(expected ? { expected } : {}),
+    substitution: expected ? (executed.id === expected ? "false" : "true") : "unknown",
+  };
+}
+
+/** Response headers for an executed-model report. Unknown values are stated, never guessed. */
+export function executedModelHeaders(report: ExecutedModelReport): Record<string, string> {
+  return {
+    ...(report.executed ? { "x-lmx-model-executed": report.executed } : {}),
+    "x-lmx-model-executed-source": report.source,
+    ...(report.expected ? { "x-lmx-model-expected": report.expected } : {}),
+    "x-lmx-substitution": report.substitution,
+  };
+}
 
 /**
  * Provider returned a different model than the ID we asked it to run.
@@ -141,13 +188,14 @@ export class InferenceRouter {
       try {
         const result = await provider.chatCompletion(request);
         this.signalStore?.recordAttempt(provider.name, true);
+        let executedModel = result.executedModel;
         if (!result.stream) {
-          const executed = result.executedModel;
+          executedModel ??= selectExecutedModel(undefined, result.response.model);
           logModelSubstitution(
             provider.name,
             request.model,
-            executed?.id ?? result.response.model,
-            { source: executed?.source ?? "body" },
+            executedModel?.id,
+            { source: executedModel?.source ?? "body" },
           );
         }
         return {
@@ -158,6 +206,10 @@ export class InferenceRouter {
           costPer1kTokens: provider.costPer1kTokens,
           usage: result.usage,
           stream: result.stream,
+          ...(executedModel && !result.stream ? { executedModel } : {}),
+          ...(result.streamExecutedModel
+            ? { streamExecutedModel: result.streamExecutedModel }
+            : {}),
         };
       } catch (err) {
         const latencyMs = Math.round(performance.now() - started);
