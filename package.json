@@ -29,7 +29,8 @@
     "build:ops": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/ops build",
     "dev:verifier": "pnpm --filter @lmxcloud/verifier dev",
     "build:verifier": "pnpm --filter @lmxcloud/verifier build",
-    "test:forwarding": "pnpm --filter @lmxcloud/api test:forwarding"
+    "test:forwarding": "pnpm --filter @lmxcloud/api test:forwarding",
+    "test:jason-40": "pnpm --filter @lmxcloud/api test:jason-40"
   },
   "engines": {
     "node": ">=20"
