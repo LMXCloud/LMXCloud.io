@@ -13,6 +13,7 @@ import {
 } from "../routing/router.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
+import { normalizeUsage, usageHeaderValue } from "../usage/normalize.js";
 import type { UsageStore } from "../usage/store.js";
 import type { PaymentStore } from "../payments/store.js";
 import { parseChatBody } from "../payments/quote-context.js";
@@ -45,11 +46,7 @@ function callerRequestedModel(body: unknown): string | undefined {
   return typeof model === "string" ? model : undefined;
 }
 
-function extractUsageFromSseChunk(chunk: string): {
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-} | null {
+function extractUsageFromSseChunk(chunk: string): Record<string, unknown> | null {
   const frames = chunk.split("\n\n");
   for (const frame of frames) {
     const lines = frame
@@ -61,14 +58,10 @@ function extractUsageFromSseChunk(chunk: string): {
       const raw = line.slice(5).trim();
       if (!raw || raw === "[DONE]") continue;
       try {
-        const data = JSON.parse(raw) as {
-          usage?: {
-            prompt_tokens: number;
-            completion_tokens: number;
-            total_tokens: number;
-          };
-        };
-        if (data.usage) return data.usage;
+        const data = JSON.parse(raw) as { usage?: unknown };
+        if (typeof data.usage === "object" && data.usage !== null) {
+          return data.usage as Record<string, unknown>;
+        }
       } catch {
         // Ignore malformed vendor chunks; upstream stream continues.
       }
@@ -406,7 +399,7 @@ export async function registerChatRoutes(
           return executedReport;
         };
 
-        let usage = result.usage ?? result.response.usage ?? null;
+        let usage: unknown = result.usage ?? result.response.usage ?? null;
         let chargedAmount = 0;
         try {
           for await (const chunk of result.stream) {
@@ -417,9 +410,10 @@ export async function registerChatRoutes(
           }
           const executed = finalizeExecutedModel();
 
-          const promptTokens = usage?.prompt_tokens ?? 0;
-          const completionTokens = usage?.completion_tokens ?? 0;
-          const totalTokens = usage?.total_tokens ?? 0;
+          const lmxUsage = normalizeUsage(usage);
+          const promptTokens = lmxUsage.prompt_tokens ?? 0;
+          const completionTokens = lmxUsage.completion_tokens ?? 0;
+          const totalTokens = lmxUsage.total_tokens ?? 0;
           const requestCost = roundCredits(
             calculateRequestCost(totalTokens, result.costPer1kTokens),
           );
@@ -477,11 +471,14 @@ export async function registerChatRoutes(
               model_executed_source: executed.source,
               model_expected: executed.expected ?? null,
               substitution: executed.substitution,
+              // Legacy field, unchanged for existing callers. Missing usage shows as 0 here;
+              // lmx_usage carries the same counts and marks missing ones unavailable.
               usage: usage ?? {
                 prompt_tokens: 0,
                 completion_tokens: 0,
                 total_tokens: 0,
               },
+              lmx_usage: lmxUsage,
             })}\n\n`,
           );
 
@@ -533,10 +530,10 @@ export async function registerChatRoutes(
         return;
       }
 
-      const usage = result.usage ?? result.response.usage ?? null;
-      const promptTokens = usage?.prompt_tokens ?? 0;
-      const completionTokens = usage?.completion_tokens ?? 0;
-      const totalTokens = usage?.total_tokens ?? 0;
+      const lmxUsage = normalizeUsage(result.usage ?? result.response.usage ?? null);
+      const promptTokens = lmxUsage.prompt_tokens ?? 0;
+      const completionTokens = lmxUsage.completion_tokens ?? 0;
+      const totalTokens = lmxUsage.total_tokens ?? 0;
       const requestCost = roundCredits(
         calculateRequestCost(totalTokens, result.costPer1kTokens),
       );
@@ -598,6 +595,7 @@ export async function registerChatRoutes(
         reply.header(name, value);
       }
       reply.header("x-lmx-cost", String(requestCost));
+      reply.header("x-lmx-usage", usageHeaderValue(lmxUsage));
       if (usageEventId) {
         reply.header("x-lmx-usage-id", usageEventId);
       }
