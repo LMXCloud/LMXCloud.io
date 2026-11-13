@@ -21,6 +21,7 @@
     "test:x402:settlement": "tsx scripts/test-x402-settlement.ts",
     "test:vision": "tsx scripts/test-vision-chat.ts",
     "test:forwarding": "tsx scripts/test-forwarding-prod.ts",
+    "test:usage": "tsx scripts/test-usage-normalization-prod.ts",
     "test:jason-40": "tsx scripts/test-jason-40-retest.ts",
     "test:qwen35-alias": "tsx scripts/test-qwen35-alias-check.ts",
     "check:mainnet-balance": "tsx scripts/check-mainnet-balance.ts --mainnet",
