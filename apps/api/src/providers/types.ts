@@ -20,6 +20,12 @@ export interface ProviderResult {
    * Undefined until one of those has been seen.
    */
   streamExecutedModel?: () => { id: string; source: "header" | "body" } | undefined;
+  /**
+   * The provider's own id for this request, read from its response headers
+   * (io.net x-request-id, Akash inference-id). Lets a completion be traced to
+   * the provider's records. Correlation only: it does not prove which model ran.
+   */
+  providerRequestId?: { id: string; header: string };
 }
 
 export interface ProviderHealthResult {

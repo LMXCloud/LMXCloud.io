@@ -6,6 +6,7 @@ import type { ApiKeyRecord } from "../auth/store.js";
 import type { CreditStore } from "../credits/store.js";
 import type { InferenceRouter } from "../routing/router.js";
 import type { UsageStore } from "../usage/store.js";
+import { createPriceBook } from "../pricing/rate-card.js";
 import { registerChatRoutes } from "./chat.js";
 
 const apiKey: ApiKeyRecord = {
@@ -115,6 +116,7 @@ async function app() {
     reconciler: null,
     chatRateLimit: () => ({ allowed: true }),
     minChatCost: 0.001,
+    priceBook: createPriceBook(),
     x402Enabled: false,
   });
   return server;

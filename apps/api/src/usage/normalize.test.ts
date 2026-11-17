@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { LMX_USAGE_SCHEMA, normalizeUsage } from "./normalize.js";
+import { priceRequest, type ModelPrice } from "../pricing/rate-card.js";
+import { LMX_USAGE_SCHEMA, normalizeUsage, withCost } from "./normalize.js";
 
 describe("normalizeUsage", () => {
   it("passes a complete provider usage through as reported", () => {
@@ -12,7 +13,7 @@ describe("normalizeUsage", () => {
     assert.equal(usage.source, "provider");
     assert.deepEqual(usage.derived, []);
     assert.deepEqual(usage.unavailable, ["reasoning_tokens", "cached_prompt_tokens"]);
-    assert.equal(usage.cost_basis, "total_tokens");
+    assert.equal(usage.cost_basis, "prompt_completion");
   });
 
   it("reads reasoning and cached-prompt breakdowns when the provider sends them", () => {
@@ -33,7 +34,7 @@ describe("normalizeUsage", () => {
     assert.equal(usage.total_tokens, 12);
     assert.deepEqual(usage.derived, ["total_tokens"]);
     assert.equal(usage.source, "provider");
-    assert.equal(usage.cost_basis, "total_tokens");
+    assert.equal(usage.cost_basis, "prompt_completion");
   });
 
   it("marks partial usage as partial and leaves missing counts null, not 0", () => {
@@ -70,5 +71,38 @@ describe("normalizeUsage", () => {
     assert.equal(usage.total_tokens, 0);
     assert.equal(usage.source, "provider");
     assert.ok(!usage.unavailable.includes("total_tokens"));
+  });
+
+  it("bills a total reported without the split at the output rate", () => {
+    const usage = normalizeUsage({ total_tokens: 30 });
+    assert.equal(usage.cost_basis, "total_tokens_at_output_rate");
+    assert.equal(usage.cost, null);
+  });
+});
+
+describe("withCost", () => {
+  it("fills in the priced cost so usage x rates = amount from one object", () => {
+    const usage = normalizeUsage({
+      prompt_tokens: 100,
+      completion_tokens: 10,
+      total_tokens: 110,
+      prompt_tokens_details: { cached_tokens: 40 },
+    });
+    const price: ModelPrice = {
+      model: "m",
+      rates: { input: 1, output: 2, cachedInput: 0.5 },
+      providerCosts: {},
+      pricingVersion: "v-test",
+    };
+    const priced = withCost(usage, priceRequest(price, usage));
+    assert.equal(priced.cost_basis, "prompt_completion");
+    assert.deepEqual(priced.cost, {
+      amount_usd: 0.0001,
+      pricing_version: "v-test",
+      rates_per_1m: { input: 1, cached_input: 0.5, output: 2 },
+      billed_tokens: { input: 60, cached_input: 40, output: 10 },
+    });
+    // The token counts are untouched.
+    assert.equal(priced.prompt_tokens, 100);
   });
 });

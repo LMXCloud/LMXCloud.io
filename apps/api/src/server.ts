@@ -23,6 +23,7 @@ import { RoutingHistoryPoller } from "./routing/history-poller.js";
 import { InferenceRouter } from "./routing/router.js";
 import { RoutingSignalStore } from "./routing/signal-store.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { createPriceBook, isPricedOnProvider } from "./pricing/rate-card.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerWebSearchRoutes } from "./routes/web-search.js";
 import { registerModelsRoutes } from "./routes/models.js";
@@ -203,6 +204,7 @@ export async function buildServer() {
     healthStore,
     usageStore,
     routingSignalStore,
+    isPricedOnProvider,
   );
 
   const creditStore = createCreditStore();
@@ -446,6 +448,7 @@ export async function buildServer() {
     providers,
     healthStore,
     chainId: config.siwe.chainId,
+    marginPct: config.x402.marginPct,
     webSearchPriceUsdc: config.webSearchPriceUsdc,
     webSearchConfigured: Boolean(config.braveSearch),
   });
@@ -469,6 +472,8 @@ export async function buildServer() {
       ),
     }),
     minChatCost: config.minChatCost,
+    // One markup for balance and x402 callers (X402_PRICING_MARGIN_PCT, default 25%).
+    priceBook: createPriceBook(config.x402.marginPct),
     x402Enabled: config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
   });
   await registerWebSearchRoutes(app, {

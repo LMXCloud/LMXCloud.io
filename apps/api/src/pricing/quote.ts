@@ -1,15 +1,17 @@
 import type { ChatCompletionRequest, ChatMessageContent } from "@lmxcloud/shared";
-import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
+import { roundCredits } from "../credits/pricing.js";
 import {
   DEFAULT_MAX_COMPLETION_TOKENS,
   MIN_CALL_USDC,
 } from "./constants.js";
+import { ceilingCost, type ModelPrice } from "./rate-card.js";
 
 /** Conservative per-image token floor for x402 ceiling quotes (high-detail-ish). */
 export const ESTIMATED_IMAGE_TOKENS = 765;
 
 export interface QuoteInput {
-  listPricePer1k: number;
+  /** Published per-model price (input and output rates per 1M tokens). */
+  price: ModelPrice;
   promptTokens: number;
   maxCompletionTokens?: number;
   minCallUsdc?: number;
@@ -66,7 +68,7 @@ export function resolveMaxCompletionTokens(
 /** Upper-bound stream cost from prompt estimate + max completion tokens. */
 export function estimateMaxStreamCost(
   request: ChatCompletionRequest,
-  costPer1kTokens: number,
+  price: ModelPrice,
   minFloor = 0,
 ): number {
   const promptTokens = estimatePromptTokens(request.messages);
@@ -74,8 +76,7 @@ export function estimateMaxStreamCost(
     request.max_tokens,
     request.max_completion_tokens,
   );
-  const estimatedTokens = promptTokens + maxCompletion;
-  const raw = calculateRequestCost(estimatedTokens, costPer1kTokens);
+  const raw = ceilingCost(price, promptTokens, maxCompletion);
   return roundCredits(Math.max(minFloor, raw));
 }
 
@@ -85,7 +86,7 @@ export function quoteCallPrice(input: QuoteInput): QuoteResult {
     input.maxCompletionTokens ?? DEFAULT_MAX_COMPLETION_TOKENS;
   const minCallUsdc = input.minCallUsdc ?? MIN_CALL_USDC;
   const estimatedTokens = input.promptTokens + maxCompletionTokens;
-  const raw = (estimatedTokens / 1000) * input.listPricePer1k;
+  const raw = ceilingCost(input.price, input.promptTokens, maxCompletionTokens);
   const quotedAmount = roundCredits(Math.max(minCallUsdc, raw));
 
   return {

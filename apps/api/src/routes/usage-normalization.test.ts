@@ -7,6 +7,7 @@ import type { CreditStore } from "../credits/store.js";
 import type { InferenceRouter } from "../routing/router.js";
 import type { LmxUsage } from "../usage/normalize.js";
 import type { UsageStore } from "../usage/store.js";
+import { createPriceBook, priceRequest } from "../pricing/rate-card.js";
 import { registerChatRoutes } from "./chat.js";
 
 const apiKey: ApiKeyRecord = {
@@ -120,6 +121,7 @@ async function app(r: InferenceRouter) {
     reconciler: null,
     chatRateLimit: () => ({ allowed: true }),
     minChatCost: 0.001,
+    priceBook: createPriceBook(),
     x402Enabled: false,
   });
   return server;
@@ -188,11 +190,16 @@ describe("chat usage normalization (lmx.usage/1)", () => {
     assert.equal(a.prompt_tokens, null);
   });
 
-  it("keeps the legacy lmx.meta.usage field and x-lmx-cost unchanged", async () => {
+  it("keeps the legacy lmx.meta.usage field, and x-lmx-cost equals the priced cost", async () => {
+    // qwen-3.6-35b published rates: 10 prompt + 20 completion tokens.
+    const expected = priceRequest(createPriceBook().priceFor("qwen-3.6-35b")!, {
+      ...FULL,
+      cached_prompt_tokens: null,
+    }).amount;
     const res = await chat(await app(router(null, FULL)), true);
     assert.deepEqual(meta(res.body).usage, FULL);
-    assert.equal(meta(res.body).cost, 0.00003);
+    assert.equal(meta(res.body).cost, expected);
     const plain = await chat(await app(router(FULL)));
-    assert.equal(plain.headers["x-lmx-cost"], "0.00003");
+    assert.equal(plain.headers["x-lmx-cost"], String(expected));
   });
 });

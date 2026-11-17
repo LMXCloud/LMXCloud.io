@@ -7,6 +7,8 @@
  * rather than read (total = prompt + completion) is named in `derived`.
  */
 
+import type { CostBasis, RequestCost } from "../pricing/rate-card.js";
+
 export const LMX_USAGE_SCHEMA = "lmx.usage/1" as const;
 
 export const LMX_USAGE_FIELDS = [
@@ -29,11 +31,22 @@ export type LmxUsageSource =
   | "unavailable";
 
 /**
- * What the charged cost was computed from. Today cost = total_tokens x the
- * provider's per-1k rate. When total_tokens is unavailable the router still
- * charges 0; this field makes that visible instead of hiding it.
+ * What the charged cost was computed from (see pricing/rate-card.ts):
+ * prompt_completion = the normal split; total_tokens_at_output_rate = only a
+ * total was reported, billed at the output rate; unavailable = no counts, 0 charged.
  */
-export type LmxCostBasis = "total_tokens" | "unavailable";
+export type LmxCostBasis = CostBasis;
+
+/** The charge for this request, with everything needed to recompute it. */
+export interface LmxCost {
+  /** USD charged (balance callers) or metered (x402), half-up to 8 decimals. */
+  amount_usd: number;
+  pricing_version: string;
+  /** Published rates applied, USD per 1M tokens. */
+  rates_per_1m: { input: number; cached_input: number; output: number };
+  /** Tokens billed at each rate. */
+  billed_tokens: { input: number; cached_input: number; output: number };
+}
 
 export interface LmxUsage {
   schema: typeof LMX_USAGE_SCHEMA;
@@ -50,6 +63,8 @@ export interface LmxUsage {
   /** Fields the router computed rather than read from the provider. */
   derived: LmxUsageField[];
   cost_basis: LmxCostBasis;
+  /** null until the router prices the request (and on responses with no price). */
+  cost: LmxCost | null;
 }
 
 function count(value: unknown): number | null {
@@ -99,7 +114,31 @@ export function normalizeUsage(raw: unknown): LmxUsage {
     source,
     unavailable,
     derived,
-    cost_basis: values.total_tokens === null ? "unavailable" : "total_tokens",
+    cost_basis:
+      values.prompt_tokens !== null && values.completion_tokens !== null
+        ? "prompt_completion"
+        : values.total_tokens !== null
+          ? "total_tokens_at_output_rate"
+          : "unavailable",
+    cost: null,
+  };
+}
+
+/** The same usage with the request's priced cost filled in. */
+export function withCost(usage: LmxUsage, cost: RequestCost): LmxUsage {
+  return {
+    ...usage,
+    cost_basis: cost.basis,
+    cost: {
+      amount_usd: cost.amount,
+      pricing_version: cost.pricingVersion,
+      rates_per_1m: {
+        input: cost.rates.input,
+        cached_input: cost.rates.cachedInput,
+        output: cost.rates.output,
+      },
+      billed_tokens: { ...cost.billed },
+    },
   };
 }
 
