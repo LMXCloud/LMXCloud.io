@@ -36,8 +36,8 @@ import { PRICING_MARGIN_PCT } from "./constants.js";
 
 /** Bump this when any rate, the markup or a billing rule changes. */
 export const PRICING_VERSION = "2026-11-17.1";
-/** First day this version is charged. Set to the production deploy date. */
-export const PRICING_EFFECTIVE_FROM = "2026-11-18";
+/** First day this version is charged: the day it reached production (PR #7, 2026-11-17). */
+export const PRICING_EFFECTIVE_FROM = "2026-11-17";
 
 export interface TokenRates {
   /** USD per 1M uncached prompt tokens. */
