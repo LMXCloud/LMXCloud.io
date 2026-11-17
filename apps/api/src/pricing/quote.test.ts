@@ -7,6 +7,7 @@ import {
   quoteCallPrice,
   resolveMaxCompletionTokens,
 } from "./quote.js";
+import type { ModelPrice } from "./rate-card.js";
 
 describe("estimatePromptTokens", () => {
   it("uses a rough 4-characters-per-token heuristic", () => {
@@ -44,6 +45,13 @@ describe("resolveMaxCompletionTokens", () => {
   });
 });
 
+const TEST_PRICE: ModelPrice = {
+  model: "llama-3-70b",
+  rates: { input: 1, output: 2, cachedInput: 0.5 },
+  providerCosts: {},
+  pricingVersion: "test",
+};
+
 describe("estimateMaxStreamCost", () => {
   it("quotes prompt + max completion tokens with an optional floor", () => {
     const cost = estimateMaxStreamCost(
@@ -52,27 +60,29 @@ describe("estimateMaxStreamCost", () => {
         messages: [{ role: "user", content: "abcd" }],
         max_tokens: 256,
       },
-      0.001,
+      TEST_PRICE,
       0.00001,
     );
-    assert.equal(cost, 0.000257);
+    // 1 prompt token x $1/M + 256 completion tokens x $2/M
+    assert.equal(cost, 0.000513);
   });
 });
 
 describe("quoteCallPrice", () => {
   it("quotes based on prompt + max completion tokens", () => {
     const quote = quoteCallPrice({
-      listPricePer1k: 0.000125,
+      price: TEST_PRICE,
       promptTokens: 8000,
       maxCompletionTokens: 4096,
     });
     assert.equal(quote.estimatedTokens, 12096);
-    assert.equal(quote.quotedAmount, 0.001512);
+    // 8000 x $1/M + 4096 x $2/M: input and output priced separately
+    assert.equal(quote.quotedAmount, 0.016192);
   });
 
   it("enforces the minimum call floor", () => {
     const quote = quoteCallPrice({
-      listPricePer1k: 0.000125,
+      price: TEST_PRICE,
       promptTokens: 1,
       maxCompletionTokens: 1,
     });

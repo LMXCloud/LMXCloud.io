@@ -31,6 +31,8 @@ export interface RoutedResult {
   fallbackUsed: boolean;
   costPer1kTokens: number;
   usage: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["usage"];
+  /** The provider's own id for this request (io.net x-request-id, Akash inference-id), when sent. */
+  providerRequestId?: { id: string; header: string };
   stream?: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["stream"];
   /** Non-streaming: executed model reported by the provider (header first, then body). */
   executedModel?: { id: string; source: ModelIdSource };
@@ -150,6 +152,12 @@ export class InferenceRouter {
     private readonly healthStore: HealthStore,
     private readonly usageStore?: UsageStore,
     private readonly signalStore?: RoutingSignalStore,
+    /**
+     * Only providers this returns true for may serve a model. Production passes
+     * isPricedOnProvider so no request is routed (and charged) without a verified
+     * rate. Defaults to allow-all so unit tests can use stub providers.
+     */
+    private readonly mayServe: (provider: string, model: string) => boolean = () => true,
   ) {}
 
   async route(
@@ -170,7 +178,10 @@ export class InferenceRouter {
       throw new AllProvidersDownError(depinOnly);
     }
 
-    const capable = order.filter((provider) => provider.supportsModel(request.model));
+    const capable = order.filter(
+      (provider) =>
+        provider.supportsModel(request.model) && this.mayServe(provider.name, request.model),
+    );
 
     if (capable.length === 0) {
       throw new ModelNotSupportedError(request.model);
@@ -206,6 +217,7 @@ export class InferenceRouter {
           costPer1kTokens: provider.costPer1kTokens,
           usage: result.usage,
           stream: result.stream,
+          ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
           ...(executedModel && !result.stream ? { executedModel } : {}),
           ...(result.streamExecutedModel
             ? { streamExecutedModel: result.streamExecutedModel }

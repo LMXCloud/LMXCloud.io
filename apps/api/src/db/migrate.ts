@@ -130,6 +130,16 @@ const MIGRATIONS = [
     ADD COLUMN IF NOT EXISTS error_code TEXT`,
   `ALTER TABLE usage_events
     ADD COLUMN IF NOT EXISTS unit_price NUMERIC(18, 8)`,
+  // Per-model pricing (Jason gate 3): enough on each row to recompute its cost,
+  // plus the provider's own request id for correlation with provider records.
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS pricing_version TEXT`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS provider_request_id TEXT`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS provider_request_id_header TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_usage_events_reliability
     ON usage_events (resource_type, provider, model, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_usage_events_success_created

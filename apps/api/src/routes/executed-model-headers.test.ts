@@ -12,6 +12,7 @@ import {
   type ModelIdSource,
 } from "../routing/router.js";
 import type { UsageStore } from "../usage/store.js";
+import { createPriceBook } from "../pricing/rate-card.js";
 import { registerChatRoutes } from "./chat.js";
 
 const QWEN36_AKASH = expectedProviderModelId("akash", "qwen-3.6-35b")!;
@@ -137,6 +138,7 @@ async function app(r: InferenceRouter) {
     reconciler: null,
     chatRateLimit: () => ({ allowed: true }),
     minChatCost: 0.001,
+    priceBook: createPriceBook(),
     x402Enabled: false,
   });
   return server;

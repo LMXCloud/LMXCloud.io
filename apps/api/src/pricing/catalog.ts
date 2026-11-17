@@ -1,46 +1,42 @@
-import { isOpenAiProprietaryModelId } from "@lmxcloud/shared";
+import { resolveSupportedModel } from "@lmxcloud/shared";
 import type { ProviderAdapter } from "../providers/types.js";
-import { PRICING_MARGIN_PCT, roundListPrice } from "./constants.js";
+import { PRICING_MARGIN_PCT } from "./constants.js";
+import { buildPriceBook, type ModelPrice } from "./rate-card.js";
 
-export interface ModelPriceEntry {
+export interface ModelPriceEntry extends ModelPrice {
+  /** LMX model id (same as `model`). */
   id: string;
-  provider: string;
-  costPer1kTokens: number;
-  listPricePer1kTokens: number;
-  tier: number;
+  /** Providers in `providers` that are priced for this model and can serve it. */
+  availableOn: string[];
 }
 
-/** Single source of truth for per-model list prices (x402 quotes + Bazaar metadata). */
+/**
+ * Published per-model prices (x402 quotes, /v1/pricing, Bazaar metadata),
+ * limited to models at least one of `providers` can serve at a verified rate.
+ * The price itself does not depend on which providers are passed in.
+ */
 export function buildPricingCatalog(
   providers: ProviderAdapter[],
   marginPct = PRICING_MARGIN_PCT,
 ): ModelPriceEntry[] {
-  const models = new Map<string, ModelPriceEntry>();
-
-  for (const provider of providers) {
-    for (const alias of provider.aliases) {
-      if (isOpenAiProprietaryModelId(alias)) continue;
-      const existing = models.get(alias);
-      if (!existing || provider.costPer1kTokens < existing.costPer1kTokens) {
-        models.set(alias, {
-          id: alias,
-          provider: provider.name,
-          costPer1kTokens: provider.costPer1kTokens,
-          listPricePer1kTokens: roundListPrice(
-            provider.costPer1kTokens * (1 + marginPct),
-          ),
-          tier: provider.tier,
-        });
-      }
-    }
+  const entries: ModelPriceEntry[] = [];
+  for (const price of buildPriceBook(marginPct)) {
+    const availableOn = providers
+      .filter(
+        (provider) =>
+          provider.name in price.providerCosts && provider.supportsModel(price.model),
+      )
+      .map((provider) => provider.name);
+    if (availableOn.length === 0) continue;
+    entries.push({ ...price, id: price.model, availableOn });
   }
-
-  return [...models.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return entries;
 }
 
 export function getModelPrice(
   catalog: ModelPriceEntry[],
   modelId: string,
 ): ModelPriceEntry | undefined {
-  return catalog.find((entry) => entry.id === modelId);
+  const canonical = resolveSupportedModel(modelId)?.alias ?? modelId;
+  return catalog.find((entry) => entry.id === canonical);
 }

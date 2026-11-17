@@ -50,8 +50,10 @@ export class PostgresUsageStore implements UsageStore {
         `INSERT INTO usage_events (
            api_key_id, payer_wallet, payment_event_id, provider, model,
            prompt_tokens, completion_tokens, total_tokens, cost, latency_ms, fallback_used,
-           resource_type, success, error_code, unit_price
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+           resource_type, success, error_code, unit_price,
+           cached_prompt_tokens, pricing_version, provider_request_id, provider_request_id_header
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+           $16, $17, $18, $19)
          RETURNING id, created_at`,
         [
           input.apiKeyId ?? null,
@@ -69,6 +71,10 @@ export class PostgresUsageStore implements UsageStore {
           success,
           input.errorCode ?? null,
           input.unitPrice ?? null,
+          input.cachedPromptTokens ?? null,
+          input.pricingVersion ?? null,
+          input.providerRequestId ?? null,
+          input.providerRequestIdHeader ?? null,
         ],
       );
 
@@ -218,11 +224,16 @@ export class PostgresUsageStore implements UsageStore {
       resource_type: string;
       success: boolean;
       created_at: Date;
+      cached_prompt_tokens: number | null;
+      pricing_version: string | null;
+      provider_request_id: string | null;
+      provider_request_id_header: string | null;
     }>(
       `SELECT
          id, api_key_id, provider, model,
          prompt_tokens, completion_tokens, total_tokens,
-         cost, latency_ms, fallback_used, resource_type, success, created_at
+         cost, latency_ms, fallback_used, resource_type, success, created_at,
+         cached_prompt_tokens, pricing_version, provider_request_id, provider_request_id_header
        FROM usage_events
        WHERE ${filters.join(" AND ")}
        ORDER BY created_at DESC, id DESC
@@ -250,6 +261,10 @@ export class PostgresUsageStore implements UsageStore {
         success: row.success,
         status: row.success ? 200 : 502,
         createdAt: row.created_at.toISOString(),
+        cachedPromptTokens: row.cached_prompt_tokens,
+        pricingVersion: row.pricing_version,
+        providerRequestId: row.provider_request_id,
+        providerRequestIdHeader: row.provider_request_id_header,
       })),
       hasMore,
       nextCursor: hasMore ? (rows[rows.length - 1]?.id ?? null) : null,

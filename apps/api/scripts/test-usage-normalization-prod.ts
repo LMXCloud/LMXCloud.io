@@ -31,6 +31,7 @@ if (!KEY) {
 const MODELS = ["llama-3.3-70b", "qwen-3.6-35b"] as const;
 const EXPECTED_KEYS = [
   "cached_prompt_tokens",
+  "cost",
   "completion_tokens",
   "cost_basis",
   "derived",

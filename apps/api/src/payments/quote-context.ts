@@ -20,7 +20,8 @@ import {
   type ProviderAdapter,
 } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
-import { buildPricingCatalog, getModelPrice } from "../pricing/catalog.js";
+import { buildPricingCatalog, getModelPrice, type ModelPriceEntry } from "../pricing/catalog.js";
+import { isPricedOnProvider } from "../pricing/rate-card.js";
 import {
   estimatePromptTokens,
   quoteCallPrice,
@@ -37,8 +38,8 @@ import {
 export interface ChatQuoteContext {
   model: string;
   quote: ReturnType<typeof quoteCallPrice>;
-  listPricePer1k: number;
-  provider: string;
+  /** Published per-model price the quote was computed from. */
+  price: ModelPriceEntry;
 }
 
 function parseImageDetail(
@@ -233,7 +234,12 @@ export function buildChatQuote(
   );
   const entry = getModelPrice(buildPricingCatalog(healthyProviders, options.marginPct), body.model);
   if (!entry) {
-    const configured = providers.some((provider) => provider.supportsModel(body.model));
+    // "Unavailable" only when a provider could serve it at a verified rate but is down.
+    // A model with no verified rate anywhere is not supported, never quoted at a guess.
+    const configured = providers.some(
+      (provider) =>
+        provider.supportsModel(body.model) && isPricedOnProvider(provider.name, body.model),
+    );
     return configured
       ? new ModelUnavailableError(body.model)
       : new ModelNotSupportedError(body.model);
@@ -245,7 +251,7 @@ export function buildChatQuote(
     body.max_completion_tokens,
   );
   const quote = quoteCallPrice({
-    listPricePer1k: entry.listPricePer1kTokens,
+    price: entry,
     promptTokens,
     maxCompletionTokens,
     minCallUsdc: options.minCallUsdc,
@@ -254,8 +260,7 @@ export function buildChatQuote(
   return {
     model: body.model,
     quote,
-    listPricePer1k: entry.listPricePer1kTokens,
-    provider: entry.provider,
+    price: entry,
   };
 }
 

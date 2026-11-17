@@ -212,6 +212,7 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
       }
 
       const executedHeader = response.headers.get("x-model-executed");
+      const providerRequestId = readProviderRequestId(response.headers);
 
       if (request.stream === true) {
         const parsed = parseProviderStream(
@@ -227,6 +228,7 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
           usage: parsed.usage,
           stream: parsed.stream,
           streamExecutedModel: parsed.streamExecutedModel,
+          ...(providerRequestId ? { providerRequestId } : {}),
         };
       }
 
@@ -245,9 +247,23 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
         latencyMs,
         usage: data.usage ?? null,
         ...(executedModel ? { executedModel } : {}),
+        ...(providerRequestId ? { providerRequestId } : {}),
       };
     },
   };
+}
+
+/** Response headers providers use for their own request id, in the order checked. */
+export const PROVIDER_REQUEST_ID_HEADERS = ["x-request-id", "inference-id", "x-inference-id", "request-id"] as const;
+
+export function readProviderRequestId(
+  headers: Headers,
+): { id: string; header: string } | undefined {
+  for (const header of PROVIDER_REQUEST_ID_HEADERS) {
+    const value = headers.get(header)?.trim();
+    if (value) return { id: value.slice(0, 200), header };
+  }
+  return undefined;
 }
 
 function parseProviderStream(

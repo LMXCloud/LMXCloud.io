@@ -1,7 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import * as Sentry from "@sentry/node";
 import { AllProvidersDownError, ModelNotSupportedError, ProviderError } from "../providers/types.js";
-import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
+import { roundCredits } from "../credits/pricing.js";
+import {
+  priceRequest,
+  providerCostPer1k,
+  type ModelPrice,
+  type PriceBook,
+  type RequestCost,
+} from "../pricing/rate-card.js";
 import type { CreditStore } from "../credits/store.js";
 import { hasBearerAuth, requireAuthenticatedKey } from "../auth/optional-auth.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
@@ -10,10 +17,11 @@ import {
   executedModelHeaders,
   type ExecutedModelReport,
   type InferenceRouter,
+  type RoutedResult,
 } from "../routing/router.js";
 import { getClientIpForRateLimit } from "../client-ip.js";
 import type { RateLimitResult } from "../rate-limit.js";
-import { normalizeUsage, usageHeaderValue } from "../usage/normalize.js";
+import { normalizeUsage, usageHeaderValue, withCost, type LmxUsage } from "../usage/normalize.js";
 import type { UsageStore } from "../usage/store.js";
 import type { PaymentStore } from "../payments/store.js";
 import { parseChatBody } from "../payments/quote-context.js";
@@ -32,7 +40,56 @@ interface ChatRouteDeps {
   chatRateLimit: (key: string) => RateLimitResult;
   x402RateLimit?: (key: string) => RateLimitResult;
   minChatCost: number;
+  /** Published per-model prices. Every charge is computed from these. */
+  priceBook: PriceBook;
   x402Enabled: boolean;
+}
+
+/** Usage priced at the published rate, plus the ledger fields that let it be recomputed. */
+function priceUsage(
+  rawUsage: unknown,
+  price: ModelPrice,
+  provider: string,
+  routed: RoutedResult,
+): {
+  lmxUsage: LmxUsage;
+  cost: RequestCost;
+  ledger: {
+    promptTokens: number;
+    completionTokens: number;
+    cost: number;
+    unitPrice: number | null;
+    cachedPromptTokens: number | null;
+    pricingVersion: string;
+    providerRequestId: string | null;
+    providerRequestIdHeader: string | null;
+  };
+} {
+  const normalized = normalizeUsage(rawUsage);
+  const cost = priceRequest(price, normalized);
+  return {
+    lmxUsage: withCost(normalized, cost),
+    cost,
+    ledger: {
+      promptTokens: normalized.prompt_tokens ?? 0,
+      completionTokens: normalized.completion_tokens ?? 0,
+      cost: cost.amount,
+      // Effective provider cost per 1k tokens for this request (what LMX paid), for ops margin tracking.
+      unitPrice: providerCostPer1k(provider, price.model, cost),
+      cachedPromptTokens: normalized.cached_prompt_tokens,
+      pricingVersion: cost.pricingVersion,
+      providerRequestId: routed.providerRequestId?.id ?? null,
+      providerRequestIdHeader: routed.providerRequestId?.header ?? null,
+    },
+  };
+}
+
+function providerRequestIdHeaders(routed: RoutedResult): Record<string, string> {
+  if (!routed.providerRequestId) return {};
+  return {
+    "x-lmx-provider-request-id": routed.providerRequestId.id,
+    "x-lmx-provider-request-id-header": routed.providerRequestId.header,
+  };
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
@@ -290,6 +347,19 @@ export async function registerChatRoutes(
       });
     }
 
+    // Fail closed: a model with no verified price is never routed or charged.
+    const price = deps.priceBook.priceFor(validated.model);
+    if (!price) {
+      return reply.status(400).send({
+        error: {
+          message: `Model "${validated.model}" is not supported: no provider has a verified price for it. See GET /v1/pricing.`,
+          type: "invalid_request_error",
+          code: "model_not_supported",
+          param: "model",
+        },
+      });
+    }
+
     if (validated.stream && isX402) {
       return reply.status(400).send({
         error: {
@@ -344,11 +414,7 @@ export async function registerChatRoutes(
           );
         }
 
-        const reservedAmount = estimateMaxStreamCost(
-          validated,
-          result.costPer1kTokens,
-          deps.minChatCost,
-        );
+        const reservedAmount = estimateMaxStreamCost(validated, price, deps.minChatCost);
         let reservationHeld = false;
         let settled = false;
 
@@ -380,6 +446,10 @@ export async function registerChatRoutes(
         reply.raw.setHeader("x-lmx-latency", String(result.latencyMs));
         reply.raw.setHeader("x-lmx-model-requested", modelRequested);
         reply.raw.setHeader("x-lmx-model-resolved", modelResolved);
+        reply.raw.setHeader("x-lmx-pricing-version", price.pricingVersion);
+        for (const [name, value] of Object.entries(providerRequestIdHeaders(result))) {
+          reply.raw.setHeader(name, value);
+        }
 
         // Executed-model headers wait for the first chunk so a model read from the
         // stream body is known. Node sends headers on the first write, so this adds
@@ -410,13 +480,9 @@ export async function registerChatRoutes(
           }
           const executed = finalizeExecutedModel();
 
-          const lmxUsage = normalizeUsage(usage);
-          const promptTokens = lmxUsage.prompt_tokens ?? 0;
-          const completionTokens = lmxUsage.completion_tokens ?? 0;
-          const totalTokens = lmxUsage.total_tokens ?? 0;
-          const requestCost = roundCredits(
-            calculateRequestCost(totalTokens, result.costPer1kTokens),
-          );
+          const priced = priceUsage(usage, price, result.provider, result);
+          const { lmxUsage } = priced;
+          const requestCost = priced.cost.amount;
 
           if (reservationHeld) {
             const settledOk = await deps.creditStore.settleReservation(
@@ -457,6 +523,23 @@ export async function registerChatRoutes(
             }
           }
 
+          // Record the ledger row first so the trailer can carry its id: streams
+          // and non-streams correlate to the usage ledger the same way.
+          let usageEventId: string | null = null;
+          try {
+            usageEventId = await recordProviderSuccess(deps.usageStore, {
+              apiKeyId: request.apiKey!.id,
+              provider: result.provider,
+              model: validated.model,
+              ...priced.ledger,
+              latencyMs: result.latencyMs,
+              fallbackUsed: result.fallbackUsed,
+              resourceType: RESOURCE_TYPE_CHAT,
+            });
+          } catch (usageErr) {
+            request.log.error({ err: usageErr }, "usage recording failed");
+          }
+
           const balance = await deps.creditStore.getBalance(request.apiKey!.id);
           reply.raw.write(
             `event: lmx.meta\ndata: ${JSON.stringify({
@@ -465,6 +548,10 @@ export async function registerChatRoutes(
               latencyMs: result.latencyMs,
               cost: requestCost,
               balance: roundCredits(balance),
+              usage_id: usageEventId,
+              pricing_version: price.pricingVersion,
+              provider_request_id: result.providerRequestId?.id ?? null,
+              provider_request_id_header: result.providerRequestId?.header ?? null,
               model_requested: modelRequested,
               model_resolved: modelResolved,
               model_executed: executed.executed ?? null,
@@ -481,19 +568,6 @@ export async function registerChatRoutes(
               lmx_usage: lmxUsage,
             })}\n\n`,
           );
-
-          void recordProviderSuccess(deps.usageStore, {
-            apiKeyId: request.apiKey!.id,
-            provider: result.provider,
-            model: validated.model,
-            promptTokens,
-            completionTokens,
-            latencyMs: result.latencyMs,
-            fallbackUsed: result.fallbackUsed,
-            cost: requestCost,
-            unitPrice: result.costPer1kTokens,
-            resourceType: RESOURCE_TYPE_CHAT,
-          });
         } catch (streamErr) {
           finalizeExecutedModel();
           request.log.error({ err: streamErr }, "Streaming response failed");
@@ -530,13 +604,14 @@ export async function registerChatRoutes(
         return;
       }
 
-      const lmxUsage = normalizeUsage(result.usage ?? result.response.usage ?? null);
-      const promptTokens = lmxUsage.prompt_tokens ?? 0;
-      const completionTokens = lmxUsage.completion_tokens ?? 0;
-      const totalTokens = lmxUsage.total_tokens ?? 0;
-      const requestCost = roundCredits(
-        calculateRequestCost(totalTokens, result.costPer1kTokens),
+      const priced = priceUsage(
+        result.usage ?? result.response.usage ?? null,
+        price,
+        result.provider,
+        result,
       );
+      const { lmxUsage } = priced;
+      const requestCost = priced.cost.amount;
 
       if (isBalance) {
         const deducted = await deps.creditStore.deduct(request.apiKey!.id, requestCost);
@@ -558,12 +633,9 @@ export async function registerChatRoutes(
           payerWallet: isX402 ? extractX402Payer(request) : undefined,
           provider: result.provider,
           model: validated.model,
-          promptTokens,
-          completionTokens,
+          ...priced.ledger,
           latencyMs: result.latencyMs,
           fallbackUsed: result.fallbackUsed,
-          cost: requestCost,
-          unitPrice: result.costPer1kTokens,
           resourceType: RESOURCE_TYPE_CHAT,
         });
       } catch (usageErr) {
@@ -596,6 +668,10 @@ export async function registerChatRoutes(
       }
       reply.header("x-lmx-cost", String(requestCost));
       reply.header("x-lmx-usage", usageHeaderValue(lmxUsage));
+      reply.header("x-lmx-pricing-version", price.pricingVersion);
+      for (const [name, value] of Object.entries(providerRequestIdHeaders(result))) {
+        reply.header(name, value);
+      }
       if (usageEventId) {
         reply.header("x-lmx-usage-id", usageEventId);
       }

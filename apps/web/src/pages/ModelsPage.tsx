@@ -19,10 +19,9 @@ import { useAuth } from "../context/AuthContext";
 import { chatCompletionCurl } from "../lib/snippets";
 import { CodeBlock } from "../components/console/CodeBlock";
 
-function formatPricePer1k(value: string): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return value;
-  return `$${num.toFixed(6)}`;
+function formatPricePer1m(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  return `$${value.toFixed(4)}`;
 }
 
 export function ModelsPage() {
@@ -41,7 +40,7 @@ export function ModelsPage() {
     try {
       const [pricingRes, modelsRes] = await Promise.all([fetchPricing(), fetchModels()]);
       setModels(pricingRes.models ?? []);
-      setNetwork(pricingRes.network);
+      setNetwork(pricingRes.x402_settlement.network);
       setMinCall(pricingRes.min_call_usdc);
       setLiveModelIds(new Set(modelsRes.data.map((m) => m.id)));
       setError(null);
@@ -62,7 +61,7 @@ export function ModelsPage() {
     return models.filter(
       (m) =>
         m.id.toLowerCase().includes(q) ||
-        m.provider.toLowerCase().includes(q),
+        m.available_on.some((provider) => provider.toLowerCase().includes(q)),
     );
   }, [models, search]);
 
@@ -103,16 +102,17 @@ export function ModelsPage() {
         <DataTableHead>
           <tr>
             <DataTableTh>Model</DataTableTh>
-            <DataTableTh>Provider</DataTableTh>
-            <DataTableTh>List price / 1k tok</DataTableTh>
+            <DataTableTh>Providers</DataTableTh>
+            <DataTableTh>Input / 1M tok</DataTableTh>
+            <DataTableTh>Output / 1M tok</DataTableTh>
             <DataTableTh>API</DataTableTh>
           </tr>
         </DataTableHead>
         <DataTableBody>
           {loading ? (
-            <DataTableEmpty colSpan={4}>Loading model catalog…</DataTableEmpty>
+            <DataTableEmpty colSpan={5}>Loading model catalog…</DataTableEmpty>
           ) : filtered.length === 0 ? (
-            <DataTableEmpty colSpan={4}>No models match your search.</DataTableEmpty>
+            <DataTableEmpty colSpan={5}>No models match your search.</DataTableEmpty>
           ) : (
             filtered.map((model) => (
               <DataTableRow
@@ -129,9 +129,10 @@ export function ModelsPage() {
                   </button>
                 </DataTableCell>
                 <DataTableCell>
-                  <Chip tone="default">{model.provider}</Chip>
+                  <Chip tone="default">{model.available_on.join(", ") || "none healthy"}</Chip>
                 </DataTableCell>
-                <DataTableCell tabular>{formatPricePer1k(model.list_price_per_1k_tokens)}</DataTableCell>
+                <DataTableCell tabular>{formatPricePer1m(model.input_per_1m)}</DataTableCell>
+                <DataTableCell tabular>{formatPricePer1m(model.output_per_1m)}</DataTableCell>
                 <DataTableCell>
                   {liveModelIds.has(model.id) ? (
                     <Chip tone="success">live</Chip>

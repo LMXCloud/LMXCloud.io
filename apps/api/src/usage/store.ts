@@ -33,6 +33,13 @@ export interface RecordUsageInput {
    * Recorded on both success and failure so price can be tracked over time.
    */
   unitPrice?: number | null;
+  /** Cached prompt tokens inside promptTokens, when the provider reported them. */
+  cachedPromptTokens?: number | null;
+  /** Price book version the cost was computed with (pricing/rate-card.ts). */
+  pricingVersion?: string | null;
+  /** The provider's own request id and the header it came from. */
+  providerRequestId?: string | null;
+  providerRequestIdHeader?: string | null;
 }
 
 export interface UsageDayBucket {
@@ -60,6 +67,10 @@ export interface UsageLogEntry {
   success: boolean;
   status: number;
   createdAt: string;
+  cachedPromptTokens: number | null;
+  pricingVersion: string | null;
+  providerRequestId: string | null;
+  providerRequestIdHeader: string | null;
 }
 
 export interface UsageLogsQuery {
@@ -98,6 +109,10 @@ interface UsageEvent {
   errorCode: string | null;
   unitPrice: number | null;
   createdAt: string;
+  cachedPromptTokens?: number | null;
+  pricingVersion?: string | null;
+  providerRequestId?: string | null;
+  providerRequestIdHeader?: string | null;
 }
 
 function routeForResourceType(resourceType: string): string {
@@ -149,6 +164,10 @@ export class FileUsageStore implements UsageStore {
         errorCode: event.errorCode ?? null,
         unitPrice: event.unitPrice ?? null,
         createdAt: event.createdAt!,
+        cachedPromptTokens: event.cachedPromptTokens ?? null,
+        pricingVersion: event.pricingVersion ?? null,
+        providerRequestId: event.providerRequestId ?? null,
+        providerRequestIdHeader: event.providerRequestIdHeader ?? null,
       }));
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -213,6 +232,10 @@ export class FileUsageStore implements UsageStore {
       errorCode: input.errorCode ?? null,
       unitPrice: input.unitPrice ?? null,
       createdAt: new Date().toISOString(),
+      cachedPromptTokens: input.cachedPromptTokens ?? null,
+      pricingVersion: input.pricingVersion ?? null,
+      providerRequestId: input.providerRequestId ?? null,
+      providerRequestIdHeader: input.providerRequestIdHeader ?? null,
     });
 
     if (this.events.length > 10_000) {
@@ -329,5 +352,9 @@ function toUsageLogEntry(event: UsageEvent): UsageLogEntry {
     success: event.success,
     status: event.success ? 200 : 502,
     createdAt: event.createdAt,
+    cachedPromptTokens: event.cachedPromptTokens ?? null,
+    pricingVersion: event.pricingVersion ?? null,
+    providerRequestId: event.providerRequestId ?? null,
+    providerRequestIdHeader: event.providerRequestIdHeader ?? null,
   };
 }

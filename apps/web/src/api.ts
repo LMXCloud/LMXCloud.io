@@ -616,14 +616,19 @@ export async function fetchModels(): Promise<ModelsResponse> {
 
 export interface PricingModelEntry {
   id: string;
-  provider: string;
-  list_price_per_1k_tokens: string;
-  cost_price_per_1k_tokens: string;
+  /** Published rates, USD per 1M tokens. */
+  input_per_1m: number;
+  cached_input_per_1m: number;
+  output_per_1m: number;
+  available: boolean;
+  available_on: string[];
 }
 
 export interface PricingCatalogResponse {
   currency: string;
-  network: string;
+  x402_settlement: { asset: string; network: string };
+  pricing_version: string;
+  effective_from: string;
   min_call_usdc: string;
   default_max_completion_tokens: number;
   models: PricingModelEntry[];
