@@ -14,10 +14,7 @@ import {
   parseOptionalKeyName,
   parseOptionalProjectId,
 } from "../auth/projects.js";
-import {
-  validatePublicCreateKeyBody,
-  WALLET_VERIFICATION_REQUIRED,
-} from "../auth/public-key-body.js";
+import { publicKeySignupClosedError } from "../auth/public-key-body.js";
 import { normalizeWalletAddress } from "../auth/wallet.js";
 import type { WalletNonceStore } from "../auth/wallet-nonce.js";
 import type { CreditStore } from "../credits/store.js";
@@ -562,73 +559,12 @@ export async function registerAuthRoutes(
     });
   });
 
-  app.post<{ Body: unknown }>("/v1/auth/key", async (request, reply) => {
-    const clientIp = getClientIpForRateLimit(request);
-    const limit = deps.keyGenRateLimit(clientIp);
-
-    if (!limit.allowed) {
-      return reply
-        .status(429)
-        .header("Retry-After", String(limit.retryAfterSec ?? 60))
-        .send({
-          error: {
-            message: `Rate limit exceeded. Try again in ${limit.retryAfterSec}s.`,
-            type: "rate_limit_error",
-          },
-        });
-    }
-
-    const validated = validatePublicCreateKeyBody(request.body);
-
-    if (typeof validated === "string") {
-      if (validated === WALLET_VERIFICATION_REQUIRED) {
-        return reply.status(400).send({
-          error: {
-            message:
-              "Wallet-linked keys require SIWE verification. Use POST /v1/auth/wallet/nonce and POST /v1/auth/wallet/verify, or sign in and use POST /v1/auth/keys.",
-            type: "invalid_request_error",
-            code: "wallet_verification_required",
-          },
-        });
-      }
-
-      return reply.status(400).send({
-        error: { message: validated, type: "invalid_request_error" },
-      });
-    }
-
-    const { record, plainKey } = await deps.store.create(validated);
-    await deps.creditStore.credit(record.id, deps.initialCreditBalance, {
-      source: "initial",
-    });
-    const balance = await deps.creditStore.getBalance(record.id);
-
-    notifyAccountCreated({
-      apiKeyId: record.id,
-      source: "public_key",
-      email: record.email,
-      wallet: record.wallet,
-      isNewAccount: true,
-    });
-    queueWelcomeNotification({
-      apiKeyId: record.id,
-      email: record.email,
-      wallet: record.wallet,
-    });
-
-    return reply.status(201).send({
-      object: "api_key",
-      api_key: plainKey,
-      id: record.id,
-      name: record.name ?? null,
-      email: record.email ?? null,
-      wallet: record.wallet ?? null,
-      environment: record.environment,
-      project_id: record.projectId ?? null,
-      created_at: record.createdAt,
-      balance: roundCredits(balance),
-      currency: "USD",
-    });
+  // Public, unauthenticated key creation is closed: it issued working keys for
+  // any unverified email (and for every landing-page visitor). Keys now come
+  // only from a signed-in account (POST /v1/auth/keys) or a verified wallet
+  // (POST /v1/auth/wallet/nonce + /v1/auth/wallet/verify).
+  app.post("/v1/auth/key", async (_request, reply) => {
+    return reply.status(410).send(publicKeySignupClosedError());
   });
 
   app.post<{ Body: unknown }>(

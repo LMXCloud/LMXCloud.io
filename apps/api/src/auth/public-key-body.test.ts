@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  publicKeySignupClosedError,
   validatePublicCreateKeyBody,
   WALLET_VERIFICATION_REQUIRED,
 } from "./public-key-body.js";
@@ -64,5 +65,14 @@ describe("validatePublicCreateKeyBody", () => {
       validatePublicCreateKeyBody({ environment: "prod" }),
       "Field 'environment' must be one of: development, staging, production",
     );
+  });
+});
+
+describe("publicKeySignupClosedError", () => {
+  it("points callers at sign-in and wallet verification", () => {
+    const body = publicKeySignupClosedError();
+    assert.equal(body.error.code, "public_key_signup_closed");
+    assert.match(body.error.message, /lmxcloud\.io/);
+    assert.match(body.error.message, /\/v1\/auth\/wallet\/verify/);
   });
 });

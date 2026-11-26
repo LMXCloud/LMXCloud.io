@@ -45,3 +45,15 @@ export function validatePublicCreateKeyBody(body: unknown): PublicCreateKeyBodyR
 
   return result;
 }
+
+/** Body returned by POST /v1/auth/key now that anonymous key creation is closed. */
+export function publicKeySignupClosedError() {
+  return {
+    error: {
+      message:
+        "Creating API keys without signing in is no longer supported. Sign in at https://lmxcloud.io to create a key, or use wallet sign-in (POST /v1/auth/wallet/nonce, then POST /v1/auth/wallet/verify).",
+      type: "invalid_request_error",
+      code: "public_key_signup_closed",
+    },
+  } as const;
+}
