@@ -17,6 +17,7 @@ import {
 } from "./lmx-client.js";
 import { enforceOriginLock } from "./origin-lock.js";
 import { runWithRequestContext } from "./request-context.js";
+import { safeFetchBytes } from "./safe-fetch.js";
 import { loadMcpX402Config, runX402ChatCompletion, buildUserMessageContent, type McpX402Config } from "./x402.js";
 
 const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "llama-3-70b";
@@ -63,18 +64,8 @@ async function resolvePdfBytes(
   }
 
   if (file_url) {
-    if (!/^https:\/\//i.test(file_url)) {
-      return { ok: false, error: "file_url must be an https URL." };
-    }
     try {
-      const response = await fetch(file_url);
-      if (!response.ok) {
-        return {
-          ok: false,
-          error: `Failed to fetch file_url: ${response.status} ${response.statusText}`,
-        };
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      const bytes = await safeFetchBytes(file_url);
       if (bytes.byteLength === 0) {
         return { ok: false, error: "Fetched PDF is empty." };
       }
@@ -82,7 +73,7 @@ async function resolvePdfBytes(
     } catch (error) {
       return {
         ok: false,
-        error: error instanceof Error ? error.message : "Failed to fetch file_url",
+        error: error instanceof Error ? error.message : "Could not fetch file_url.",
       };
     }
   }
